@@ -6,8 +6,8 @@ const API_BASE =
 
 export const signUp = async (userInfo: UserCreate): Promise<boolean> => {
   try {
-    const response = await axios.post(`${API_BASE}/auth/signup`, { userInfo });
-    return response.status === 200;
+    const response = await axios.post(`${API_BASE}/auth/signup`, userInfo);
+    return true;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       alert(
