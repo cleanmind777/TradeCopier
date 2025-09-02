@@ -33,13 +33,11 @@ def authenticate_user(db: Session, email: str) -> User | None:
         otp_data = generate_otp()
         user_create_otp_code(db, email, otp_data)
         send_otp_email(email, otp_data.otp)
-        print(otp_data)
     return user
 
 
 def verify_otp(db: Session, email: str, otp: str) -> int | User | None:
     user = get_user_by_email(db, email)
-    print(user)
     if not user:
         return None
     return user_verify_otp_code(db, email, otp)

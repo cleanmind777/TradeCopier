@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, AuthState } from '../types';
-import { sendEmailOTP, verifyEmailOTP, signUp } from "../api/authApi";
-import { UserCreate } from "../types/user";
+import { AuthState } from '../types';
+import { sendEmailOTP, verifyEmailOTP, signUp, loginWithGoogle } from "../api/authApi";
+import { UserCreate, User } from "../types/user";
 
 interface AuthContextType extends AuthState {
   sendEmailOTP: (email: string) => Promise<boolean>;
   verifyEmailOTP: (email: string, otp: string) => Promise<boolean>;
   signUp: (userInfo: UserCreate) => Promise<boolean>;
+  loginWithGoogle: (tokenId: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -29,7 +30,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session on mount
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
@@ -40,8 +40,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const handleSendOTP = async (email: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const success = await sendEmailOTP(email);
-      return success;
+      return await sendEmailOTP(email);
     } catch (error) {
       console.error('Error sending OTP:', error);
       return false;
@@ -55,19 +54,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const success = await verifyEmailOTP(email, otp);
       if (success) {
-        // Create user session on successful OTP verification
         const authenticatedUser: User = {
-          id: '1', // Replace with actual user ID from API response
+          id: '1',
           email,
-          name: email.split('@')[0], // Default name from email
+          name: email.split('@')[0],
         };
         setUser(authenticatedUser);
         localStorage.setItem('user', JSON.stringify(authenticatedUser));
+      }
+      return success;
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async (tokenId: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const userData = await loginWithGoogle(tokenId);
+      if (userData != null) {
+        setUser(userData);
+        localStorage.setItem('user', JSON.stringify(userData));
         return true;
       }
       return false;
     } catch (error) {
-      console.error('Error verifying OTP:', error);
+      console.error('Google login error:', error);
       return false;
     } finally {
       setIsLoading(false);
@@ -77,8 +92,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const handleSignUp = async (userInfo: UserCreate): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const success = await signUp(userInfo);
-      return success;
+      return await signUp(userInfo);
     } catch (error) {
       console.error('Error during sign up:', error);
       return false;
@@ -99,6 +113,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     sendEmailOTP: handleSendOTP,
     verifyEmailOTP: handleVerifyOTP,
     signUp: handleSignUp,
+    loginWithGoogle: handleGoogleLogin,
     logout,
   };
 

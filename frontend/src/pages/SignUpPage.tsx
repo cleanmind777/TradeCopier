@@ -32,7 +32,6 @@ const SignUpPage: React.FC = () => {
       "email": email,
       "name": name
     }
-    console.log(userInfo)
     const success = await signUp(userInfo); // assuming signup function exists
     if (!success) {
       setError('Failed to sign up. Please try again.');

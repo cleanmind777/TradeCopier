@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from app.models.user import User
-from app.schemas.user import UserBase
+from app.schemas.user import UserBase, UserRespond
 from app.schemas.email import OTP
 from app.core.security import hash_password
 import json
@@ -10,8 +10,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 
-def get_user_by_email(db: Session, email: str) -> User:
-    print(email)
+def get_user_by_email(db: Session, email: str) -> UserRespond:
     return db.query(User).filter(User.email == email).first()
 
 
@@ -44,7 +43,6 @@ def user_verify_otp_code(db: Session, email: str, otp: str):
     if db_user.otp_code != otp:
         return 0
     now = datetime.now(timezone.utc)
-    print(now, db_user.otp_expire.astimezone(timezone.utc))
     if db_user.otp_expire.astimezone(timezone.utc) < now:
         return 1
     return db_user

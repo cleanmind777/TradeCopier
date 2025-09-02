@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     OTP_EXPIRE_MINUTES: int = Field(env="OTP_EXPIRE_MINUTES")
 
-    # GOOGLE_CLIENT_ID: str = Field(env="GOOGLE_CLIENT_ID")
+    GOOGLE_CLIENT_ID: str = Field(env="GOOGLE_CLIENT_ID")
 
     class Config:
         # Path to the .env file (relative to project root)
