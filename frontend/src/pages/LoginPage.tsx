@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { LockKeyhole } from 'lucide-react'; // Changed icon
+import { Navigate, Link } from 'react-router-dom';
+import { LockKeyhole } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -132,6 +132,16 @@ const LoginPage: React.FC = () => {
               </button>
             )}
           </form>
+
+          <div className="text-center text-sm text-slate-600">
+            Don't have an account?{' '}
+            <Link
+              to="/signup"
+              className="font-medium text-blue-600 hover:text-blue-500"
+            >
+              Sign up
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
