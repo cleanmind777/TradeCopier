@@ -1,22 +1,62 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { LockKeyhole } from 'lucide-react'; // Changed icon
+import React, { useState, useEffect } from 'react';
+import { Navigate, Link } from 'react-router-dom';
+import { LockKeyhole } from 'lucide-react';
+import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
 const LoginPage: React.FC = () => {
-  const { sendEmailOTP, verifyEmailOTP, isAuthenticated, isLoading } = useAuth();
+  const { sendEmailOTP, verifyEmailOTP, loginWithGoogle, isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [step, setStep] = useState(1); // 1: Email step, 2: OTP step
+  const [step, setStep] = useState(1);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  useEffect(() => {
+    const initializeGoogleSignIn = () => {
+      window.google.accounts.id.initialize({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        callback: handleGoogleResponse
+      });
+      window.google.accounts.id.renderButton(
+        document.getElementById('googleSignInButton'),
+        { theme: 'outline', size: 'large' }
+      );
+    };
+
+    if (window.google) {
+      initializeGoogleSignIn();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.onload = initializeGoogleSignIn;
+      document.body.appendChild(script);
+    }
+  }, []);
+
+  const handleGoogleResponse = async (response: any) => {
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const success = await loginWithGoogle(response.credential);
+      if (!success) {
+        setError('Google login failed. Please try again.');
+      }
+    } catch (error) {
+      setError('An error occurred during Google login.');
+    }
+    setIsSubmitting(false);
+  };
 
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +95,10 @@ const LoginPage: React.FC = () => {
     }
     setIsSubmitting(false);
   };
+
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   if (isLoading) {
     return (
@@ -132,6 +176,27 @@ const LoginPage: React.FC = () => {
               </button>
             )}
           </form>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            </div>
+          </div>
+
+          <div id="googleSignInButton" className="w-full flex justify-center"></div>
+
+          <div className="text-center text-sm text-slate-600">
+            Don't have an account?{' '}
+            <Link
+              to="/signup"
+              className="font-medium text-blue-600 hover:text-blue-500"
+            >
+              Sign up
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

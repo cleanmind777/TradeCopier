@@ -10,6 +10,10 @@ class UserBase(BaseModel):
     name: str
 
 
+class UserRespond(UserBase):
+    id: UUID
+
+
 class UserInfo(UserBase):
     id: UUID
     created_at: datetime
