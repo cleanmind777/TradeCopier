@@ -56,6 +56,10 @@ async def login(
     response = authenticate_user(db, email.email)
     if response == None:
         raise HTTPException(status_code=400, detail="You should register Account")
+    elif response == False:
+        raise HTTPException(
+            status_code=400, detail="Your account has not yet been approved."
+        )
     else:
         return "Plz verify email inbox"
 

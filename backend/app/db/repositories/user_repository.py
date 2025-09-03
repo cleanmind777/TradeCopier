@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 
-def get_user_by_email(db: Session, email: str) -> UserRespond:
+def get_user_by_email(db: Session, email: str) -> UserData:
     return db.query(User).filter(User.email == email).first()
 
 
