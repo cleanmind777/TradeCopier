@@ -25,6 +25,7 @@ class User(Base):
     name = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     admin_role = Column(Boolean, default=False)
+    is_accepted = Column(Boolean, default=False)
     is_verified = Column(Boolean, default=False)
     reset_token = Column(String, nullable=True)
     otp_code = Column(String, nullable=True)

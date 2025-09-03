@@ -5,6 +5,7 @@ CREATE TABLE users (
     admin_role BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     is_verified BOOLEAN DEFAULT FALSE,
+    is_accepted BOOLEAN DEFAULT FALSE,
     otp_code VARCHAR,
     otp_expire TIMESTAMPTZ,
     reset_token VARCHAR

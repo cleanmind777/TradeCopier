@@ -42,3 +42,23 @@ class TokenData(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class UserData(BaseModel):
+    id: UUID
+    name: str
+    email: str
+    admin_role: bool
+    created_at: datetime
+    is_verified: bool
+    is_accepted: bool
+
+
+class UserFilter(BaseModel):
+    id: Optional[UUID] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    admin_role: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    is_verified: Optional[bool] = None
+    is_accepted: Optional[bool] = None
