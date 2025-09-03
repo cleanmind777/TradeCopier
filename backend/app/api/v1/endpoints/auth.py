@@ -131,5 +131,8 @@ async def google_login(token: str = Form(...), db: Session = Depends(get_db)):
         # OR auto-create:
         # user = User(email=email, name=user_info.get("name"), picture=user_info.get("picture"))
         # db.add(user); db.commit(); db.refresh(user)
-
+    elif user.is_accepted == False:
+        raise HTTPException(
+            status_code=404, detail="Your account has not yet been approved."
+        )
     return user
