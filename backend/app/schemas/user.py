@@ -12,11 +12,13 @@ class UserBase(BaseModel):
 
 class UserRespond(UserBase):
     id: UUID
+    admin_role: bool
 
 
 class UserInfo(UserBase):
     id: UUID
     created_at: datetime
+    admin_role: bool
 
     class Config:
         from_attributes = True

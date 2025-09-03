@@ -5,7 +5,7 @@ import { UserCreate, User } from "../types/user";
 
 interface AuthContextType extends AuthState {
   sendEmailOTP: (email: string) => Promise<boolean>;
-  verifyEmailOTP: (email: string, otp: string) => Promise<boolean>;
+  verifyEmailOTP: (email: string, otp: string) => Promise<User | boolean>;
   signUp: (userInfo: UserCreate) => Promise<boolean>;
   loginWithGoogle: (tokenId: string) => Promise<boolean>;
   logout: () => void;
@@ -49,20 +49,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const handleVerifyOTP = async (email: string, otp: string): Promise<boolean> => {
+  const handleVerifyOTP = async (email: string, otp: string): Promise<User | boolean> => {
     setIsLoading(true);
     try {
-      const success = await verifyEmailOTP(email, otp);
-      if (success) {
+      const response = await verifyEmailOTP(email, otp);
+
+      if (response && typeof response === 'object') {
         const authenticatedUser: User = {
-          id: '1',
-          email,
-          name: email.split('@')[0],
+          id: response.id,
+          email: response.email,
+          name: response.name || email.split('@')[0],
+          admin_role: response.admin_role || false,
         };
         setUser(authenticatedUser);
         localStorage.setItem('user', JSON.stringify(authenticatedUser));
+        return authenticatedUser;
       }
-      return success;
+      return false;
     } catch (error) {
       console.error('Error verifying OTP:', error);
       return false;
@@ -110,6 +113,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     isLoading,
     isAuthenticated: !!user,
+    isAdmin: user?.admin_role || false,
     sendEmailOTP: handleSendOTP,
     verifyEmailOTP: handleVerifyOTP,
     signUp: handleSignUp,

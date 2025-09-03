@@ -27,13 +27,13 @@ export const sendEmailOTP = async (email: string): Promise<boolean> => {
 export const verifyEmailOTP = async (
   email: string,
   otp: string
-): Promise<boolean> => {
+): Promise<User | boolean> => {
   try {
     const response = await axios.post(`${API_BASE}/auth/verify-email-otp`, {
       email,
       otp,
     });
-    return true;
+    return response.data;
   } catch (error) {
     console.error("Verify OTP error:", error);
     return false;

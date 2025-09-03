@@ -64,14 +64,45 @@ async def login(
 async def verify_otp_code(
     data: OTPVerifyRequest, db: Session = Depends(get_db)
 ) -> UserRespond:
-    response = verify_otp(db, data.email, data.otp)
-    if response == None:
+    user = verify_otp(db, data.email, data.otp)
+    if user == None:
         raise HTTPException(status_code=400, detail="You don't have Account")
-    elif response == 0:
+    elif user == 0:
         raise HTTPException(status_code=400, detail="Invalid OTP")
-    elif response == 1:
+    elif user == 1:
         raise HTTPException(status_code=400, detail="OTP expired")
     else:
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.email}, expires_delta=access_token_expires
+        )
+        userinfo = get_user_by_email(db, user.email)
+        # Set JWT in HttpOnly cookie
+        user_info_model = UserInfo.from_orm(userinfo)
+        response = JSONResponse(content=jsonable_encoder(user_info_model))
+        response.set_cookie(
+            key="access_token",
+            value=f"Bearer {access_token}",
+            domain=FRONTEND_URL.replace("https://", "").replace(
+                "http://", ""
+            ),  # Remove protocol
+            httponly=True,
+            secure=settings.ENVIRONMENT == "production",  # Set based on environment
+            samesite="lax",  # Changed to lax for better compatibility
+            max_age=1800,  # 30 minutes in seconds
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value="your_refresh_token_value",
+            domain=FRONTEND_URL.replace("https://", "").replace(
+                "http://", ""
+            ),  # Remove protocol
+            httponly=True,
+            secure=settings.ENVIRONMENT == "production",  # Set based on environment
+            samesite="lax",  # Changed to lax for better compatibility
+            max_age=86400,  # 24 hours
+        )
+        print(response.headers)
         return response
 
 

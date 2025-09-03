@@ -7,4 +7,5 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  admin_role: boolean;
 }
