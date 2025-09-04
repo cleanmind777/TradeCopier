@@ -15,6 +15,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from app.db.session import Base
 import uuid
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 
 
 class User(Base):
@@ -30,3 +31,5 @@ class User(Base):
     reset_token = Column(String, nullable=True)
     otp_code = Column(String, nullable=True)
     otp_expire = Column(DateTime, nullable=True)
+
+    trading_accounts = relationship("BrokerAccount", back_populates="user")
