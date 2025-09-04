@@ -25,10 +25,12 @@ def register_user(db: Session, user_create: UserBase) -> User:
     return create_user(db, user_create)
 
 
-def authenticate_user(db: Session, email: str) -> User | None:
+def authenticate_user(db: Session, email: str) -> User | None | bool:
     user = get_user_by_email(db, email)
     if not user:
         return None
+    elif user.is_accepted == False:
+        return False
     else:
         otp_data = generate_otp()
         user_create_otp_code(db, email, otp_data)

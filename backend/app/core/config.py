@@ -30,6 +30,8 @@ class Settings(BaseSettings):
 
     GOOGLE_CLIENT_ID: str = Field(env="GOOGLE_CLIENT_ID")
 
+    ENVIRONMENT: str = Field(env="ENVIRONMENT")
+
     class Config:
         # Path to the .env file (relative to project root)
         env_file = ".env"
