@@ -32,6 +32,16 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: str = Field(env="ENVIRONMENT")
 
+    APP_VERSION: str = Field(env="APP_VERSION")
+
+    APP_ID: str = Field(env="APP_ID")
+
+    CID: str = Field(env="CID")
+
+    SEC: str = Field(env="SEC")
+
+    TRADOVATE_API_URL: str = Field(env="TRADOVATE_API_URL")
+
     class Config:
         # Path to the .env file (relative to project root)
         env_file = ".env"

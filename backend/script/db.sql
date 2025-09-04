@@ -19,7 +19,7 @@ CREATE TABLE broker_accounts (
     type VARCHAR NOT NULL,
     last_sync TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     status BOOLEAN DEFAULT FALSE,
-    account_id VARCHAR,
+    user_broker_id VARCHAR,
     access_token VARCHAR,
-    reset_token VARCHAR
+    md_access_token VARCHAR
 );

@@ -5,9 +5,11 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AdminProtectedRoute from './components/AdminProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import BrokerPage from './pages/BrokerPage';
 import SignUpPage from './pages/SignUpPage';
 import AdminPage from './pages/admin/AdminPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
+
 
 function App() {
   return (
@@ -21,6 +23,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/broker"
+            element={
+              <ProtectedRoute>
+                <BrokerPage />
               </ProtectedRoute>
             }
           />

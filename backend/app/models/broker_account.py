@@ -24,8 +24,8 @@ class BrokerAccount(Base):
     type = Column(String, nullable=False)
     last_sync = Column(DateTime, onupdate=func.now())
     status = Column(Boolean, default=False)
-    account_id = Column(String, nullable=True)
+    user_broker_id = Column(String, nullable=True)
     access_token = Column(String, nullable=True)
-    reset_token = Column(String, nullable=True)
+    md_access_token = Column(String, nullable=True)
 
     user = relationship("User", back_populates="broker_accounts")

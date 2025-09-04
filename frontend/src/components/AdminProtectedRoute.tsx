@@ -16,7 +16,9 @@ const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({ children }) =
       </div>
     );
   }
-
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
   if (!isAdmin && isAuthenticated) {
     alert("You are not admin, so you can't use this page!")
     return <Navigate to="/dashboard" replace />;
