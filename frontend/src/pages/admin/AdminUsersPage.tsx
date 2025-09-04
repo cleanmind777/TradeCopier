@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Users, UserCheck, UserX, UserCog, Search, Filter } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import AdminSidebar from '../../components/layout/AdminSidebar';
@@ -6,32 +6,63 @@ import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import UserTable from '../../components/admin/UserTable';
+import { getUsers, acceptUser } from "../../api/adminApi"
+import { User, UserFilter } from "../../types/user"
 
 const AdminUsersPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeTab, setActiveTab] = useState('all');
-
+    const [users, setUsers] = useState<User[] | null>(null)
+    const [pendingUsers, setPendingUsers] = useState<User[] | null>(null)
+    const [activeUsers, setActiveUsers] = useState<User[] | null>(null)
     // Sample data - replace with real data from your API
-    const pendingUsers = [
-        { id: 1, name: 'John Doe', email: 'john@example.com', status: 'Pending', date: '2023-10-01' },
-        { id: 2, name: 'Jane Smith', email: 'jane@example.com', status: 'Pending', date: '2023-10-02' },
-    ];
+    // const pendingUsers = [
+    //     { id: 1, name: 'John Doe', email: 'john@example.com', status: 'Pending', date: '2023-10-01' },
+    //     { id: 2, name: 'Jane Smith', email: 'jane@example.com', status: 'Pending', date: '2023-10-02' },
+    // ];
 
-    const activeUsers = [
-        { id: 3, name: 'Mike Johnson', email: 'mike@example.com', status: 'Active', date: '2023-09-15' },
-        { id: 4, name: 'Sarah Wilson', email: 'sarah@example.com', status: 'Active', date: '2023-09-20' },
-    ];
+    // const activeUsers = [
+    //     { id: 3, name: 'Mike Johnson', email: 'mike@example.com', status: 'Active', date: '2023-09-15' },
+    //     { id: 4, name: 'Sarah Wilson', email: 'sarah@example.com', status: 'Active', date: '2023-09-20' },
+    // ];
 
-    const allUsers = [...pendingUsers, ...activeUsers];
-
+    // const allUsers = [...pendingUsers, ...activeUsers];
+    const getAllUsers = async () => {
+        const response = await getUsers({});
+        setUsers(response);
+    }
+    useEffect(() => {
+        getAllUsers();
+    }, [])
+    useEffect(() => {
+        if (users) {
+            let x = []
+            let y = []
+            let i = 0;
+            for (i = 0; i < users.length; i++) {
+                if (users[i].is_accepted) {
+                    x.push(users[i])
+                }
+                else {
+                    y.push(users[i])
+                }
+            }
+            setPendingUsers(y)
+            setActiveUsers(x)
+        }
+    }, [users])
+    const handleAcceptUser = async (id: string) => {
+        const response = await acceptUser(id);
+        setUsers(response)
+    }
     const renderTabContent = () => {
         switch (activeTab) {
             case 'all':
-                return <UserTable users={allUsers} />;
+                return <UserTable users={users} onAccept={handleAcceptUser} />;
             case 'pending':
-                return <UserTable users={pendingUsers} />;
+                return <UserTable users={pendingUsers} onAccept={handleAcceptUser} />;
             case 'active':
-                return <UserTable users={activeUsers} />;
+                return <UserTable users={activeUsers} onAccept={handleAcceptUser} />;
             case 'info':
                 return (
                     <div className="space-y-4">

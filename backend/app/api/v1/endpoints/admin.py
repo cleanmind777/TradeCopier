@@ -18,7 +18,7 @@ def get_Users_data(user_filter: UserFilter, db: Session = Depends(get_db)):
     return get_users_data(db, user_filter)
 
 
-@router.post("/accept-user", status_code=status.HTTP_201_CREATED)
+@router.get("/accept-user", status_code=status.HTTP_201_CREATED)
 def accept_User(id: UUID, db: Session = Depends(get_db)):
     result = accept_user(db, id)
     if result == False:
@@ -26,4 +26,4 @@ def accept_User(id: UUID, db: Session = Depends(get_db)):
             status_code=400, detail="You don't have account. Plz register!"
         )
     else:
-        return "Success"
+        return result

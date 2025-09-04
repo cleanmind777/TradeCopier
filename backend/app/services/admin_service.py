@@ -24,5 +24,5 @@ def get_users_data(db: Session, user_filter: UserFilter) -> list[UserData]:
     return get_users_by_filter(db, user_filter)
 
 
-def accept_user(db: Session, id: UUID) -> bool:
+def accept_user(db: Session, id: UUID) -> bool | list[UserData]:
     return admin_accept_user(db, id)

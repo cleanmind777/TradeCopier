@@ -66,7 +66,7 @@ def get_users_by_filter(db: Session, user_filter: UserFilter) -> list[UserData]:
     return users
 
 
-def admin_accept_user(db: Session, id: UUID) -> bool:
+def admin_accept_user(db: Session, id: UUID) -> bool | list[UserData]:
     db_user = db.query(User).filter(User.id == id).first()
     if db_user == None:
         return False
@@ -74,4 +74,4 @@ def admin_accept_user(db: Session, id: UUID) -> bool:
         db_user.is_accepted = True
         db.commit()
         db.refresh(db_user)
-    return True
+    return db.query(User).all()

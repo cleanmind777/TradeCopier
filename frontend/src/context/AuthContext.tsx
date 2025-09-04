@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { AuthState } from '../types';
 import { sendEmailOTP, verifyEmailOTP, signUp, loginWithGoogle } from "../api/authApi";
 import { UserCreate, User } from "../types/user";
+import { Navigate } from 'react-router-dom';
 
 interface AuthContextType extends AuthState {
   sendEmailOTP: (email: string) => Promise<boolean>;
@@ -60,6 +61,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email: response.email,
           name: response.name || email.split('@')[0],
           admin_role: response.admin_role || false,
+          is_accepted: response.is_accepted,
+          created_at: response.created_at || new Date().toISOString() // Add this line
         };
         setUser(authenticatedUser);
         localStorage.setItem('user', JSON.stringify(authenticatedUser));
@@ -79,8 +82,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const userData = await loginWithGoogle(tokenId);
       if (userData != null) {
-        setUser(userData);
-        localStorage.setItem('user', JSON.stringify(userData));
+        const authenticatedUser: User = {
+          ...userData,
+          created_at: userData.created_at || new Date().toISOString() // Ensure created_at exists
+        };
+        setUser(authenticatedUser);
+        localStorage.setItem('user', JSON.stringify(authenticatedUser));
         return true;
       }
       return false;
