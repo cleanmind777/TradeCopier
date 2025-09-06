@@ -20,9 +20,13 @@ def add_broker(db: Session, broker_connect: BrokerConnect) -> list[BrokerInfo]:
         type=broker_connect.type,
         user_broker_id=response.userId,
         access_token=response.accessToken,
-        md_access_token=response.mdAccessToken,
+        expire_in=response.mdAccessToken,
     )
 
+    return user_add_broker(db, broker_add)
+
+
+def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
     return user_add_broker(db, broker_add)
 
 

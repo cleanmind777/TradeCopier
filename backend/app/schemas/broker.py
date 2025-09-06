@@ -7,7 +7,7 @@ import json
 
 class BrokerBase(BaseModel):
     user_id: UUID
-    nickname: str
+    nickname: Optional[str] = None
     type: str
 
 
@@ -19,12 +19,13 @@ class BrokerConnect(BrokerBase):
 class BrokerAdd(BrokerBase):
     user_broker_id: str
     access_token: str
-    md_access_token: str
+    expire_in: int
 
 
 class BrokerInfo(BrokerBase):
     id: UUID
     last_sync: datetime
+    status: bool
 
 
 class RespondTradoVate(BaseModel):

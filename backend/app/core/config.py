@@ -42,6 +42,14 @@ class Settings(BaseSettings):
 
     TRADOVATE_API_URL: str = Field(env="TRADOVATE_API_URL")
 
+    TRADOVATE_REDIRECT_URL: str = Field(env="TRADOVATE_REDIRECT_URL")
+
+    TRADOVATE_AUTH_URL: str = Field(env="TRADOVATE_AUTH_URL")
+
+    TRADOVATE_EXCHANGE_URL: str = Field(env="TRADOVATE_EXCHANGE_URL")
+
+    TRADOVATE_API_ME_URL: str = Field(env="TRADOVATE_API_ME_URL")
+
     class Config:
         # Path to the .env file (relative to project root)
         env_file = ".env"

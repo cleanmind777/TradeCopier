@@ -10,13 +10,20 @@ from uuid import UUID
 
 
 def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
+    db_broker_account = (
+        db.query(BrokerAccount)
+        .filter(BrokerAccount.user_id == broker_add.user_id)
+        .filter(BrokerAccount.type == broker_add.type)
+        .all()
+    )
+    counter = len(db_broker_account)
     db_broker = BrokerAccount(
         user_id=broker_add.user_id,
-        nickname=broker_add.nickname,
+        nickname=f"{broker_add.type} {counter}",
         type=broker_add.type,
         user_broker_id=broker_add.user_broker_id,
         access_token=broker_add.access_token,
-        md_access_token=broker_add.md_access_token,
+        expire_in=broker_add.expire_in,
     )
     db.add(db_broker)
     db.commit()
@@ -25,6 +32,7 @@ def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
 
 
 def user_get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo]:
+
     query = select(BrokerAccount)
     if broker_filter.id != None:
         query = query.filter(BrokerAccount.id == broker_filter.id)

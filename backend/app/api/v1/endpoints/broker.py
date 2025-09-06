@@ -18,7 +18,7 @@ def add_Broker(broker_connect: BrokerConnect, db: Session = Depends(get_db)):
     return add_broker(db, broker_connect)
 
 
-@router.get(
+@router.post(
     "/get", response_model=list[BrokerInfo], status_code=status.HTTP_201_CREATED
 )
 def get_Brokers(broker_filter: BrokerFilter, db: Session = Depends(get_db)):

@@ -1,15 +1,17 @@
 import React from 'react';
 import { Home, Users, BarChart3, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Sidebar: React.FC = () => {
   const { logout } = useAuth();
+  const navigate = useNavigate();
 
   const menuItems = [
-    { icon: Home, label: 'Dashboard', active: true },
-    { icon: Users, label: 'Broker Accounts', active: false },
-    { icon: BarChart3, label: 'Analytics', active: false },
-    { icon: Settings, label: 'Settings', active: false },
+    { icon: Home, label: 'Dashboard', active: true, path: '/dashboard' },
+    { icon: Users, label: 'Broker Accounts', active: false, path: '/broker' },
+    { icon: BarChart3, label: 'Analytics', active: false, path: '/analytics' },
+    { icon: Settings, label: 'Settings', active: false, path: '/settings' },
   ];
 
   return (
@@ -24,9 +26,10 @@ const Sidebar: React.FC = () => {
           return (
             <button
               key={item.label}
+              onClick={() => navigate(item.path)}
               className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors duration-200 ${item.active
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 }`}
             >
               <Icon className="h-5 w-5" />
