@@ -32,6 +32,24 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: str = Field(env="ENVIRONMENT")
 
+    APP_VERSION: str = Field(env="APP_VERSION")
+
+    APP_ID: str = Field(env="APP_ID")
+
+    CID: str = Field(env="CID")
+
+    SEC: str = Field(env="SEC")
+
+    TRADOVATE_API_URL: str = Field(env="TRADOVATE_API_URL")
+
+    TRADOVATE_REDIRECT_URL: str = Field(env="TRADOVATE_REDIRECT_URL")
+
+    TRADOVATE_AUTH_URL: str = Field(env="TRADOVATE_AUTH_URL")
+
+    TRADOVATE_EXCHANGE_URL: str = Field(env="TRADOVATE_EXCHANGE_URL")
+
+    TRADOVATE_API_ME_URL: str = Field(env="TRADOVATE_API_ME_URL")
+
     class Config:
         # Path to the .env file (relative to project root)
         env_file = ".env"
