@@ -23,10 +23,10 @@ export const getUsers = async (
 
 export const acceptUser = async (id: string): Promise<User[] | null> => {
   try {
-    // const params = {
-    //   id: id,
-    // };
-    const response = await axios.get(`${API_BASE}/admin/accept-user?id=${id}`);
+    const params = {
+      id: id,
+    };
+    const response = await axios.post(`${API_BASE}/admin/accept-user`, { id });
     return response.data;
   } catch (error) {
     if (error instanceof AxiosError) {

@@ -13,15 +13,10 @@ base.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="My FastAPI App")
 
-origins = [
-    "http://localhost:5173",
-    "http://3.12.160.213",
-    "http://ec2-3-12-160-213.us-east-2.compute.amazonaws.com",  # Your frontend origin
-]
 app.add_middleware(SessionMiddleware, secret_key="!secret")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # Must match frontend origin exactly
+    allow_origins=["*"],  # Must match frontend origin exactly
     allow_credentials=True,  # Important for cookies/auth credentials
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
