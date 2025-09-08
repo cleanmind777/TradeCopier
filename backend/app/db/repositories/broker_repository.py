@@ -31,7 +31,9 @@ def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
     return db.query(BrokerAccount).all()
 
 
-def user_get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo]:
+def user_get_brokers(
+    db: Session, broker_filter: BrokerFilter
+) -> list[BrokerInfo] | None:
 
     query = select(BrokerAccount)
     if broker_filter.id != None:

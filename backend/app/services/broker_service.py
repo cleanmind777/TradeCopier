@@ -30,7 +30,7 @@ def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]
     return user_add_broker(db, broker_add)
 
 
-def get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo]:
+def get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo] | None:
     return user_get_brokers(db, broker_filter)
 
 
