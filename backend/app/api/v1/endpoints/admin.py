@@ -14,13 +14,13 @@ router = APIRouter()
 @router.post(
     "/users", response_model=list[UserData], status_code=status.HTTP_201_CREATED
 )
-def get_Users_data(user_filter: UserFilter, db: Session = Depends(get_db)):
+def get_Users_data(user_filter: UserFilter, db: Sessiona = Depends(get_db)):
     return get_users_data(db, user_filter)
 
 
-@router.get("/accept-user", status_code=status.HTTP_201_CREATED)
-def accept_User(id: UUID, db: Session = Depends(get_db)):
-    result = accept_user(db, id)
+@router.post("/accept-user", status_code=status.HTTP_201_CREATED)
+def accept_User(data: dict, db: Session = Depends(get_db)):
+    result = accept_user(db, data["id"])
     if result == False:
         raise HTTPException(
             status_code=400, detail="You don't have account. Plz register!"

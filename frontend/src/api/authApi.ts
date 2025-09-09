@@ -6,7 +6,14 @@ const API_BASE =
 
 export const signUp = async (userInfo: UserCreate): Promise<boolean> => {
   try {
-    const response = await axios.post(`${API_BASE}/auth/signup`, userInfo);
+    const response = await axios.post(`${API_BASE}/auth/signup`, userInfo, {
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "https://5a5f0ab14919.ngrok-free.app/",
+        // Add other headers here if needed, e.g. Authorization
+        // "Authorization": `Bearer ${token}`
+      },
+    });
     return true;
   } catch (error) {
     if (error instanceof AxiosError) {
