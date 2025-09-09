@@ -7,7 +7,8 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { BrokerFilter, BrokerInfo } from '../types/broker';
 import { getBrokers } from '../api/brokerApi';
-
+const API_BASE =
+    import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
 const BrokerPage: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -170,7 +171,7 @@ const BrokerPage: React.FC = () => {
                                     style={{
                                         height: '150px'
                                     }}
-                                    onClick={() => { window.location.href = `http://localhost:8000/api/v1/tradovate/auth?user_id=${user_id}` }}
+                                    onClick={() => { window.location.href = `${API_BASE}tradovate/auth?user_id=${user_id}` }}
                                 >
                                     <div
                                         className="absolute inset-0 bg-contain bg-no-repeat bg-center rounded-lg"

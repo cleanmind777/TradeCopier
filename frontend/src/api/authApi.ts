@@ -9,7 +9,6 @@ export const signUp = async (userInfo: UserCreate): Promise<boolean> => {
     const response = await axios.post(`${API_BASE}/auth/signup`, userInfo, {
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "https://5a5f0ab14919.ngrok-free.app/",
         // Add other headers here if needed, e.g. Authorization
         // "Authorization": `Bearer ${token}`
       },
