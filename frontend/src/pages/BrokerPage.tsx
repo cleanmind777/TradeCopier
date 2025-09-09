@@ -171,7 +171,7 @@ const BrokerPage: React.FC = () => {
                                     style={{
                                         height: '150px'
                                     }}
-                                    onClick={() => { window.location.href = `${API_BASE}tradovate/auth?user_id=${user_id}` }}
+                                    onClick={() => { window.location.href = `${API_BASE}/tradovate/auth?user_id=${user_id}` }}
                                 >
                                     <div
                                         className="absolute inset-0 bg-contain bg-no-repeat bg-center rounded-lg"
