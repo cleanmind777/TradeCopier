@@ -36,6 +36,23 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
     else:
         url = f"{TRADO_LIVE_URL}/cashBalance/item"
     response = requests.get(url, headers=headers, params=params)
+    print("111111111111111111111111111111111111111", response.data)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+        except ValueError:
+            # Log error or handle malformed JSON
+            data = None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        data = None
+    return data
+
+
+def get_renew_token(access_token: str):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{TRADO_DEMO_URL}/auth/renewaccesstoken"
+    response = requests.get(url, headers=headers)
     if response.status_code == 200 and response.content:
         try:
             data = response.json()

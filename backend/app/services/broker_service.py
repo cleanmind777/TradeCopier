@@ -94,6 +94,7 @@ async def get_sub_brokers(
             response = await get_account_balance(
                 access_token, sub_broker_info.sub_account_id, sub_broker_info.is_demo
             )
+            print("Balance: ", response)
             if response:
                 balance = response.data["amount"]
             else:
