@@ -8,9 +8,18 @@ from starlette.middleware.sessions import SessionMiddleware
 import os
 from dotenv import load_dotenv
 import asyncio
-from app.dependencies.database import get_db
-from app.dependencies.database import SessionLocal
 from app.services.broker_service import refresh_new_token
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from app.core.config import settings
+
+engine = create_async_engine(settings.DATABASE_URL, echo=True)
+async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+
+async def get_db():
+    async with async_session() as session:
+        yield session
+
 
 load_dotenv(dotenv_path=".env", encoding="utf-8-sig")
 
@@ -40,8 +49,8 @@ app.include_router(api_router, prefix="/api/v1")
 
 async def regenerate_access_token_periodically():
     while True:
-        async with SessionLocal() as db:
-            # Your regeneration logic here
+        async with async_session() as db:  # Use async_session here instead of sync Session
+            # Your async logic for token regeneration
             print("Regenerating access token...")
             await refresh_new_token(db)
         await asyncio.sleep(120)  # Sleep 2 minutes
