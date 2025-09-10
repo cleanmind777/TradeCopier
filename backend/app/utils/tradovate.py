@@ -32,9 +32,9 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
     }
     params = {"masterid": account_id}
     if is_demo:
-        url = f"{TRADO_DEMO_URL}/cashBalance/item"
+        url = f"{TRADO_DEMO_URL}/cashBalance/deps"
     else:
-        url = f"{TRADO_LIVE_URL}/cashBalance/item"
+        url = f"{TRADO_LIVE_URL}/cashBalance/deps"
     response = requests.get(url, headers=headers, params=params)
     print("111111111111111111111111111111111111111", response)
     if response.status_code == 200 and response.content:
