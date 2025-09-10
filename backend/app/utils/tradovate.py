@@ -36,7 +36,7 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
     else:
         url = f"{TRADO_LIVE_URL}/cashBalance/item"
     response = requests.get(url, headers=headers, params=params)
-    print("111111111111111111111111111111111111111", response.data)
+    print("111111111111111111111111111111111111111", response)
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
