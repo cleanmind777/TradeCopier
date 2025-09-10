@@ -79,13 +79,16 @@ async def get_sub_brokers(
     db: Session, sub_broker_filter: SubBrokerFilter
 ) -> list[SubBrokerInfoPlus] | None:
     sub_broker_info_plus_list: list[SubBrokerInfoPlus] = []
+    print("Sub Broker Filter: ", sub_broker_filter)
     sub_broker_info_list = await user_get_sub_brokers(db, sub_broker_filter)
+    print("sub_broker_info_list:", sub_broker_info_list)
     db_broker_account = (
         db.query(BrokerAccount)
         .filter(BrokerAccount.user_broker_id == sub_broker_filter.user_broker_id)
         .first()
     )
     access_token = db_broker_account.access_token
+    print("Access Token:", access_token)
     if sub_broker_info_list:
         for sub_broker_info in sub_broker_info_list:
             response = await get_account_balance(
@@ -108,6 +111,7 @@ async def get_sub_brokers(
                 balance=balance,
             )
             sub_broker_info_plus_list.append(sub_broker_info_plus)
+    print("sub_broker_info_plus_list: ", sub_broker_info_plus_list)
     return sub_broker_info_plus_list
 
 
