@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { PlusCircle, Wallet, Trash2, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Sidebar from '../components/layout/Sidebar';
@@ -13,6 +13,7 @@ const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/
 
 const SubBrokerPage: React.FC = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
@@ -56,14 +57,6 @@ const SubBrokerPage: React.FC = () => {
             <div className="flex-1 flex flex-col">
                 <Header />
                 <main className="flex-1 p-6 space-y-6">
-                    {/* Page Header */}
-                    <div className="flex items-center justify-between">
-                        <h1 className="text-2xl font-bold text-slate-900">Broker Accounts</h1>
-                        <Button onClick={() => setIsModalOpen(true)}>
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Add Broker Account
-                        </Button>
-                    </div>
 
                     {/* Accounts Grid */}
                     <div className="grid grid-cols-1 gap-6">
@@ -74,13 +67,17 @@ const SubBrokerPage: React.FC = () => {
                                         <div className="flex items-center justify-between">
                                             <div>
                                                 <h3 className="text-lg font-semibold text-slate-900">{account.nickname}</h3>
-                                                <p className="text-sm text-slate-500">{account.type}</p>
+                                                <p className="text-sm text-slate-500">{account.sub_account_name}</p>
                                             </div>
                                             <Wallet className="h-6 w-6 text-blue-500" />
                                         </div>
                                     </CardHeader>
                                     <CardContent>
                                         <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-slate-600">Account Type</span>
+                                                <span className="text-sm text-slate-500">{account.account_type}</span>
+                                            </div>
                                             <div className="flex items-center justify-between">
                                                 <span className="text-sm text-slate-600">Status</span>
                                                 <button
@@ -98,11 +95,30 @@ const SubBrokerPage: React.FC = () => {
                                                 </button>
                                             </div>
                                             <div className="flex items-center justify-between">
+                                                <span className="text-sm text-slate-600">Demo Account</span>
+                                                <span className="text-sm text-slate-500">
+                                                    {account.is_demo ? 'Yes' : 'No'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-slate-600">Balance</span>
+                                                <span className="text-sm text-slate-500">
+                                                    {account.balance ? `$${account.balance.toFixed(2)}` : 'N/A'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
                                                 <span className="text-sm text-slate-600">Last Updated</span>
-                                                <span className="text-sm text-slate-500">{String(account.last_sync)}</span>
+                                                <span className="text-sm text-slate-500">
+                                                    {new Date(account.last_sync).toLocaleString()}
+                                                </span>
                                             </div>
                                             <div className="flex space-x-2 mt-4">
-                                                <Button variant="outline" size="sm" className="w-full">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="w-full"
+                                                    onClick={() => navigate(`/sub-brokers/${account.id}`)}
+                                                >
                                                     <Eye className="mr-2 h-4 w-4" />
                                                     View
                                                 </Button>
@@ -130,7 +146,7 @@ const SubBrokerPage: React.FC = () => {
                     <Modal
                         isOpen={isModalOpen}
                         onClose={() => setIsModalOpen(false)}
-                        title="Add New Broker Account"
+                        title="Add New Sub Broker Account"
                     >
                         <div className="space-y-6">
                             <div className="flex flex-col gap-4">
