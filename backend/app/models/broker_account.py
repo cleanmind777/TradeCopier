@@ -29,3 +29,22 @@ class BrokerAccount(Base):
     expire_in = Column(String, nullable=True)
 
     user = relationship("User", back_populates="broker_accounts")
+
+
+class SubBrokerAccount(Base):
+    __tablename__ = "sub_broker_accounts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    user_broker_id = Column(String, nullable=False)
+    sub_account_id = Column(String, nullable=False)
+    nickname = Column(String, nullable=False)
+    sub_account_name = Column(String, nullable=False)
+    type = Column(String, nullable=False)
+    is_demo = Column(Boolean, nullable=False)
+    last_sync = Column(DateTime, default=func.now())
+    status = Column(Boolean, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+
+    user = relationship("User", back_populates="sub_broker_accounts")
+    broker_account = relationship("BrokerAccount", back_populates="sub_broker_accounts")

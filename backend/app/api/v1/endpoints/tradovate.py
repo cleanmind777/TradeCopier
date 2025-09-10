@@ -131,7 +131,7 @@ async def oauth_callback(
             access_token=token_data["access_token"],
             expire_in=token_data["expires_in"],
         )
-        user_brokers_list = add_tradovate_broker(db, broker_add)
+        user_brokers_list = await add_tradovate_broker(db, broker_add)
     print(token_data["access_token"], token_data["expires_in"])
     return RedirectResponse(f"{FRONTEND_URL}/broker")
 

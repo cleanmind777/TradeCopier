@@ -40,3 +40,39 @@ class BrokerFilter(BaseModel):
     nickname: Optional[str] = None
     type: Optional[str] = None
     status: Optional[bool] = None
+
+
+class SubBrokerAdd(BaseModel):
+    user_id: UUID
+    user_broker_id: str
+    sub_account_id: str
+    nickname: Optional[str] = None
+    sub_account_name: str
+    type: str
+    account_type: str
+    is_demo: bool
+    status: bool
+    account_type: str
+
+
+class SubBrokerInfo(SubBrokerAdd):
+    id: UUID
+    last_sync: datetime
+    is_active: bool
+
+
+class SubBrokerInfoPlus(SubBrokerInfo):
+    balance: float
+
+
+class SubBrokerFilter(BaseModel):
+    id: Optional[UUID] = None
+    user_id: Optional[UUID] = None
+    user_broker_id: Optional[str] = None
+    sub_account_id: Optional[str] = None
+    nickname: Optional[str] = None
+    sub_account_name: Optional[str] = None
+    type: Optional[str] = None
+    is_demo: Optional[bool] = None
+    status: Optional[bool] = None
+    is_active: Optional[bool] = None
