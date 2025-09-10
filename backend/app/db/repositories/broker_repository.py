@@ -75,6 +75,10 @@ def user_get_brokers(
         query = query.filter(BrokerAccount.id == broker_filter.id)
     if broker_filter.user_id != None:
         query = query.filter(BrokerAccount.user_id == broker_filter.user_id)
+    if broker_filter.user_broker_id != None:
+        query = query.filter(
+            BrokerAccount.user_broker_id == broker_filter.user_broker_id
+        )
     if broker_filter.nickname != None:
         query = query.filter(BrokerAccount.nickname == broker_filter.nickname)
     if broker_filter.type != None:

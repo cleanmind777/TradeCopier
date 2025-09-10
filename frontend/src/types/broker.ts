@@ -1,6 +1,7 @@
 export interface BrokerFilter {
   id?: string;
   user_id?: string;
+  user_broker_id?: string;
   nickname?: string;
   type?: string;
   status?: boolean;
@@ -42,5 +43,17 @@ export interface SubBrokerFilter {
   type?: string;
   is_demo?: boolean;
   status?: boolean;
+  is_active?: boolean;
+}
+
+export interface BrokerChange {
+  id: string;
+  nickname?: string;
+  status?: boolean;
+}
+
+export interface SubBrokerChange {
+  id: string;
+  nickname?: string;
   is_active?: boolean;
 }

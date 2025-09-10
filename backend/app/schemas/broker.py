@@ -41,6 +41,7 @@ class BrokerFilter(BaseModel):
     nickname: Optional[str] = None
     type: Optional[str] = None
     status: Optional[bool] = None
+    user_broker_id: Optional[str] = None
 
 
 class SubBrokerAdd(BaseModel):
