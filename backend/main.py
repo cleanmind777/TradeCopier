@@ -3,19 +3,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
 from app.core.config import settings
-from app.models import base  # Your models Base
+from app.models import base  # Your declarative base with models
 from app.services.broker_service import (
     refresh_new_token,
-)  # Your async token regeneration
+)  # Your async token refresh logic
+from app.api.v1.routers import api_router  # Your routers
 
-# Create Async SQLAlchemy engine and sessionmaker
+# Async SQLAlchemy engine and session maker
 engine = create_async_engine(settings.ASYNC_DATABASE_URL, echo=True)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 
-# Dependency for injecting DB sessions in routes
+# Dependency to provide async DB sessions for routes
 async def get_db():
     async with async_session() as session:
         yield session
@@ -23,7 +23,7 @@ async def get_db():
 
 app = FastAPI(title="My FastAPI App")
 
-# CORS setup
+# CORS origins
 origins = [
     "http://localhost:5173",
     "http://tc.streetagent.ai",
@@ -40,28 +40,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include your routers
 app.include_router(api_router, prefix="/api/v1")
 
 
-# Async DB initialization
+# Async database schema initialization
 async def init_db():
     async with engine.begin() as conn:
-        # Creates tables for all models defined on base
         await conn.run_sync(base.Base.metadata.create_all)
 
 
-# Background task to run every 2 minutes
+# Periodic background task to refresh tokens
 async def regenerate_access_token_periodically():
     while True:
         async with async_session() as db:
             print("Regenerating access token...")
             await refresh_new_token(db)
-        await asyncio.sleep(120)  # 2 minutes
+        await asyncio.sleep(120)  # Sleep 2 minutes
 
 
-# Startup event to run DB init and background task
+# FastAPI startup event to initialize DB and start background task
 @app.on_event("startup")
-async def startup_event():
+async def on_startup():
     await init_db()
     asyncio.create_task(regenerate_access_token_periodically())
