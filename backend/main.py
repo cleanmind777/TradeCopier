@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 import asyncio
 from app.dependencies.database import get_db
+from app.dependencies.database import SessionLocal
 
 load_dotenv(dotenv_path=".env", encoding="utf-8-sig")
 
@@ -36,19 +37,15 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 
-async def regenerate_access_token_periodically(db: Session):
+async def regenerate_access_token_periodically():
     while True:
-        # Your regeneration logic here
-        print("Regenerating access token...")
-
-        # Imagine calling your async token regeneration function here
-        # await regenerate_token()
-
-        # Sleep for 2 minutes
-        await asyncio.sleep(1)  # 120 seconds = 2 minutes
+        async with SessionLocal() as db:
+            # Your regeneration logic here
+            print("Regenerating access token...")
+            # await regenerate_token(db)
+        await asyncio.sleep(120)  # Sleep 2 minutes
 
 
 @app.on_event("startup")
-async def startup_event(db: Session = Depends(get_db)):
-    # Schedule the background task to run forever in the background
-    asyncio.create_task(regenerate_access_token_periodically(db))
+async def startup_event():
+    asyncio.create_task(regenerate_access_token_periodically())
