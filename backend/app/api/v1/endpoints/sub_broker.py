@@ -27,8 +27,10 @@ router = APIRouter()
     response_model=list[SubBrokerInfoPlus] | None,
     status_code=status.HTTP_201_CREATED,
 )
-def get_Sub_brokers(sub_broker_filter: SubBrokerFilter, db: Session = Depends(get_db)):
-    response = get_sub_brokers(db, sub_broker_filter)
+async def get_Sub_brokers(
+    sub_broker_filter: SubBrokerFilter, db: Session = Depends(get_db)
+):
+    response = await get_sub_brokers(db, sub_broker_filter)
     if response is None:
         raise HTTPException(status_code=404, detail="SubBrokers not found")
     return response
