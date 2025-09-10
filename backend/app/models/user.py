@@ -33,3 +33,4 @@ class User(Base):
     otp_expire = Column(DateTime, nullable=True)
 
     broker_accounts = relationship("BrokerAccount", back_populates="user")
+    sub_broker_accounts = relationship("SubBrokerAccount", back_populates="user")
