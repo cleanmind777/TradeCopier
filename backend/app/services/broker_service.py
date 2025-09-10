@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.future import select
 from fastapi import HTTPException, status, BackgroundTasks
 import json
 from uuid import UUID
@@ -119,8 +120,9 @@ def del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
     return user_del_broker(db, broker_id)
 
 
-def refresh_new_token(db: Session):
-    db_broker_accounts = db.query(BrokerAccount).all()
+async def refresh_new_token(db: Session):
+    result = await db.execute(select(BrokerAccount))
+    db_broker_accounts = result.scalars().all()
     if db_broker_accounts:
         for broker in db_broker_accounts:
             new_token = get_renew_token(broker.access_token)
