@@ -22,6 +22,7 @@ def add_Broker(broker_connect: BrokerConnect, db: Session = Depends(get_db)):
     "/get", response_model=list[BrokerInfo], status_code=status.HTTP_201_CREATED
 )
 def get_Brokers(broker_filter: BrokerFilter, db: Session = Depends(get_db)):
+    print("111111111111111111111111111111111")
     response = get_brokers(db, broker_filter)
     if response is None:
         raise HTTPException(status_code=404, detail="Brokers not found")
