@@ -22,7 +22,7 @@ class BrokerAccount(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     nickname = Column(String, nullable=False)
     type = Column(String, nullable=False)
-    last_sync = Column(DateTime, onupdate=func.now())
+    last_sync = Column(DateTime, default=func.now())
     status = Column(Boolean, default=False)
     user_broker_id = Column(String, nullable=True)
     access_token = Column(String, nullable=True)
