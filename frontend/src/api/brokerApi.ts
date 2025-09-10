@@ -49,7 +49,7 @@ export const getSubBrokers = async (
 ): Promise<SubBrokerInfo[] | null> => {
   try {
     const response = await axios.post(
-      `${API_BASE}/sub_broker/get`,
+      `${API_BASE}/subbroker/get`,
       subBrokerFilter
     );
     return response.data;
