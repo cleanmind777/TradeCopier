@@ -40,7 +40,9 @@ class Settings(BaseSettings):
 
     SEC: str = Field(env="SEC")
 
-    TRADOVATE_API_URL: str = Field(env="TRADOVATE_API_URL")
+    TRADOVATE_LIVE_API_URL: str = Field(env="TRADOVATE_LIVE_API_URL")
+
+    TRADOVATE_DEMO_API_URL: str = Field(env="TRADOVATE_DEMO_API_URL")
 
     TRADOVATE_REDIRECT_URL: str = Field(env="TRADOVATE_REDIRECT_URL")
 
