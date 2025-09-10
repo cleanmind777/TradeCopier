@@ -29,9 +29,6 @@ class BrokerAccount(Base):
     expire_in = Column(String, nullable=True)
 
     user = relationship("User", back_populates="broker_accounts")
-    sub_broker_accounts = relationship(
-        "SubBrokerAccount", back_populates="broker_account"
-    )
 
 
 class SubBrokerAccount(Base):
@@ -50,4 +47,3 @@ class SubBrokerAccount(Base):
     is_active = Column(Boolean, nullable=False, default=True)
 
     user = relationship("User", back_populates="sub_broker_accounts")
-    broker_account = relationship("BrokerAccount", back_populates="sub_broker_accounts")
