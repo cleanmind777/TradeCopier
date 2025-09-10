@@ -15,7 +15,7 @@ def getAccessTokenForTradoVate(broker_connect: BrokerConnect) -> RespondTradoVat
     }
     header = {"content-type": "application/json"}
     response = requests.post(
-        f"{settings.TRADOVATE_API_URL}/auth/accesstokenrequest",
+        f"{settings.TRADOVATE_LIVE_API_URL}/auth/accesstokenrequest",
         headers=header,
         json=data,
     )

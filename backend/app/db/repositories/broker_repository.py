@@ -1,15 +1,22 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
 from sqlalchemy.future import select
-from app.models.broker_account import BrokerAccount
-from app.schemas.broker import BrokerAdd, BrokerInfo, BrokerFilter
+from app.models.broker_account import BrokerAccount, SubBrokerAccount
+from app.schemas.broker import (
+    BrokerAdd,
+    BrokerInfo,
+    BrokerFilter,
+    SubBrokerAdd,
+    SubBrokerInfo,
+    SubBrokerFilter,
+)
 import json
 import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 
 
-def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
+async def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
     db_broker_account = (
         db.query(BrokerAccount)
         .filter(BrokerAccount.user_id == broker_add.user_id)
@@ -31,6 +38,34 @@ def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
     return db.query(BrokerAccount).all()
 
 
+def user_add_sub_broker(
+    db: Session, sub_broker_add: SubBrokerAdd
+) -> list[SubBrokerInfo]:
+    db_sub_broker_account = (
+        db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.user_id == sub_broker_add.user_id)
+        .filter(SubBrokerAccount.type == sub_broker_add.type)
+        .all()
+    )
+    counter = len(db_sub_broker_account)
+    db_sub_broker = SubBrokerAccount(
+        user_id=sub_broker_add.user_id,
+        nickname=f"Sub {sub_broker_add.type} {counter}",
+        type=sub_broker_add.type,
+        account_type=sub_broker_add.account_type,
+        user_broker_id=sub_broker_add.user_broker_id,
+        sub_account_id=sub_broker_add.sub_account_id,
+        sub_account_name=sub_broker_add.sub_account_name,
+        status=sub_broker_add.status,
+        is_active=True,
+        is_demo=sub_broker_add.is_demo,
+    )
+    db.add(db_sub_broker)
+    db.commit()
+    db.refresh(db_sub_broker)
+    return db.query(SubBrokerAccount).all()
+
+
 def user_get_brokers(
     db: Session, broker_filter: BrokerFilter
 ) -> list[BrokerInfo] | None:
@@ -46,6 +81,41 @@ def user_get_brokers(
         query = query.filter(BrokerAccount.type == broker_filter.type)
     if broker_filter.status != None:
         query = query.filter(BrokerAccount.status == broker_filter.status)
+    result = db.execute(query)
+    brokers = result.scalars().all()
+    return brokers
+
+
+def user_get_sub_brokers(
+    db: Session, sub_broker_filter: SubBrokerFilter
+) -> list[SubBrokerInfo] | None:
+    query = select(SubBrokerAccount)
+    if sub_broker_filter.id != None:
+        query = query.filter(SubBrokerAccount.id == sub_broker_filter.id)
+    if sub_broker_filter.user_id != None:
+        query = query.filter(SubBrokerAccount.user_id == sub_broker_filter.user_id)
+    if sub_broker_filter.user_broker_id != None:
+        query = query.filter(
+            SubBrokerAccount.user_broker_id == sub_broker_filter.user_broker_id
+        )
+    if sub_broker_filter.sub_account_id != None:
+        query = query.filter(
+            SubBrokerAccount.sub_account_id == sub_broker_filter.sub_account_id
+        )
+    if sub_broker_filter.nickname != None:
+        query = query.filter(SubBrokerAccount.nickname == sub_broker_filter.nickname)
+    if sub_broker_filter.sub_account_name != None:
+        query = query.filter(
+            SubBrokerAccount.sub_account_name == sub_broker_filter.sub_account_name
+        )
+    if sub_broker_filter.type != None:
+        query = query.filter(SubBrokerAccount.type == sub_broker_filter.type)
+    if sub_broker_filter.status != None:
+        query = query.filter(SubBrokerAccount.status == sub_broker_filter.status)
+    if sub_broker_filter.is_demo != None:
+        query = query.filter(SubBrokerAccount.status == sub_broker_filter.is_demo)
+    if sub_broker_filter.is_active != None:
+        query = query.filter(SubBrokerAccount.is_active == sub_broker_filter.is_active)
     result = db.execute(query)
     brokers = result.scalars().all()
     return brokers

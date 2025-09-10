@@ -14,7 +14,7 @@ CREATE TABLE users (
 
 CREATE TABLE broker_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id),,
     nickname VARCHAR NOT NULL,
     type VARCHAR NOT NULL,
     last_sync TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -22,4 +22,19 @@ CREATE TABLE broker_accounts (
     user_broker_id VARCHAR,
     access_token VARCHAR,
     expire_in VARCHAR
+);
+
+CREATE TABLE sub_broker_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    user_broker_id VARCHAR NOT NULL,
+    sub_account_id VARCHAR NOT NULL,
+    nickname VARCHAR NOT NULL,
+    sub_account_name VARCHAR NOT NULL,
+    type VARCHAR NOT NULL,
+    account_type VARCHAR NOT NULL,
+    is_demo BOOLEAN NOT NULL,
+    last_sync TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    status BOOLEAN NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
