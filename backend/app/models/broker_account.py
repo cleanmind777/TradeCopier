@@ -41,7 +41,7 @@ class SubBrokerAccount(Base):
     nickname = Column(String, nullable=False)
     sub_account_name = Column(String, nullable=False)
     type = Column(String, nullable=False)
-    account_type = ColumnColumn(String, nullable=False)
+    account_type = Column(String, nullable=False)
     is_demo = Column(Boolean, nullable=False)
     last_sync = Column(DateTime, default=func.now())
     status = Column(Boolean, nullable=False)
