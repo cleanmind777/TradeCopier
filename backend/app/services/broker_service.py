@@ -54,7 +54,7 @@ async def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[Broke
                 is_demo=True,
                 status=demo_account["active"],
             )
-            await user_add_sub_broker(db, sub_demo_account)
+            user_add_sub_broker(db, sub_demo_account)
     if len(sub_live_account_list):
         for live_account in sub_live_account_list:
             sub_live_account = SubBrokerAdd(
@@ -67,7 +67,7 @@ async def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[Broke
                 is_demo=False,
                 status=live_account["active"],
             )
-            await user_add_sub_broker(db, sub_live_account)
+            user_add_sub_broker(db, sub_live_account)
     return await user_add_broker(db, broker_add)
 
 
