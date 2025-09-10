@@ -15,13 +15,14 @@ from app.schemas.broker import (
 )
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
 from app.utils.broker import getAccessTokenForTradoVate
-from app.utils.tradovate import get_account_list, get_account_balance
+from app.utils.tradovate import get_account_list, get_account_balance, get_renew_token
 from app.db.repositories.broker_repository import (
     user_add_broker,
     user_get_brokers,
     user_del_broker,
     user_add_sub_broker,
     user_get_sub_brokers,
+    user_refresh_token,
 )
 
 
@@ -116,3 +117,11 @@ async def get_sub_brokers(
 
 def del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
     return user_del_broker(db, broker_id)
+
+
+def refresh_new_token(db: Session):
+    db_broker_accounts = db.query(BrokerAccount).all()
+    if db_broker_accounts:
+        for broker in db_broker_accounts:
+            new_token = get_renew_token(broker.access_token)
+            user_refresh_token(db, broker.id, new_token)

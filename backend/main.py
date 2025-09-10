@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import asyncio
 from app.dependencies.database import get_db
 from app.dependencies.database import SessionLocal
+from app.services.broker_service import refresh_new_token
 
 load_dotenv(dotenv_path=".env", encoding="utf-8-sig")
 
@@ -42,7 +43,7 @@ async def regenerate_access_token_periodically():
         async with SessionLocal() as db:
             # Your regeneration logic here
             print("Regenerating access token...")
-            # await regenerate_token(db)
+            await refresh_new_token(db)
         await asyncio.sleep(120)  # Sleep 2 minutes
 
 
