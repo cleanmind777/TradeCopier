@@ -30,12 +30,19 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
     headers = {
         "Authorization": f"Bearer {access_token}",
     }
-    params = {id: id}
+    params = {"id": account_id}
     if is_demo:
-        url = f"{TRADO_DEMO_URL}/cashBalance/deps"
+        url = f"{TRADO_DEMO_URL}/cashBalance/item"
     else:
-        url = f"{TRADO_LIVE_URL}/cashBalance/deps"
+        url = f"{TRADO_LIVE_URL}/cashBalance/item"
     response = requests.get(url, headers=headers, params=params)
-    data = response.json()
-    print("Account Balance: ", data)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+        except ValueError:
+            # Log error or handle malformed JSON
+            data = None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        data = None
     return data
