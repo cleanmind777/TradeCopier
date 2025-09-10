@@ -93,7 +93,7 @@ async def get_sub_brokers(
             )
             print("Balance: ", response)
             if response:
-                balance = response.data["amount"]
+                balance = response[0]["amount"]
             else:
                 balance = 0
             sub_broker_info_plus = SubBrokerInfoPlus(

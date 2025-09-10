@@ -30,7 +30,7 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
     headers = {
         "Authorization": f"Bearer {access_token}",
     }
-    params = {"id": account_id}
+    params = {"masterid": account_id}
     if is_demo:
         url = f"{TRADO_DEMO_URL}/cashBalance/item"
     else:
