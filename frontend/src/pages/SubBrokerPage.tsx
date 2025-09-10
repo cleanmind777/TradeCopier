@@ -1,59 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useParams } from "react-router-dom";
 import { PlusCircle, Wallet, Trash2, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Sidebar from '../components/layout/Sidebar';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { BrokerFilter, BrokerInfo } from '../types/broker';
-import { getBrokers } from '../api/brokerApi';
+import { SubBrokerFilter, SubBrokerInfo } from '../types/broker';
+import { getSubBrokers } from '../api/brokerApi';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
 
-const BrokerPage: React.FC = () => {
-    const navigate = useNavigate();
+const SubBrokerPage: React.FC = () => {
+    const { id } = useParams();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-    const [brokerAccounts, setBrokerAccounts] = useState<BrokerInfo[] | null>(null);
-    const [newBrokerData, setNewBrokerData] = useState({
-        name: '',
-        broker: '',
-        apiKey: '',
-        secretKey: '',
-    });
+    const [brokerAccounts, setBrokerAccounts] = useState<SubBrokerInfo[] | null>(null);
 
     const user = localStorage.getItem('user');
     const user_id = user ? JSON.parse(user).id : null;
 
     const getBrokerAccounts = async () => {
-        const brokerFilter: BrokerFilter = {
-            "user_id": user_id
+        const subBrokerFilter: SubBrokerFilter = {
+            "user_id": user_id,
+            "user_broker_id": id
         }
-        const brokers = await getBrokers(brokerFilter);
-        setBrokerAccounts(brokers);
+        const brokers = await getSubBrokers(subBrokerFilter);
+        if (brokers) {
+            setBrokerAccounts(brokers);
+        }
     }
-
-    const handleAddBroker = (e: React.FormEvent) => {
-        e.preventDefault();
-        console.log("Adding new broker:", newBrokerData);
-        setIsModalOpen(false);
-        setNewBrokerData({
-            name: '',
-            broker: '',
-            apiKey: '',
-            secretKey: '',
-        });
-    };
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setNewBrokerData(prev => ({
-            ...prev,
-            [name]: value,
-        }));
-    };
 
     const toggleAccountStatus = (id: string) => {
         if (brokerAccounts != null) {
@@ -89,7 +66,7 @@ const BrokerPage: React.FC = () => {
                     </div>
 
                     {/* Accounts Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 gap-6">
                         {brokerAccounts && (
                             brokerAccounts.map((account) => (
                                 <Card key={account.id} className="hover:shadow-lg transition-shadow duration-200">
@@ -125,12 +102,7 @@ const BrokerPage: React.FC = () => {
                                                 <span className="text-sm text-slate-500">{String(account.last_sync)}</span>
                                             </div>
                                             <div className="flex space-x-2 mt-4">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="w-full"
-                                                    onClick={() => navigate(`/broker/${account.user_broker_id}`)}
-                                                >
+                                                <Button variant="outline" size="sm" className="w-full">
                                                     <Eye className="mr-2 h-4 w-4" />
                                                     View
                                                 </Button>
@@ -188,4 +160,4 @@ const BrokerPage: React.FC = () => {
     );
 };
 
-export default BrokerPage;
+export default SubBrokerPage;
