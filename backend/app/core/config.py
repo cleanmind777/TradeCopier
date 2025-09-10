@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     # Database connection URL
     DATABASE_URL: str = Field(..., env="DATABASE_URL")
 
+    ASYNC_DATABASE_URL: str = Field(..., env="ASYNC_DATABASE_URL")
+
     # Secret key for JWT signing
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
 
