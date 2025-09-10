@@ -131,3 +131,11 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
     query.delete(synchronize_session=False)
     db.commit()
     return db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
+
+
+def user_refresh_token(db: Session, id: UUID, new_token: str):
+    db_broker_account = db.query(BrokerAccount).filter(BrokerAccount.id == id).first()
+    db_broker_account.access_token = new_token
+    db.commit()
+    db.refresh(db_broker_account)
+    return db_broker_account
