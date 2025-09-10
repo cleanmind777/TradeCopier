@@ -5,6 +5,8 @@ import {
   BrokerInfo,
   SubBrokerFilter,
   SubBrokerInfo,
+  SubBrokerChange,
+  BrokerChange,
 } from "../types/broker";
 
 const API_BASE =
@@ -59,6 +61,46 @@ export const getSubBrokers = async (
       alert(error.response?.data.detail);
     } else {
       console.error("Unexpected fetch brokers error:", error);
+    }
+    return null;
+  }
+};
+
+export const changeSubBrokerAccount = async (
+  subBrokerChange: SubBrokerChange
+): Promise<SubBrokerInfo[] | null> => {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/subbroker/change`,
+      subBrokerChange
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      console.error("Change SubBrokers:", error.response?.data);
+      alert(error.response?.data.detail);
+    } else {
+      console.error("Unexpected Change Sub brokers error:", error);
+    }
+    return null;
+  }
+};
+
+export const changeBrokerAccount = async (
+  brokerChange: BrokerChange
+): Promise<SubBrokerInfo[] | null> => {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/broker/change`,
+      brokerChange
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      console.error("Change SubBrokers:", error.response?.data);
+      alert(error.response?.data.detail);
+    } else {
+      console.error("Unexpected Change Sub brokers error:", error);
     }
     return null;
   }
