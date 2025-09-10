@@ -82,7 +82,9 @@ async def auth(request: Request):
 
 
 @router.get("/oauth/tradovate/callback")
-async def oauth_callback(request: Request, code: str = None):
+async def oauth_callback(
+    request: Request, code: str = None, db: Session = Depends(get_db)
+):
     if not code:
         return HTMLResponse("No code provided", status_code=400)
     # Exchange code for token
@@ -98,6 +100,7 @@ async def oauth_callback(request: Request, code: str = None):
         if r.status_code != 200:
             return HTMLResponse(f"Failed to exchange code: {r.text}", status_code=400)
         token_data = r.json()
+        print(token_data)
         if "error" in token_data:
             return HTMLResponse(
                 f"Error: {token_data['error_description']}", status_code=400
@@ -106,7 +109,31 @@ async def oauth_callback(request: Request, code: str = None):
         # Save access token in session
         request.session["access_token"] = token_data["access_token"]
         request.session["expires_in"] = token_data["expires_in"]
-    return RedirectResponse("/")
+        async with httpx.AsyncClient() as client:
+            headers = {"Authorization": f"Bearer {token_data["access_token"]}"}
+            r = await client.get(API_ME_URL, headers=headers)
+            print("asdfasdfsdf,", r.status_code)
+            if r.status_code == 200:
+                me = r.json()
+            else:
+                # Token might be invalid or expired, clear session
+                request.session.pop("access_token", None)
+                return HTMLResponse(
+                    """
+                    <h2>Tradovate OAuth</h2>
+                    <a href="/auth"><h3>Click to Authenticate</h3></a>
+                """
+                )
+        broker_add = BrokerAdd(
+            user_id=router.user_id,
+            type="tradovate",
+            user_broker_id=str(me.get("userId")),
+            access_token=token_data["access_token"],
+            expire_in=token_data["expires_in"],
+        )
+        user_brokers_list = add_tradovate_broker(db, broker_add)
+    print(token_data["access_token"], token_data["expires_in"])
+    return RedirectResponse(f"{FRONTEND_URL}/broker")
 
 
 @router.get("/logout")
