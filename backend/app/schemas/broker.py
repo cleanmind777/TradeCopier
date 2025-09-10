@@ -26,6 +26,7 @@ class BrokerInfo(BrokerBase):
     id: UUID
     last_sync: datetime
     status: bool
+    user_broker_id: str
 
 
 class RespondTradoVate(BaseModel):
@@ -52,7 +53,6 @@ class SubBrokerAdd(BaseModel):
     account_type: str
     is_demo: bool
     status: bool
-    account_type: str
 
 
 class SubBrokerInfo(SubBrokerAdd):

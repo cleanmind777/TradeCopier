@@ -9,6 +9,7 @@ import BrokerPage from './pages/BrokerPage';
 import SignUpPage from './pages/SignUpPage';
 import AdminPage from './pages/admin/AdminPage';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
+import SubBrokerPage from './pages/SubBrokerPage';
 
 
 function App() {
@@ -31,6 +32,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <BrokerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/broker/:id"
+            element={
+              <ProtectedRoute>
+                <SubBrokerPage />
               </ProtectedRoute>
             }
           />
