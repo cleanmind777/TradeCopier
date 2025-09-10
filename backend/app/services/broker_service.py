@@ -80,7 +80,7 @@ async def get_sub_brokers(
 ) -> list[SubBrokerInfoPlus] | None:
     sub_broker_info_plus_list: list[SubBrokerInfoPlus] = []
     print("Sub Broker Filter: ", sub_broker_filter)
-    sub_broker_info_list = await user_get_sub_brokers(db, sub_broker_filter)
+    sub_broker_info_list = user_get_sub_brokers(db, sub_broker_filter)
     print("sub_broker_info_list:", sub_broker_info_list)
     db_broker_account = (
         db.query(BrokerAccount)
