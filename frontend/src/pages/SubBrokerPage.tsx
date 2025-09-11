@@ -169,31 +169,51 @@ const SubBrokerPage: React.FC = () => {
                             </div>
 
                             {/* Table Header */}
-                            <div className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr_1fr_1fr_2fr_2fr_2fr_1fr_1fr] gap-2 text-sm font-semibold text-slate-600 border-b border-slate-200 pb-2 select-none overflow-x-auto">
+                            <div className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr_1fr_1fr_2fr_2fr_2fr_1fr_1fr] gap-3 text-sm font-semibold text-slate-700 border-b border-slate-200 pb-3 select-none overflow-x-auto">
                                 <div className="flex justify-center">
                                     <button onClick={() => { }} aria-label="Toggle status">
                                         {/* Optional toggleAll here */}
                                     </button>
                                 </div>
-                                <div>Status</div>
-                                <div>Name</div>
-                                <div>ID</div>
-                                <div>Type</div>
-                                <div>Mode</div>
-                                <div>Subs</div>
-                                <div>Balance</div>
-                                <div className="text-center">Actions</div>
+                                <div className="flex items-center">
+                                    <span>Status</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span>Name</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span>ID</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span>Type</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span>Mode</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span>Subs</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span>Balance</span>
+                                </div>
+                                <div className="text-center">
+                                    <span>Actions</span>
+                                </div>
                             </div>
 
                             {/* Table Rows */}
                             {subBrokerAccounts?.map(account => (
                                 <div
                                     key={account.id}
-                                    className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr_1fr_1fr_2fr_2fr_2fr_1fr_1fr] gap-2 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto"
+                                    className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr_1fr_1fr_2fr_2fr_2fr_1fr_1fr] gap-3 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto hover:bg-slate-50 transition-colors"
                                 >
                                     {/* Is_active */}
                                     <div className="flex justify-center">
-                                        <button onClick={() => toggleAccountStatus(account.id)} aria-label="Toggle status">
+                                        <button
+                                            onClick={() => toggleAccountStatus(account.id)}
+                                            aria-label="Toggle status"
+                                            className="p-1 rounded-full hover:bg-slate-100 transition-colors"
+                                        >
                                             {account.is_active ? (
                                                 <ToggleRight className="h-6 w-6 text-green-500" />
                                             ) : (
@@ -204,11 +224,7 @@ const SubBrokerPage: React.FC = () => {
 
                                     {/* Status indicator */}
                                     <div className="flex justify-center">
-                                        {account.status ? (
-                                            <span className="block w-5 h-5 rounded-full bg-green-500" aria-label="Active status" />
-                                        ) : (
-                                            <span className="block w-5 h-5 rounded-full bg-red-500" aria-label="Inactive status" />
-                                        )}
+                                        <div className={`w-5 h-5 rounded-full ${account.status ? 'bg-green-500' : 'bg-red-500'} shadow-sm`} />
                                     </div>
 
                                     {/* Editable Nickname Input */}
@@ -218,50 +234,64 @@ const SubBrokerPage: React.FC = () => {
                                                 type="text"
                                                 value={editedNicknames[account.id] || ''}
                                                 onChange={e => onNicknameChange(account.id, e.target.value)}
-                                                className="w-full px-2 py-1 border rounded text-sm text-slate-900"
+                                                className="w-full px-3 py-1.5 border rounded-lg text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                             />
                                         ) : (
-                                            <input
-                                                type="text"
-                                                value={account.nickname}
-                                                readOnly
-                                                className="w-full bg-transparent border border-transparent text-sm text-slate-900"
-                                            />
+                                            <div className="px-3 py-1.5 text-slate-900">
+                                                {account.nickname}
+                                            </div>
                                         )}
                                     </div>
 
                                     {/* ID + sub account name */}
-                                    <div className="truncate">
-                                        <div>{account.sub_account_name}</div>
-                                        <div className="text-xs text-slate-500 truncate">{account.id}</div>
+                                    <div className="space-y-1">
+                                        <div className="font-medium text-slate-900">{account.sub_account_name}</div>
+                                        <div className="text-xs text-slate-500">{account.id}</div>
                                     </div>
 
                                     {/* Account type */}
-                                    <div className="truncate">{account.account_type}</div>
+                                    <div className="text-slate-700">
+                                        {account.account_type}
+                                    </div>
 
                                     {/* Mode (demo/live) */}
                                     <div>
                                         <span
-                                            className={`text-xs font-medium rounded px-2 py-0.5 ${account.is_demo ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                                                }`}
+                                            className={`inline-block text-xs font-medium rounded-full px-3 py-1 ${account.is_demo ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}
                                         >
                                             {account.is_demo ? 'Paper' : 'Live'}
                                         </span>
                                     </div>
 
                                     {/* Subscriptions count */}
-                                    <div className="text-center">{0}</div>
+                                    <div className="text-center text-slate-700">
+                                        {0}
+                                    </div>
 
                                     {/* Balance */}
-                                    <div>${account.balance?.toFixed(2) ?? 'N/A'}</div>
+                                    <div className="font-medium text-slate-900">
+                                        ${account.balance?.toFixed(2) ?? 'N/A'}
+                                    </div>
 
                                     {/* Actions */}
                                     <div className="flex justify-center space-x-2">
-                                        {/* Edit/Save/Cancel Buttons for nickname editing */}
                                         {editingNicknameIds.includes(account.id) ? (
                                             <>
-                                                <Button size="sm" onClick={() => saveNickname(account.id)}>Save</Button>
-                                                <Button size="sm" variant="outline" onClick={() => cancelEditingNickname(account.id)}>Cancel</Button>
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => saveNickname(account.id)}
+                                                    className="bg-blue-500 hover:bg-blue-600 text-white"
+                                                >
+                                                    Save
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => cancelEditingNickname(account.id)}
+                                                    className="border-slate-300 hover:bg-slate-100"
+                                                >
+                                                    Cancel
+                                                </Button>
                                             </>
                                         ) : (
                                             <>
@@ -270,12 +300,14 @@ const SubBrokerPage: React.FC = () => {
                                                         <Button
                                                             size="sm"
                                                             title="Dashboard"
+                                                            className="bg-indigo-500 hover:bg-indigo-600 text-white"
                                                         >
                                                             Dash
                                                         </Button>
                                                         <Button
                                                             size="sm"
                                                             title="Trades"
+                                                            className="bg-purple-500 hover:bg-purple-600 text-white"
                                                         >
                                                             Trades
                                                         </Button>
@@ -286,13 +318,14 @@ const SubBrokerPage: React.FC = () => {
                                                     size="sm"
                                                     onClick={() => navigate(`/sub-brokers/${account.id}`)}
                                                     title="View"
+                                                    className="border-slate-300 hover:bg-slate-100"
                                                 >
-                                                    <Eye className="h-4 w-4" />
+                                                    <Eye className="h-4 w-4 text-slate-700" />
                                                 </Button>
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    className="text-red-600 hover:bg-red-50"
+                                                    className="text-red-600 hover:bg-red-50 border-red-200"
                                                     onClick={() => {
                                                         setSelectedAccountId(account.id);
                                                         setIsDeleteModalOpen(true);
@@ -305,6 +338,7 @@ const SubBrokerPage: React.FC = () => {
                                                     size="sm"
                                                     onClick={() => startEditingNickname(account.id, account.nickname)}
                                                     title="Edit Nickname"
+                                                    className="bg-green-500 hover:bg-green-600 text-white"
                                                 >
                                                     <Edit className="h-4 w-4" />
                                                 </Button>
@@ -313,45 +347,44 @@ const SubBrokerPage: React.FC = () => {
                                     </div>
                                 </div>
                             ))}
+
+                            {/* Connection Status */}
+                            <div className="p-4 bg-green-50 rounded text-green-700 text-sm font-semibold select-none">
+                                <span>Connection successful</span>
+                            </div>
                         </div>
 
-                        {/* Connection Status */}
-                        <div className="p-4 bg-green-50 rounded text-green-700 text-sm font-semibold select-none">
-                            <span>Connection successful</span>
-                        </div>
-                    </div>
-
-                    {/* Modal for adding a new sub broker */}
-                    <Modal
-                        isOpen={isModalOpen}
-                        onClose={() => setIsModalOpen(false)}
-                        title="Add New Sub Broker Account"
-                    >
-                        <div className="space-y-6">
-                            <div
-                                className="w-full p-6 rounded-lg cursor-pointer hover:shadow-md transition-all relative"
-                                style={{ height: '150px' }}
-                                onClick={() => {
-                                    window.location.href = `${API_BASE}/tradovate/auth?user_id=${user_id}`;
-                                }}
-                            >
+                        {/* Modal for adding a new sub broker */}
+                        <Modal
+                            isOpen={isModalOpen}
+                            onClose={() => setIsModalOpen(false)}
+                            title="Add New Sub Broker Account"
+                        >
+                            <div className="space-y-6">
                                 <div
-                                    className="absolute inset-0 bg-contain bg-no-repeat bg-center rounded-lg"
-                                    style={{
-                                        backgroundImage: "url('/Tradovate-whitebg.png')",
-                                        backgroundSize: '80%',
-                                        opacity: 1,
+                                    className="w-full p-6 rounded-lg cursor-pointer hover:shadow-md transition-all relative"
+                                    style={{ height: '150px' }}
+                                    onClick={() => {
+                                        window.location.href = `${API_BASE}/tradovate/auth?user_id=${user_id}`;
                                     }}
-                                />
+                                >
+                                    <div
+                                        className="absolute inset-0 bg-contain bg-no-repeat bg-center rounded-lg"
+                                        style={{
+                                            backgroundImage: "url('/Tradovate-whitebg.png')",
+                                            backgroundSize: '80%',
+                                            opacity: 1,
+                                        }}
+                                    />
+                                </div>
+                                <div className="text-center text-slate-500 text-sm">
+                                    Don't see your broker?{' '}
+                                    <a href="/brokers/other" className="text-blue-500 hover:underline">
+                                        Add manually
+                                    </a>
+                                </div>
                             </div>
-                            <div className="text-center text-slate-500 text-sm">
-                                Don't see your broker?{' '}
-                                <a href="/brokers/other" className="text-blue-500 hover:underline">
-                                    Add manually
-                                </a>
-                            </div>
-                        </div>
-                    </Modal>
+                        </Modal>
                 </main>
             </div>
         </div>
