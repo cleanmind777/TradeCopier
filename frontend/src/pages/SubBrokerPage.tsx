@@ -169,7 +169,7 @@ const SubBrokerPage: React.FC = () => {
                             </div>
 
                             {/* Table Header */}
-                            <div className="grid grid-cols-[48px_80px_minmax(150px,1fr)_minmax(120px,1fr)_80px_80px_100px_100px] gap-2 text-sm font-semibold text-slate-600 border-b border-slate-200 pb-2 select-none overflow-x-auto">
+                            <div className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr_1fr_1fr_2fr_2fr_2fr_1fr_1fr] gap-2 text-sm font-semibold text-slate-600 border-b border-slate-200 pb-2 select-none overflow-x-auto">
                                 <div className="flex justify-center">
                                     <button onClick={() => { }} aria-label="Toggle status">
                                         {/* Optional toggleAll here */}
@@ -189,7 +189,7 @@ const SubBrokerPage: React.FC = () => {
                             {subBrokerAccounts?.map(account => (
                                 <div
                                     key={account.id}
-                                    className="grid grid-cols-[48px_80px_minmax(150px,1fr)_minmax(120px,1fr)_80px_80px_100px_100px] gap-2 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto"
+                                    className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr_1fr_1fr_2fr_2fr_2fr_1fr_1fr] gap-2 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto"
                                 >
                                     {/* Is_active */}
                                     <div className="flex justify-center">
