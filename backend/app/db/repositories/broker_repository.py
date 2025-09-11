@@ -173,4 +173,5 @@ def user_change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
         db_sub_broker_account.is_active = sub_broker_change.is_active
     db.commit()
     db.refresh(db_sub_broker_account)
+    print("###############", db_sub_broker_account.is_active)
     return db_sub_broker_account
