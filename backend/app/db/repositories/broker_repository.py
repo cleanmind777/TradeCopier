@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 from sqlalchemy.future import select
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
@@ -16,6 +17,7 @@ import json
 import secrets
 from datetime import datetime, timezone
 from uuid import UUID
+from sqlalchemy.future import select
 
 
 async def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
@@ -139,11 +141,17 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
     return db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
 
 
-def user_refresh_token(db: Session, id: UUID, new_token: str):
-    db_broker_account = db.query(BrokerAccount).filter(BrokerAccount.id == id).first()
-    db_broker_account.access_token = new_token
-    db.commit()
-    db.refresh(db_broker_account)
+async def user_refresh_token(db: AsyncSession, id: int, new_token: str):
+    stmt = select(BrokerAccount).where(BrokerAccount.id == id)
+    result = await db.execute(stmt)
+    db_broker_account = result.scalars().first()  # or .one_or_none()
+
+    if db_broker_account is None:
+        # handle None case
+        return
+
+    db_broker_account.refresh_token = new_token
+    await db.commit()
     return db_broker_account
 
 
