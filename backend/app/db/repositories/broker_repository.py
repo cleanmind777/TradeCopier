@@ -6,6 +6,7 @@ from app.schemas.broker import (
     BrokerAdd,
     BrokerInfo,
     BrokerFilter,
+    BrokerChange,
     SubBrokerAdd,
     SubBrokerInfo,
     SubBrokerFilter,
@@ -140,6 +141,19 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
 def user_refresh_token(db: Session, id: UUID, new_token: str):
     db_broker_account = db.query(BrokerAccount).filter(BrokerAccount.id == id).first()
     db_broker_account.access_token = new_token
+    db.commit()
+    db.refresh(db_broker_account)
+    return db_broker_account
+
+
+def user_change_broker(db: Session, broker_change: BrokerChange):
+    db_broker_account = (
+        db.query(BrokerAccount).filter(BrokerAccount.id == broker_change.id).first()
+    )
+    if broker_change.nickname:
+        db_broker_account.nickname = broker_change.nickname
+    if broker_change.status:
+        db_broker_account.status = broker_change.status
     db.commit()
     db.refresh(db_broker_account)
     return db_broker_account

@@ -77,3 +77,9 @@ class SubBrokerFilter(BaseModel):
     is_demo: Optional[bool] = None
     status: Optional[bool] = None
     is_active: Optional[bool] = None
+
+
+class BrokerChange(BaseModel):
+    id: UUID
+    nickname: Optional[str] = None
+    status: Optional[bool] = None
