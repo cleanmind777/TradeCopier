@@ -9,12 +9,14 @@ from app.schemas.broker import (
     BrokerFilter,
     SubBrokerFilter,
     SubBrokerInfoPlus,
+    SubBrokerChange,
 )
 from app.services.broker_service import (
     add_broker,
     get_brokers,
     del_broker,
     get_sub_brokers,
+    change_sub_brokers,
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -30,8 +32,20 @@ router = APIRouter()
 async def get_Sub_brokers(
     sub_broker_filter: SubBrokerFilter, db: Session = Depends(get_db)
 ):
-    print("222222222222222222222222222222222222")
     response = await get_sub_brokers(db, sub_broker_filter)
+    if response is None:
+        raise HTTPException(status_code=404, detail="SubBrokers not found")
+    return response
+
+
+@router.post(
+    "/change",
+    status_code=status.HTTP_201_CREATED,
+)
+async def change_Sub_brokers(
+    sub_broker_change: SubBrokerChange, db: Session = Depends(get_db)
+):
+    response = await change_sub_brokers(db, sub_broker_change)
     if response is None:
         raise HTTPException(status_code=404, detail="SubBrokers not found")
     return response

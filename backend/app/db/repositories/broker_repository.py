@@ -10,6 +10,7 @@ from app.schemas.broker import (
     SubBrokerAdd,
     SubBrokerInfo,
     SubBrokerFilter,
+    SubBrokerChange,
 )
 import json
 import secrets
@@ -157,3 +158,18 @@ def user_change_broker(db: Session, broker_change: BrokerChange):
     db.commit()
     db.refresh(db_broker_account)
     return db_broker_account
+
+
+def user_change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
+    db_sub_broker_account = (
+        db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.id == sub_broker_change.id)
+        .first()
+    )
+    if sub_broker_change.nickname:
+        db_sub_broker_account.nickname = sub_broker_change.nickname
+    if sub_broker_change.is_active:
+        db_sub_broker_account.is_active = sub_broker_change.is_active
+    db.commit()
+    db.refresh(db_sub_broker_account)
+    return db_sub_broker_account

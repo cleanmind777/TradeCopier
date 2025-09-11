@@ -57,8 +57,8 @@ const SubBrokerPage: React.FC = () => {
         const subBrokerChange: SubBrokerChange = {
             id: accountId
         };
-        const subBrokers = await changeSubBrokerAccount(subBrokerChange);
-        setSubBrokerAccounts(subBrokers);
+        await changeSubBrokerAccount(subBrokerChange);
+        getSubBrokerAccounts();
     };
 
     // Start editing a sub-broker nickname
@@ -186,45 +186,25 @@ const SubBrokerPage: React.FC = () => {
                             </div>
 
                             {/* Table Header */}
-                            <div className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr_1fr_1fr_2fr_2fr_2fr_1fr_1fr] gap-3 text-sm font-semibold text-slate-700 border-b border-slate-200 pb-3 select-none overflow-x-auto">
-                                <div className="flex justify-center">
-                                    <button onClick={() => { }} aria-label="Toggle status">
-                                        {/* Optional toggleAll here */}
-                                    </button>
-                                </div>
-                                <div className="flex items-center">
-                                    <span>Status</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span>Name</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span>ID</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span>Type</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span>Mode</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span>Subs</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span>Balance</span>
-                                </div>
-                                <div className="text-center">
-                                    <span>Actions</span>
-                                </div>
+                            <div className="grid grid-cols-[48px_48px_2fr_2fr_1fr_1fr_1fr_1fr_1fr] gap-3 text-sm font-semibold text-slate-700 border-b border-slate-200 pb-3 select-none overflow-x-auto">
+                                <div className="flex justify-center">Toggle</div>
+                                <div className="flex justify-center">Status</div>
+                                <div>Name</div>
+                                <div>ID</div>
+                                <div>Type</div>
+                                <div>Mode</div>
+                                <div>Subs</div>
+                                <div>Balance</div>
+                                <div className="text-center">Actions</div>
                             </div>
 
                             {/* Table Rows */}
                             {subBrokerAccounts?.map(account => (
                                 <div
                                     key={account.id}
-                                    className="grid grid-cols-[1fr_1fr_2fr_2fr_1fr_1fr_1fr_2fr_2fr_2fr_1fr_1fr] gap-3 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto hover:bg-slate-50 transition-colors"
+                                    className="grid grid-cols-[48px_48px_2fr_2fr_1fr_1fr_1fr_1fr_1fr] gap-3 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto hover:bg-slate-50 transition-colors"
                                 >
-                                    {/* Is_active */}
+                                    {/* Toggle */}
                                     <div className="flex justify-center">
                                         <button
                                             onClick={() => toggleAccountStatus(account.id)}
