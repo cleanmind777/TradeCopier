@@ -90,10 +90,7 @@ const SubBrokerPage: React.FC = () => {
                 alert("Nickname cannot be empty");
                 return;
             }
-            // Assuming changeSubBrokerAccount supports updating nickname property
             await changeSubBrokerAccount({ id: accountId, nickname: newNickname });
-
-            // Refresh list or update local state after saving
             await getSubBrokerAccounts();
             cancelEditingNickname(accountId);
         } catch (error) {
@@ -167,12 +164,12 @@ const SubBrokerPage: React.FC = () => {
                                     onClick={getSubBrokerAccounts}
                                     className="px-3 py-1 border rounded text-sm hover:bg-slate-100"
                                 >
-                                    Refresh Accounts
+                                    Refresh
                                 </button>
                             </div>
 
                             {/* Table Header */}
-                            <div className="grid grid-cols-[48px_2fr_3fr_2fr_1fr_1fr_2fr_3fr] gap-2 text-sm font-semibold text-slate-600 border-b border-slate-200 pb-2 select-none">
+                            <div className="grid grid-cols-[48px_80px_minmax(150px,1fr)_minmax(120px,1fr)_80px_80px_100px_100px] gap-2 text-sm font-semibold text-slate-600 border-b border-slate-200 pb-2 select-none overflow-x-auto">
                                 <div className="flex justify-center">
                                     <button onClick={() => { }} aria-label="Toggle status">
                                         {/* Optional toggleAll here */}
@@ -183,7 +180,7 @@ const SubBrokerPage: React.FC = () => {
                                 <div>ID</div>
                                 <div>Type</div>
                                 <div>Mode</div>
-                                <div>Subscriptions</div>
+                                <div>Subs</div>
                                 <div>Balance</div>
                                 <div className="text-center">Actions</div>
                             </div>
@@ -192,7 +189,7 @@ const SubBrokerPage: React.FC = () => {
                             {subBrokerAccounts?.map(account => (
                                 <div
                                     key={account.id}
-                                    className="grid grid-cols-[48px_2fr_3fr_2fr_1fr_1fr_2fr_3fr] gap-2 items-center border-b border-slate-100 py-3"
+                                    className="grid grid-cols-[48px_80px_minmax(150px,1fr)_minmax(120px,1fr)_80px_80px_100px_100px] gap-2 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto"
                                 >
                                     {/* Is_active */}
                                     <div className="flex justify-center">
@@ -234,13 +231,13 @@ const SubBrokerPage: React.FC = () => {
                                     </div>
 
                                     {/* ID + sub account name */}
-                                    <div>
-                                        <div className="truncate">{account.sub_account_name}</div>
+                                    <div className="truncate">
+                                        <div>{account.sub_account_name}</div>
                                         <div className="text-xs text-slate-500 truncate">{account.id}</div>
                                     </div>
 
                                     {/* Account type */}
-                                    <div>{account.account_type}</div>
+                                    <div className="truncate">{account.account_type}</div>
 
                                     {/* Mode (demo/live) */}
                                     <div>
@@ -273,14 +270,12 @@ const SubBrokerPage: React.FC = () => {
                                                         <Button
                                                             size="sm"
                                                             title="Dashboard"
-                                                        // onClick={() => navigate(`/sub-brokers/dashboard/${account.id}`)}
                                                         >
-                                                            Dashboard
+                                                            Dash
                                                         </Button>
                                                         <Button
                                                             size="sm"
                                                             title="Trades"
-                                                        // onClick={() => navigate(`/sub-brokers/trades/${account.id}`)}
                                                         >
                                                             Trades
                                                         </Button>
@@ -292,8 +287,7 @@ const SubBrokerPage: React.FC = () => {
                                                     onClick={() => navigate(`/sub-brokers/${account.id}`)}
                                                     title="View"
                                                 >
-                                                    <Eye className="mr-1 h-4 w-4" />
-                                                    View
+                                                    <Eye className="h-4 w-4" />
                                                 </Button>
                                                 <Button
                                                     variant="outline"
@@ -305,16 +299,14 @@ const SubBrokerPage: React.FC = () => {
                                                     }}
                                                     title="Delete"
                                                 >
-                                                    <Trash2 className="mr-1 h-4 w-4" />
-                                                    Delete
+                                                    <Trash2 className="h-4 w-4" />
                                                 </Button>
                                                 <Button
                                                     size="sm"
                                                     onClick={() => startEditingNickname(account.id, account.nickname)}
                                                     title="Edit Nickname"
                                                 >
-                                                    <Edit className="mr-1 h-4 w-4" />
-                                                    Edit
+                                                    <Edit className="h-4 w-4" />
                                                 </Button>
                                             </>
                                         )}

@@ -40,7 +40,7 @@ def del_Broker(broker_id: UUID, db: Session = Depends(get_db)):
     return del_broker(db, broker_id)
 
 
-@router.post("/change", response_model=bool, status_code=status.HTTP_201_CREATED)
+@router.post("/change", status_code=status.HTTP_201_CREATED)
 def change_Broker(broker_change: BrokerChange, db: Session = Depends(get_db)):
     response = change_broker(db, broker_change)
     if response is None:
