@@ -42,10 +42,10 @@ async def get_Sub_brokers(
     "/change",
     status_code=status.HTTP_201_CREATED,
 )
-async def change_Sub_brokers(
+def change_Sub_brokers(
     sub_broker_change: SubBrokerChange, db: Session = Depends(get_db)
 ):
-    response = await change_sub_brokers(db, sub_broker_change)
+    response = change_sub_brokers(db, sub_broker_change)
     if response is None:
         raise HTTPException(status_code=404, detail="SubBrokers not found")
     return response

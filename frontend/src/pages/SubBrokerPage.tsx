@@ -320,18 +320,6 @@ const SubBrokerPage: React.FC = () => {
                                                     <Eye className="h-4 w-4 text-slate-700" />
                                                 </Button>
                                                 <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="text-red-600 hover:bg-red-50 border-red-200"
-                                                    onClick={() => {
-                                                        setSelectedAccountId(account.id);
-                                                        setIsDeleteModalOpen(true);
-                                                    }}
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                                <Button
                                                     size="sm"
                                                     onClick={() => startEditingNickname(account.id, account.nickname)}
                                                     title="Edit Nickname"
