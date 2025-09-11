@@ -130,25 +130,42 @@ const SubBrokerPage: React.FC = () => {
                 <Header />
                 <main className="flex-1 p-6 space-y-6">
                     {/* Connection name and editing */}
-                    <div className="bg-white p-4 rounded shadow flex items-center space-x-4">
+                    <div className="bg-white p-4 rounded-lg shadow-sm flex items-center space-x-4">
                         {isEditingBrokerNickname ? (
                             <>
                                 <input
                                     type="text"
                                     value={editedBrokerNickname}
                                     onChange={e => setEditedBrokerNickname(e.target.value)}
-                                    className="border px-2 py-1 rounded flex-grow text-xl font-semibold"
+                                    className="border px-3 py-1.5 rounded-lg flex-grow text-xl font-semibold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
                                 />
-                                <Button size="sm" onClick={saveBrokerNickname}>Save</Button>
-                                <Button size="sm" variant="outline" onClick={() => setIsEditingBrokerNickname(false)}>Cancel</Button>
+                                <Button
+                                    size="sm"
+                                    onClick={saveBrokerNickname}
+                                    className="bg-blue-500 hover:bg-blue-600 text-white"
+                                >
+                                    Save
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setIsEditingBrokerNickname(false)}
+                                    className="border-slate-300 hover:bg-slate-100"
+                                >
+                                    Cancel
+                                </Button>
                             </>
                         ) : (
                             <>
-                                <h1 className="text-xl font-semibold mb-0 flex-grow">{brokerAccount?.nickname}</h1>
-                                <Button size="sm" onClick={() => {
-                                    setEditedBrokerNickname(brokerAccount?.nickname || '');
-                                    setIsEditingBrokerNickname(true);
-                                }}>
+                                <h1 className="text-xl font-semibold mb-0 flex-grow text-slate-900">{brokerAccount?.nickname}</h1>
+                                <Button
+                                    size="sm"
+                                    onClick={() => {
+                                        setEditedBrokerNickname(brokerAccount?.nickname || '');
+                                        setIsEditingBrokerNickname(true);
+                                    }}
+                                    className="bg-green-500 hover:bg-green-600 text-white"
+                                >
                                     Edit
                                 </Button>
                             </>
@@ -156,13 +173,13 @@ const SubBrokerPage: React.FC = () => {
                     </div>
 
                     {/* Connected Accounts */}
-                    <div className="bg-white p-4 rounded shadow">
+                    <div className="bg-white p-4 rounded-lg shadow-sm">
                         <div className="mb-6">
                             <div className="flex justify-between items-center mb-4">
                                 <h2 className="text-lg font-semibold text-slate-900">CONNECTED ACCOUNTS</h2>
                                 <button
                                     onClick={getSubBrokerAccounts}
-                                    className="px-3 py-1 border rounded text-sm hover:bg-slate-100"
+                                    className="px-3 py-1.5 border rounded-lg text-sm hover:bg-slate-100 transition-colors"
                                 >
                                     Refresh
                                 </button>
@@ -347,44 +364,45 @@ const SubBrokerPage: React.FC = () => {
                                     </div>
                                 </div>
                             ))}
-
-                            {/* Connection Status */}
-                            <div className="p-4 bg-green-50 rounded text-green-700 text-sm font-semibold select-none">
-                                <span>Connection successful</span>
-                            </div>
                         </div>
 
-                        {/* Modal for adding a new sub broker */}
-                        <Modal
-                            isOpen={isModalOpen}
-                            onClose={() => setIsModalOpen(false)}
-                            title="Add New Sub Broker Account"
-                        >
-                            <div className="space-y-6">
+                        {/* Connection Status */}
+                        <div className="p-4 bg-green-50 rounded-lg text-green-700 text-sm font-semibold select-none">
+                            <span>Connection successful</span>
+                        </div>
+                    </div>
+
+                    {/* Modal for adding a new sub broker */}
+                    <Modal
+                        isOpen={isModalOpen}
+                        onClose={() => setIsModalOpen(false)}
+                        title="Add New Sub Broker Account"
+                    >
+                        <div className="space-y-6">
+                            <div
+                                className="w-full p-6 rounded-lg cursor-pointer hover:shadow-md transition-all relative"
+                                style={{ height: '150px' }}
+                                onClick={() => {
+                                    window.location.href = `${API_BASE}/tradovate/auth?user_id=${user_id}`;
+                                }}
+                            >
                                 <div
-                                    className="w-full p-6 rounded-lg cursor-pointer hover:shadow-md transition-all relative"
-                                    style={{ height: '150px' }}
-                                    onClick={() => {
-                                        window.location.href = `${API_BASE}/tradovate/auth?user_id=${user_id}`;
+                                    className="absolute inset-0 bg-contain bg-no-repeat bg-center rounded-lg"
+                                    style={{
+                                        backgroundImage: "url('/Tradovate-whitebg.png')",
+                                        backgroundSize: '80%',
+                                        opacity: 1,
                                     }}
-                                >
-                                    <div
-                                        className="absolute inset-0 bg-contain bg-no-repeat bg-center rounded-lg"
-                                        style={{
-                                            backgroundImage: "url('/Tradovate-whitebg.png')",
-                                            backgroundSize: '80%',
-                                            opacity: 1,
-                                        }}
-                                    />
-                                </div>
-                                <div className="text-center text-slate-500 text-sm">
-                                    Don't see your broker?{' '}
-                                    <a href="/brokers/other" className="text-blue-500 hover:underline">
-                                        Add manually
-                                    </a>
-                                </div>
+                                />
                             </div>
-                        </Modal>
+                            <div className="text-center text-slate-500 text-sm">
+                                Don't see your broker?{' '}
+                                <a href="/brokers/other" className="text-blue-500 hover:underline">
+                                    Add manually
+                                </a>
+                            </div>
+                        </div>
+                    </Modal>
                 </main>
             </div>
         </div>
