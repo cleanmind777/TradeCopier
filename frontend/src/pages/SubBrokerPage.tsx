@@ -57,8 +57,8 @@ const SubBrokerPage: React.FC = () => {
         const subBrokerChange: SubBrokerChange = {
             id: accountId
         };
-        const subBrokers = await changeSubBrokerAccount(subBrokerChange);
-        setSubBrokerAccounts(subBrokers);
+        await changeSubBrokerAccount(subBrokerChange);
+        getSubBrokerAccounts();
     };
 
     // Start editing a sub-broker nickname

@@ -14,6 +14,7 @@ from app.schemas.broker import (
     SubBrokerInfo,
     SubBrokerFilter,
     SubBrokerInfoPlus,
+    SubBrokerChange,
 )
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
 from app.utils.broker import getAccessTokenForTradoVate
@@ -26,6 +27,7 @@ from app.db.repositories.broker_repository import (
     user_get_sub_brokers,
     user_refresh_token,
     user_change_broker,
+    user_change_sub_brokers,
 )
 
 
@@ -133,3 +135,7 @@ async def refresh_new_token(db: Session):
 
 def change_broker(db: Session, broker_change: BrokerChange):
     return user_change_broker(db, broker_change)
+
+
+def change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
+    return user_change_sub_brokers(db, sub_broker_change)
