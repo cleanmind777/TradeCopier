@@ -130,7 +130,7 @@ async def refresh_new_token(db: Session):
     if db_broker_accounts:
         for broker in db_broker_accounts:
             new_token = get_renew_token(broker.access_token)
-            user_refresh_token(db, broker.id, new_token)
+            await user_refresh_token(db, broker.id, new_token)
 
 
 def change_broker(db: Session, broker_change: BrokerChange):
