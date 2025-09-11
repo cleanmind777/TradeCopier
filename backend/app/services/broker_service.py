@@ -9,6 +9,7 @@ from app.schemas.broker import (
     BrokerInfo,
     BrokerAdd,
     BrokerFilter,
+    BrokerChange,
     SubBrokerAdd,
     SubBrokerInfo,
     SubBrokerFilter,
@@ -24,6 +25,7 @@ from app.db.repositories.broker_repository import (
     user_add_sub_broker,
     user_get_sub_brokers,
     user_refresh_token,
+    user_change_broker,
 )
 
 
@@ -127,3 +129,7 @@ async def refresh_new_token(db: Session):
         for broker in db_broker_accounts:
             new_token = get_renew_token(broker.access_token)
             user_refresh_token(db, broker.id, new_token)
+
+
+def change_broker(db: Session, broker_change: BrokerChange):
+    return user_change_broker(db, broker_change)
