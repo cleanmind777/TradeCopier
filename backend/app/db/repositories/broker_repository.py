@@ -161,6 +161,7 @@ def user_change_broker(db: Session, broker_change: BrokerChange):
 
 
 def user_change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
+    print("!!!!!!!!!!", sub_broker_change)
     db_sub_broker_account = (
         db.query(SubBrokerAccount)
         .filter(SubBrokerAccount.id == sub_broker_change.id)
