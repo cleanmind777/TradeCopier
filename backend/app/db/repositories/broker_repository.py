@@ -161,7 +161,6 @@ def user_change_broker(db: Session, broker_change: BrokerChange):
 
 
 def user_change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
-    print("!!!!!!!!!!", sub_broker_change)
     db_sub_broker_account = (
         db.query(SubBrokerAccount)
         .filter(SubBrokerAccount.id == sub_broker_change.id)
@@ -169,7 +168,7 @@ def user_change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
     )
     if sub_broker_change.nickname:
         db_sub_broker_account.nickname = sub_broker_change.nickname
-    if sub_broker_change.is_active:
+    if sub_broker_change.is_active is not None:
         db_sub_broker_account.is_active = sub_broker_change.is_active
     db.commit()
     db.refresh(db_sub_broker_account)
