@@ -53,9 +53,10 @@ const SubBrokerPage: React.FC = () => {
         }
     };
 
-    const toggleAccountStatus = async (accountId: string) => {
+    const toggleAccountStatus = async (accountId: string, is_active: boolean) => {
         const subBrokerChange: SubBrokerChange = {
-            id: accountId
+            id: accountId,
+            is_active: !is_active
         };
         await changeSubBrokerAccount(subBrokerChange);
         getSubBrokerAccounts();
@@ -207,7 +208,7 @@ const SubBrokerPage: React.FC = () => {
                                     {/* Toggle */}
                                     <div className="flex justify-center">
                                         <button
-                                            onClick={() => toggleAccountStatus(account.id)}
+                                            onClick={() => toggleAccountStatus(account.id, account.is_active)}
                                             aria-label="Toggle status"
                                             className="p-1 rounded-full hover:bg-slate-100 transition-colors"
                                         >
