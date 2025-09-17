@@ -87,7 +87,7 @@ def get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo] | 
         broker.live = summary_sub_broker.live
         broker.paper = summary_sub_broker.paper
         broker.enable = summary_sub_broker.enable
-        fixed_brokers.append(summary_sub_broker)
+        fixed_brokers.append(broker)
     return fixed_brokers
 
 
