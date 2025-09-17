@@ -15,6 +15,7 @@ from app.schemas.broker import (
     SubBrokerFilter,
     SubBrokerInfoPlus,
     SubBrokerChange,
+    SummarySubBrokers,
 )
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
 from app.utils.broker import getAccessTokenForTradoVate
@@ -28,6 +29,7 @@ from app.db.repositories.broker_repository import (
     user_refresh_token,
     user_change_broker,
     user_change_sub_brokers,
+    user_get_summary_sub_broker,
 )
 
 
@@ -78,7 +80,19 @@ async def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[Broke
 
 
 def get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo] | None:
-    return user_get_brokers(db, broker_filter)
+    brokers = user_get_brokers(db, broker_filter)
+    fixed_brokers: list[BrokerInfo] = []
+    for broker in brokers:
+        summary_sub_broker = get_summary_sub_broker(db, broker.user_broker_id)
+        broker.live = summary_sub_broker.live
+        broker.paper = summary_sub_broker.paper
+        broker.enable = summary_sub_broker.enable
+        fixed_brokers.append(summary_sub_broker)
+    return fixed_brokers
+
+
+def get_summary_sub_broker(db: Session, user_broker_id: str) -> SummarySubBrokers:
+    return user_get_summary_sub_broker(db, user_broker_id)
 
 
 async def get_sub_brokers(

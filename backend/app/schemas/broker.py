@@ -27,6 +27,15 @@ class BrokerInfo(BrokerBase):
     last_sync: datetime
     status: bool
     user_broker_id: str
+    live: Optional[int] = None
+    paper: Optional[int] = None
+    enable: Optional[int] = None
+
+
+class SummarySubBrokers(BaseModel):
+    live: Optional[int] = None
+    paper: Optional[int] = None
+    enable: Optional[int] = None
 
 
 class RespondTradoVate(BaseModel):
