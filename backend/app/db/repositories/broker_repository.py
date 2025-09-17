@@ -12,6 +12,7 @@ from app.schemas.broker import (
     SubBrokerInfo,
     SubBrokerFilter,
     SubBrokerChange,
+    SummarySubBrokers,
 )
 import json
 import secrets
@@ -181,3 +182,30 @@ def user_change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
     db.commit()
     db.refresh(db_sub_broker_account)
     return db_sub_broker_account
+
+
+def user_get_summary_sub_broker(db: Session, user_broker_id: str) -> SummarySubBrokers:
+    enable_sub_broker_accounts = (
+        db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.user_broker_id == user_broker_id)
+        .filter(SubBrokerAccount.status == True)
+        .all()
+    )
+    paper_sub_broker_accounts = (
+        db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.user_broker_id == user_broker_id)
+        .filter(SubBrokerAccount.is_demo == True)
+        .all()
+    )
+    live_sub_broker_accounts = (
+        db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.user_broker_id == user_broker_id)
+        .filter(SubBrokerAccount.is_demo == False)
+        .all()
+    )
+    summary_sub_broker = SummarySubBrokers(
+        live=len(live_sub_broker_accounts),
+        paper=len(paper_sub_broker_accounts),
+        enable=len(enable_sub_broker_accounts),
+    )
+    return summary_sub_broker

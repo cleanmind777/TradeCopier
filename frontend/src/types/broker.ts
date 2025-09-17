@@ -15,6 +15,9 @@ export interface BrokerInfo {
   type: string;
   last_sync: Date;
   status: boolean;
+  live: number;
+  paper: number;
+  enable: number;
 }
 
 export interface SubBrokerInfo {

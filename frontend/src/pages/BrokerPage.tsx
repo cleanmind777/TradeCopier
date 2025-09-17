@@ -124,6 +124,18 @@ const BrokerPage: React.FC = () => {
                                                 <span className="text-sm text-slate-600">Last Updated</span>
                                                 <span className="text-sm text-slate-500">{String(account.last_sync)}</span>
                                             </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-slate-600">Live</span>
+                                                <span className="text-sm text-slate-500">{String(account.live)}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-slate-600">Paper</span>
+                                                <span className="text-sm text-slate-500">{String(account.paper)}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm text-slate-600">Enabled</span>
+                                                <span className="text-sm text-slate-500">{String(account.enable)}</span>
+                                            </div>
                                             <div className="flex space-x-2 mt-4">
                                                 <Button
                                                     variant="outline"
