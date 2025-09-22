@@ -153,7 +153,7 @@ async def user_refresh_token(db: AsyncSession, id: int, new_token: str):
         return
 
     # db_broker_account.refresh_token = new_token
-    db_broker_account.refresh_token = "1111111111111111111111111111111111111111"
+    db_broker_account.access_token = "1111111111111111111111111111111111111111"
     await db.commit()
     await db.refresh(db_broker_account)
     return db_broker_account
