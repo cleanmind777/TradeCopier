@@ -187,7 +187,7 @@ const SubBrokerPage: React.FC = () => {
                             </div>
 
                             {/* Table Header */}
-                            <div className="grid grid-cols-[48px_48px_2fr_2fr_1fr_1fr_1fr_1fr_1fr] gap-3 text-sm font-semibold text-slate-700 border-b border-slate-200 pb-3 select-none overflow-x-auto">
+                            <div className="grid grid-cols-[48px_48px_2fr_2fr_1fr_1fr_1fr_1fr_3fr] gap-3 text-sm font-semibold text-slate-700 border-b border-slate-200 pb-3 select-none overflow-x-auto">
                                 <div className="flex justify-center">Toggle</div>
                                 <div className="flex justify-center">Status</div>
                                 <div>Name</div>
@@ -203,7 +203,7 @@ const SubBrokerPage: React.FC = () => {
                             {subBrokerAccounts?.map(account => (
                                 <div
                                     key={account.id}
-                                    className="grid grid-cols-[48px_48px_2fr_2fr_1fr_1fr_1fr_1fr_1fr] gap-3 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto hover:bg-slate-50 transition-colors"
+                                    className="grid grid-cols-[48px_48px_2fr_2fr_1fr_1fr_1fr_1fr_3fr] gap-3 items-center border-b border-slate-100 py-3 text-sm overflow-x-auto hover:bg-slate-50 transition-colors"
                                 >
                                     {/* Toggle */}
                                     <div className="flex justify-center">
