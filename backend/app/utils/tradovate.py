@@ -54,6 +54,7 @@ def get_renew_token(access_token: str):
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
+            print(data)
         except ValueError:
             # Log error or handle malformed JSON
             return None
