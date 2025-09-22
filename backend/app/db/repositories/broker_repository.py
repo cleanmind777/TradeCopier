@@ -148,6 +148,7 @@ async def user_refresh_token(db: AsyncSession, id: int, new_token: str):
     db_broker_account = result.scalars().first()  # or .one_or_none()
 
     if db_broker_account is None:
+        print("None: 111111111111111111111111111111111111111111111")
         # handle None case
         return
 
