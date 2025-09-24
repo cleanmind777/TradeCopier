@@ -9,6 +9,7 @@ from app.services.broker_service import (
     get_brokers,
     del_broker,
     change_broker,
+    get_positions,
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -45,4 +46,12 @@ def change_Broker(broker_change: BrokerChange, db: Session = Depends(get_db)):
     response = change_broker(db, broker_change)
     if response is None:
         raise HTTPException(status_code=404, detail="Brokers not found")
+    return response
+
+
+@router.get("/positions", status_code=status.HTTP_200_OK)
+def get_Positions(user_id: UUID, db: Session = Depends(get_db)):
+    response = get_positions(user_id)
+    if response is None:
+        raise HTTPException(status_code=404, detail="Positions not found")
     return response

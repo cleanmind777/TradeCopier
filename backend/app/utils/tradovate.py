@@ -62,3 +62,71 @@ def get_renew_token(access_token: str):
         # Log error or handle non-200 statuses and empty responses gracefully
         return None
     return data["accessToken"]
+
+
+def get_position_list_of_live_account(access_token: str):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{TRADO_LIVE_URL}/position/list"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print(data)
+        except ValueError:
+            # Log error or handle malformed JSON
+            return None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        return None
+    return data
+
+
+def get_position_list_of_demo_account(access_token: str):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{TRADO_DEMO_URL}/position/list"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print(data)
+        except ValueError:
+            # Log error or handle malformed JSON
+            return None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        return None
+    return data
+
+
+def get_order_list_of_demo_account(access_token: str):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{TRADO_DEMO_URL}/order/list"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print(data)
+        except ValueError:
+            # Log error or handle malformed JSON
+            return None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        return None
+    return data
+
+
+def get_order_list_of_live_account(access_token: str):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{TRADO_LIVE_URL}/order/list"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print(data)
+        except ValueError:
+            # Log error or handle malformed JSON
+            return None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        return None
+    return data
