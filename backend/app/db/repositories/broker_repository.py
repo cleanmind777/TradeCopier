@@ -185,21 +185,26 @@ def user_change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
     return db_sub_broker_account
 
 
-def user_get_summary_sub_broker(db: Session, user_broker_id: str) -> SummarySubBrokers:
+def user_get_summary_sub_broker(
+    db: Session, user_id: UUID, user_broker_id: str
+) -> SummarySubBrokers:
     enable_sub_broker_accounts = (
         db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.user_id == user_id)
         .filter(SubBrokerAccount.user_broker_id == user_broker_id)
         .filter(SubBrokerAccount.status == True)
         .all()
     )
     paper_sub_broker_accounts = (
         db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.user_id == user_id)
         .filter(SubBrokerAccount.user_broker_id == user_broker_id)
         .filter(SubBrokerAccount.is_demo == True)
         .all()
     )
     live_sub_broker_accounts = (
         db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.user_id == user_id)
         .filter(SubBrokerAccount.user_broker_id == user_broker_id)
         .filter(SubBrokerAccount.is_demo == False)
         .all()
