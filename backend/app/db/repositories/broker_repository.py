@@ -192,7 +192,7 @@ def user_get_summary_sub_broker(
         db.query(SubBrokerAccount)
         .filter(SubBrokerAccount.user_id == user_id)
         .filter(SubBrokerAccount.user_broker_id == user_broker_id)
-        .filter(SubBrokerAccount.status == True)
+        .filter(SubBrokerAccount.is_active == True)
         .all()
     )
     paper_sub_broker_accounts = (
