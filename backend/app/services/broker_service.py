@@ -91,7 +91,9 @@ def get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo] | 
     brokers = user_get_brokers(db, broker_filter)
     fixed_brokers: list[BrokerInfo] = []
     for broker in brokers:
-        summary_sub_broker = get_summary_sub_broker(db, broker.user_broker_id)
+        summary_sub_broker = get_summary_sub_broker(
+            db, broker_filter.user_id, broker.user_broker_id
+        )
         broker.live = summary_sub_broker.live
         broker.paper = summary_sub_broker.paper
         broker.enable = summary_sub_broker.enable
@@ -99,8 +101,10 @@ def get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo] | 
     return fixed_brokers
 
 
-def get_summary_sub_broker(db: Session, user_broker_id: str) -> SummarySubBrokers:
-    return user_get_summary_sub_broker(db, user_broker_id)
+def get_summary_sub_broker(
+    db: Session, user_id: UUID, user_broker_id: str
+) -> SummarySubBrokers:
+    return user_get_summary_sub_broker(db, user_id, user_broker_id)
 
 
 async def get_sub_brokers(
