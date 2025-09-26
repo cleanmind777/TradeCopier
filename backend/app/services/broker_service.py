@@ -19,7 +19,15 @@ from app.schemas.broker import (
 )
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
 from app.utils.broker import getAccessTokenForTradoVate
-from app.utils.tradovate import get_account_list, get_account_balance, get_renew_token
+from app.utils.tradovate import (
+    get_account_list,
+    get_account_balance,
+    get_renew_token,
+    get_position_list_of_demo_account,
+    get_position_list_of_live_account,
+    get_order_list_of_demo_account,
+    get_order_list_of_live_account,
+)
 from app.db.repositories.broker_repository import (
     user_add_broker,
     user_get_brokers,
@@ -153,3 +161,20 @@ def change_broker(db: Session, broker_change: BrokerChange):
 
 def change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
     return user_change_sub_brokers(db, sub_broker_change)
+
+
+def get_positions(db: Session, user_id: UUID):
+    positions_status = []
+    db_broker_accounts = db.query(BrokerAccount).filter(
+        BrokerAccount.user_id == user_id
+    )
+    for db_broker_account in db_broker_accounts:
+        demo_positions = get_position_list_of_demo_account(
+            db_broker_account.access_token
+        )
+        live_positions = get_position_list_of_live_account(
+            db_broker_account.access_token
+        )
+        positions_status.extend(demo_positions)
+        positions_status.extend(live_positions)
+    return positions_status
