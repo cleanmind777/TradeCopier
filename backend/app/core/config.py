@@ -54,10 +54,6 @@ class Settings(BaseSettings):
 
     TRADOVATE_API_ME_URL: str = Field(env="TRADOVATE_API_ME_URL")
 
-    SIGNAL_SLACK_SECRET: str = Field(env="SIGNAL_SLACK_SECRET")
-
-    SIGNAL_SLACK_URL: str = Field(env="SIGNAL_SLACK_URL")
-
     class Config:
         # Path to the .env file (relative to project root)
         env_file = ".env"
