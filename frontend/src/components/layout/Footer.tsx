@@ -6,14 +6,11 @@ const Footer: React.FC = () => {
     const { user } = useAuth();
 
     return (
-        <footer className="bg-white border-t border-slate-200 px-6 py-4">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                    <h2 className="text-xl font-semibold text-slate-900">Welcome back, {user?.name}</h2>
-                </div>
-                <div className="text-sm text-slate-500">
+        <footer className="bg-white border-t border-slate-200">
+            <div className="container mx-auto px-6 py-4 text-center">
+                <p className="text-sm text-slate-500">
                     Version: {APP_VERSION}
-                </div>
+                </p>
             </div>
         </footer>
     );

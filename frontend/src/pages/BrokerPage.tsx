@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle, Wallet, Trash2, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import Header from '../components/layout/Header';
+import Footer from '../components/layout/Footer';
 import Sidebar from '../components/layout/Sidebar';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -195,6 +196,7 @@ const BrokerPage: React.FC = () => {
                         </div>
                     </Modal>
                 </main>
+                <Footer />
             </div>
         </div>
     );
