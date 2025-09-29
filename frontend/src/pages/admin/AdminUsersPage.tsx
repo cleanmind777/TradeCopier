@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Users, UserCheck, UserX, UserCog, Search, Filter } from 'lucide-react';
 import Header from '../../components/layout/Header';
+import Footer from '../../components/layout/Footer';
 import AdminSidebar from '../../components/layout/AdminSidebar';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import Input from '../../components/ui/Input';
@@ -162,6 +163,8 @@ const AdminUsersPage: React.FC = () => {
                         </Card>
                     </div>
                 </main>
+
+                <Footer />
             </div>
         </div>
     );

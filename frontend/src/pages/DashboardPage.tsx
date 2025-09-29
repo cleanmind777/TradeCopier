@@ -1,6 +1,7 @@
 import React from 'react';
 import { Users, DollarSign, ShoppingCart, TrendingUp } from 'lucide-react';
 import Header from '../components/layout/Header';
+import Footer from '../components/layout/Footer'
 import Sidebar from '../components/layout/Sidebar';
 import StatsCard from '../components/dashboard/StatsCard';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
@@ -138,6 +139,8 @@ const DashboardPage: React.FC = () => {
             </Card>
           </div>
         </main>
+
+        <Footer />
       </div>
     </div>
   );

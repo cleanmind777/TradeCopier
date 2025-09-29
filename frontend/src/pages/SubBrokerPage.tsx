@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Wallet, Edit, Trash2, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import Header from '../components/layout/Header';
+import Footer from '../components/layout/Footer';
 import Sidebar from '../components/layout/Sidebar';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -373,6 +374,7 @@ const SubBrokerPage: React.FC = () => {
                         </div>
                     </Modal>
                 </main>
+                <Footer />
             </div>
         </div>
     );
