@@ -55,7 +55,7 @@ async def regenerate_access_token_periodically():
         async with async_session() as db:
             print("Regenerating access token...")
             await refresh_new_token(db)
-        await asyncio.sleep(4200)  # Sleep 2 minutes
+        await asyncio.sleep(4200)  # Sleep 70 minutes
 
 
 # FastAPI startup event to initialize DB and start background task
