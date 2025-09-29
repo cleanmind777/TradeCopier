@@ -27,7 +27,9 @@ app = FastAPI(title="My FastAPI App")
 origins = [
     "http://localhost:5173",
     "http://tc.streetagent.ai",
+    "http://dev.tc.streetagent.ai",
     "https://tc.streetagent.ai",
+    "https://dev.tc.streetagent.ai",
 ]
 
 app.add_middleware(SessionMiddleware, secret_key="!secret")
