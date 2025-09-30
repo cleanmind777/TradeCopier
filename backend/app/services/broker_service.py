@@ -90,7 +90,7 @@ async def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[Broke
     broker_filter = BrokerFilter (
         id = broker_account.id,
     )
-    return await get_brokers(db, broker_filter)
+    return get_brokers(db, broker_filter)
 
 
 def get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo] | None:
