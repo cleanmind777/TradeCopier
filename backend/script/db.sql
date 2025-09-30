@@ -28,7 +28,7 @@ CREATE TABLE sub_broker_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
     user_broker_id VARCHAR NOT NULL,
-    broker_account_id UUID NOT NULL REFERENCES broker_accounts(id)
+    broker_account_id UUID NOT NULL REFERENCES broker_accounts(id),
     sub_account_id VARCHAR NOT NULL,
     nickname VARCHAR NOT NULL,
     sub_account_name VARCHAR NOT NULL,
