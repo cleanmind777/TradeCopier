@@ -55,6 +55,7 @@ class BrokerFilter(BaseModel):
 
 class SubBrokerAdd(BaseModel):
     user_id: UUID
+    broker_account_id: UUID
     user_broker_id: str
     sub_account_id: str
     nickname: Optional[str] = None

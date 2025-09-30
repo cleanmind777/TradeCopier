@@ -37,6 +37,7 @@ class SubBrokerAccount(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     user_broker_id = Column(String, nullable=False)
+    broker_account_id = Column(UUID(as_uuid=True), ForeignKey("broker_accounts.id"), nullable=False)
     sub_account_id = Column(String, nullable=False)
     nickname = Column(String, nullable=False)
     sub_account_name = Column(String, nullable=False)
@@ -48,3 +49,4 @@ class SubBrokerAccount(Base):
     is_active = Column(Boolean, nullable=False, default=True)
 
     user = relationship("User", back_populates="sub_broker_accounts")
+    broker_account = relationship("BrokerAccount", back_populates="sub_broker_accounts")

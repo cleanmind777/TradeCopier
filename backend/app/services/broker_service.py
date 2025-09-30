@@ -56,12 +56,14 @@ def add_broker(db: Session, broker_connect: BrokerConnect) -> list[BrokerInfo]:
 
 
 async def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
+    broker_account = await user_add_broker(db, broker_add)
     sub_demo_account_list = await get_account_list(broker_add.access_token, True)
     sub_live_account_list = await get_account_list(broker_add.access_token, False)
     if len(sub_demo_account_list):
         for demo_account in sub_demo_account_list:
             sub_demo_account = SubBrokerAdd(
                 user_id=broker_add.user_id,
+                broker_account_id=broker_account.id,
                 user_broker_id=str(broker_add.user_broker_id),
                 sub_account_id=str(demo_account["id"]),
                 sub_account_name=str(demo_account["name"]),
@@ -75,6 +77,7 @@ async def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[Broke
         for live_account in sub_live_account_list:
             sub_live_account = SubBrokerAdd(
                 user_id=broker_add.user_id,
+                broker_account_id=broker_account.id,
                 user_broker_id=str(broker_add.user_broker_id),
                 sub_account_id=str(live_account["id"]),
                 sub_account_name=str(live_account["name"]),
@@ -84,7 +87,10 @@ async def add_tradovate_broker(db: Session, broker_add: BrokerAdd) -> list[Broke
                 status=live_account["active"],
             )
             user_add_sub_broker(db, sub_live_account)
-    return await user_add_broker(db, broker_add)
+    broker_filter = BrokerFilter (
+        id = broker_account.id,
+    )
+    return await get_brokers(db, broker_filter)
 
 
 def get_brokers(db: Session, broker_filter: BrokerFilter) -> list[BrokerInfo] | None:
