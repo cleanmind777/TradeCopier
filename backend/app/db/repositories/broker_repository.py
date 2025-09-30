@@ -136,8 +136,10 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
     db_broker_account = (
         db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
     )
-    db_sub_broker_account = (db.query(SubBrokerAccount).filter(SubBrokerAccount.id == broker_id).first())
     user_id = db_broker_account.user_id
+    query = db.query(SubBrokerAccount).filter(SubBrokerAccount.broker_account_id == broker_id)
+    query.delete(synchronize_session=False)
+    db.commit()
     query = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id)
     query.delete(synchronize_session=False)
     db.commit()
