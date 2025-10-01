@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import Sidebar  from '../components/layout/Sidebar';
+import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
-import Button from '../components/ui/Button';
+import  Button  from '../components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/Table';
+import { Trash2 } from 'lucide-react';
 
 type Position = {
   id: number;
@@ -101,12 +102,43 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const handleFlattenAll = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // TODO: Replace with actual API call
+      console.log('Flattening all positions and canceling all orders');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setPositions([]);
+      setOrders(prev => prev.map(order => ({ ...order, status: 'Cancelled' })));
+    } catch (err) {
+      setError('Failed to flatten all positions and orders');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex bg-slate-50 min-h-screen">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
         <main className="flex-1 p-6 space-y-6">
+          {/* Global Action Button */}
+          <div className="flex justify-end">
+<Button
+  variant="secondary"
+  onClick={handleFlattenAll}
+  disabled={isLoading}
+  className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white"
+>
+              <Trash2 className="h-4 w-4" />
+              <span>Flatten All / Exit All & Cancel All</span>
+            </Button>
+          </div>
+
+          {/* Error Message */}
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
               <span className="block sm:inline">{error}</span>
@@ -305,13 +337,13 @@ const DashboardPage: React.FC = () => {
                                 >
                                   Flatten
                                 </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:bg-red-50"
-                                  onClick={() => handleExitAll(account.id)}
-                                  disabled={isLoading}
-                                >
+<Button
+  variant="outline"
+  size="sm"
+  className="text-red-600 hover:bg-red-50 hover:text-red-700"
+  onClick={() => handleExitAll(account.id)}
+  disabled={isLoading}
+>
                                   Exit All
                                 </Button>
                               </div>
