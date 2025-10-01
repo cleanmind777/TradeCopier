@@ -49,7 +49,7 @@ export const delBroker = async (
   id: string
 ): Promise<BrokerInfo[] | null> => {
   try {
-    const response = await axios.delete(`${API_BASE}/broker/del`, {
+    const response = await axios.delete(`${API_BASE}/broker/delete`, {
       data: { id }, // Use data property inside config
     });
     return response.data;
