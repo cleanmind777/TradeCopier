@@ -168,7 +168,6 @@ const BrokerPage: React.FC = () => {
                                                     onClick={() => {
                                                         setSelectedAccountId(account.id);
                                                         setIsDeleteModalOpen(true);
-                                                        console.log("11111111111111111111111111111111111111111111111")
                                                     }}
                                                 >
                                                     <Trash2 className="mr-2 h-4 w-4" />
@@ -230,7 +229,7 @@ const BrokerPage: React.FC = () => {
                                 </Button>
                                 <Button
                                     variant="outline"
-                                    className="bg-red-600 text-white hover:bg-red-700"
+                                    className="bg-red-600 text-red hover:bg-red-700"
                                     onClick={handleDeleteAccount}
                                 >
                                     Delete Account

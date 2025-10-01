@@ -37,8 +37,8 @@ def get_Brokers(broker_filter: BrokerFilter, db: Session = Depends(get_db)):
 @router.delete(
     "/delete", response_model=list[BrokerInfo], status_code=status.HTTP_201_CREATED
 )
-def del_Broker(broker_id: UUID, db: Session = Depends(get_db)):
-    return del_broker(db, broker_id)
+def del_Broker(id: UUID, db: Session = Depends(get_db)):
+    return del_broker(db, id)
 
 
 @router.post("/change", status_code=status.HTTP_201_CREATED)
