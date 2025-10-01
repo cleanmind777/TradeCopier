@@ -21,7 +21,7 @@ from uuid import UUID
 from sqlalchemy.future import select
 
 
-async def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo]:
+async def user_add_broker(db: Session, broker_add: BrokerAdd) -> BrokerInfo:
     db_broker_account = (
         db.query(BrokerAccount)
         .filter(BrokerAccount.user_id == broker_add.user_id)
@@ -40,7 +40,7 @@ async def user_add_broker(db: Session, broker_add: BrokerAdd) -> list[BrokerInfo
     db.add(db_broker)
     db.commit()
     db.refresh(db_broker)
-    return db.query(BrokerAccount).all()
+    return db_broker
 
 
 def user_add_sub_broker(
@@ -59,6 +59,7 @@ def user_add_sub_broker(
         type=sub_broker_add.type,
         account_type=sub_broker_add.account_type,
         user_broker_id=sub_broker_add.user_broker_id,
+        broker_account_id=sub_broker_add.broker_account_id,
         sub_account_id=sub_broker_add.sub_account_id,
         sub_account_name=sub_broker_add.sub_account_name,
         status=sub_broker_add.status,
@@ -136,6 +137,9 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
         db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
     )
     user_id = db_broker_account.user_id
+    query = db.query(SubBrokerAccount).filter(SubBrokerAccount.broker_account_id == broker_id)
+    query.delete(synchronize_session=False)
+    db.commit()
     query = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id)
     query.delete(synchronize_session=False)
     db.commit()

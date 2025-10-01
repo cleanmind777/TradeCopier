@@ -55,6 +55,7 @@ class BrokerFilter(BaseModel):
 
 class SubBrokerAdd(BaseModel):
     user_id: UUID
+    broker_account_id: UUID
     user_broker_id: str
     sub_account_id: str
     nickname: Optional[str] = None
@@ -69,10 +70,11 @@ class SubBrokerInfo(SubBrokerAdd):
     id: UUID
     last_sync: datetime
     is_active: bool
+    broker_account_id: Optional[int] = None
 
 
 class SubBrokerInfoPlus(SubBrokerInfo):
-    balance: float
+    balance: float    
 
 
 class SubBrokerFilter(BaseModel):

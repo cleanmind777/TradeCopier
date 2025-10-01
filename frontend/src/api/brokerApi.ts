@@ -45,7 +45,24 @@ export const getBrokers = async (
     return null;
   }
 };
-
+export const delBroker = async (
+  id: string
+): Promise<BrokerInfo[] | null> => {
+  try {
+    const response = await axios.delete(`${API_BASE}/broker/delete`, {
+      params: { id },
+    });
+    return response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      console.error("Del Brokers:", error.response?.data);
+      alert(error.response?.data.detail);
+    } else {
+      console.error("Unexpected delete brokers error:", error);
+    }
+    return null;
+  }
+};
 export const getSubBrokers = async (
   subBrokerFilter: SubBrokerFilter
 ): Promise<SubBrokerInfo[] | null> => {

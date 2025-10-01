@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { BrokerFilter, BrokerInfo } from '../types/broker';
-import { getBrokers } from '../api/brokerApi';
+import { getBrokers, delBroker } from '../api/brokerApi';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
 
@@ -67,6 +67,20 @@ const BrokerPage: React.FC = () => {
                     )
                 )
             ));
+        }
+    };
+
+    const delBrokerAccounts = async (id: string) => {
+        await delBroker(id);
+    }
+    const handleDeleteAccount = async () => {
+        if (selectedAccountId) {
+            console.log("Deleting account:", selectedAccountId);
+            await delBrokerAccounts(selectedAccountId);
+            // Add your delete API call here
+            setIsDeleteModalOpen(false);
+            setSelectedAccountId(null);
+            await getBrokerAccounts(); // Refresh the list after deletion
         }
     };
 
@@ -192,6 +206,34 @@ const BrokerPage: React.FC = () => {
                             </div>
                             <div className="text-center text-slate-500 text-sm">
                                 Don't see your broker? <a href="/brokers/other" className="text-blue-500 hover:underline">Add manually</a>
+                            </div>
+                        </div>
+                    </Modal>
+
+                    {/* Delete Confirmation Modal */}
+                    <Modal
+                        isOpen={isDeleteModalOpen}
+                        onClose={() => setIsDeleteModalOpen(false)}
+                        title="Delete Broker Account"
+                    >
+                        <div className="space-y-6">
+                            <p className="text-slate-600">
+                                Are you sure you want to delete this broker account? This action cannot be undone.
+                            </p>
+                            <div className="flex justify-end space-x-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsDeleteModalOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="bg-red-600 text-red hover:bg-red-700"
+                                    onClick={handleDeleteAccount}
+                                >
+                                    Delete Account
+                                </Button>
                             </div>
                         </div>
                     </Modal>
