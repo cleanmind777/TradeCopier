@@ -76,7 +76,7 @@ const BrokerPage: React.FC = () => {
     const handleDeleteAccount = async () => {
         if (selectedAccountId) {
             console.log("Deleting account:", selectedAccountId);
-            delBrokerAccounts(selectedAccountId);
+            await delBrokerAccounts(selectedAccountId);
             // Add your delete API call here
             setIsDeleteModalOpen(false);
             setSelectedAccountId(null);
