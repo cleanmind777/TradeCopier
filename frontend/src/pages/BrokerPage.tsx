@@ -168,6 +168,7 @@ const BrokerPage: React.FC = () => {
                                                     onClick={() => {
                                                         setSelectedAccountId(account.id);
                                                         setIsDeleteModalOpen(true);
+                                                        console.log("11111111111111111111111111111111111111111111111")
                                                     }}
                                                 >
                                                     <Trash2 className="mr-2 h-4 w-4" />
