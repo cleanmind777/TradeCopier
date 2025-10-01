@@ -55,8 +55,8 @@ const UserTable: React.FC<UserTableProps> = ({ users, onAccept }) => {
                                     {user.is_accepted ? (
                                         <button disabled className="text-gray-600 hover:text-gray-800">Accept</button>
                                     ) : (<button onClick={() => onAccept(user.id)} className="text-blue-600 hover:text-blue-800">Accept</button>)}
-                                    <button className="text-green-600 hover:text-green-800">View</button>
-                                    <button className="text-red-600 hover:text-red-800">Delete</button>
+                                    {/* <button className="text-green-600 hover:text-green-800">View</button>
+                                    <button className="text-red-600 hover:text-red-800">Delete</button> */}
                                 </td>
                             </tr>
                         ))}
