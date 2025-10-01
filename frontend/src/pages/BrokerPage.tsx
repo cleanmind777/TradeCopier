@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { BrokerFilter, BrokerInfo } from '../types/broker';
-import { getBrokers, delBroker } from '../api/brokerApi';
+import { getBrokers, delBroker, changeBrokerAccount } from '../api/brokerApi';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
 
@@ -56,7 +56,8 @@ const BrokerPage: React.FC = () => {
         }));
     };
 
-    const toggleAccountStatus = (id: string) => {
+    const toggleAccountStatus  = async (id: string, status: Boolean) => {
+        await changeBrokerAccount({ id: id, status:  !status});
         if (brokerAccounts != null) {
             setBrokerAccounts(prevAccounts => (
                 prevAccounts && (
@@ -122,7 +123,7 @@ const BrokerPage: React.FC = () => {
                                             <div className="flex items-center justify-between">
                                                 <span className="text-sm text-slate-600">Status</span>
                                                 <button
-                                                    onClick={() => toggleAccountStatus(account.id)}
+                                                    onClick={() => toggleAccountStatus(account.id, account.status)}
                                                     className="flex items-center space-x-2"
                                                 >
                                                     {account.status === true ? (
