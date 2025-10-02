@@ -207,12 +207,13 @@ async def get_positions(db: Session, user_id: UUID):
             db_sub_broker_account = db.query(SubBrokerAccount).filter(
                 SubBrokerAccount.sub_account_id == str(position['accountId'])
             ).first()
+            
             contract_item = await get_contract_item(position['contractId'], db_broker_account.access_token, is_demo=True)
 
             p = TradovatePositionListForFrontend (
                 id=position['id'],
                 accountId=position['accountId'],
-                accountNickname=db_sub_broker_account.nickname,
+                accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
                 symbol=contract_item['name'],
                 netPos=position['netPos'],
                 netPrice=position['netPrice'],
