@@ -216,12 +216,13 @@ async def get_positions(db: Session, user_id: UUID):
                 accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
                 symbol=contract_item['name'],
                 netPos=position['netPos'],
-                netPrice=position['netPrice'],
+                netPrice = position['netPrice'] if 'netPrice' in position else 0,
                 bought=position['bought'],
                 boughtValue=position['boughtValue'],
                 sold=position['sold'],
                 soldValue=position['soldValue']
             )
+
             positions_for_frontend.append(p)
     return positions_for_frontend
 
