@@ -35,3 +35,42 @@ class TradovatePositionListResponse(BaseModel):
     soldValue: float
     archived: bool
     prevPos: int
+
+class TradovateProductItemResponse(BaseModel):
+    id: int
+    name: str
+    currencyId: int
+    productType: str
+    description: str
+    exchangeId: int
+    exchangeChannelId: int
+    contractGroupId: int
+    riskDiscountContractGroupId: int
+    status: str
+    months: str
+    valuePerPoint: float
+    priceFormatType: str
+    priceFormat: int
+    tickSize: float
+    allowProviderContractInfo: bool
+    isMicro: bool
+    marketDataSource: str
+    lookupWeight: int
+    hasReplay: bool
+    settlementMethod: str
+
+class TradovateContractMaturityItemResponse(BaseModel):
+    id: int
+    productId: int
+    expirationMonth: int
+    expirationDate: datetime
+    archived: bool
+    seqNo: int
+    isFront: bool
+
+class TradovateContractItemResponse(BaseModel):
+    id: int
+    name: str
+    contractMaturityId: int
+    status: str
+    providerTickSize: float
