@@ -5,7 +5,7 @@ import Footer from '../components/layout/Footer';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import  Button  from '../components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/Table';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Activity, Package, CreditCard } from 'lucide-react';
 
 type Position = {
   id: number;
@@ -120,19 +120,19 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="flex bg-slate-50 min-h-screen">
+    <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 p-6 space-y-6">
+        <main className="flex-1 p-8 space-y-8">
           {/* Global Action Button */}
           <div className="flex justify-end">
-<Button
-  variant="secondary"
-  onClick={handleFlattenAll}
-  disabled={isLoading}
-  className="flex items-center space-x-2 bg-red-600 hover:bg-red-700 text-white"
->
+            <Button
+              variant="primary"
+              onClick={handleFlattenAll}
+              disabled={isLoading}
+              className="flex items-center space-x-2 shadow-lg hover:shadow-xl transition-shadow bg-red-600 hover:bg-red-700"
+            >
               <Trash2 className="h-4 w-4" />
               <span>Flatten All / Exit All & Cancel All</span>
             </Button>
@@ -140,11 +140,11 @@ const DashboardPage: React.FC = () => {
 
           {/* Error Message */}
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative shadow-sm">
               <span className="block sm:inline">{error}</span>
               <button 
                 onClick={() => setError(null)} 
-                className="absolute top-0 right-0 px-4 py-3"
+                className="absolute top-0 right-0 px-4 py-3 hover:text-red-900 transition-colors"
                 aria-label="Close error message"
               >
                 &times;
@@ -153,35 +153,38 @@ const DashboardPage: React.FC = () => {
           )}
 
           {/* Tabs Navigation */}
-          <div className="flex border-b border-slate-200">
+          <div className="flex border-b border-slate-200 bg-white rounded-lg p-1 shadow-sm">
             <button
               onClick={() => setActiveTab('positions')}
-              className={`px-4 py-3 font-medium text-sm ${
+              className={`flex items-center px-4 py-2.5 font-medium text-sm rounded-md transition-all ${
                 activeTab === 'positions'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  ? 'bg-blue-50 text-blue-600 shadow-sm'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
               }`}
             >
+              <Activity className="mr-2 h-4 w-4" />
               Positions
             </button>
             <button
               onClick={() => setActiveTab('orders')}
-              className={`px-4 py-3 font-medium text-sm ${
+              className={`flex items-center px-4 py-2.5 font-medium text-sm rounded-md transition-all ${
                 activeTab === 'orders'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  ? 'bg-blue-50 text-blue-600 shadow-sm'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
               }`}
             >
+              <Package className="mr-2 h-4 w-4" />
               Orders
             </button>
             <button
               onClick={() => setActiveTab('accounts')}
-              className={`px-4 py-3 font-medium text-sm ${
+              className={`flex items-center px-4 py-2.5 font-medium text-sm rounded-md transition-all ${
                 activeTab === 'accounts'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  ? 'bg-blue-50 text-blue-600 shadow-sm'
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
               }`}
             >
+              <CreditCard className="mr-2 h-4 w-4" />
               Accounts
             </button>
           </div>
@@ -189,41 +192,41 @@ const DashboardPage: React.FC = () => {
           {/* Loading State */}
           {isLoading && (
             <div className="flex justify-center items-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
             </div>
           )}
 
           {/* Positions Tab */}
           {!isLoading && activeTab === 'positions' && (
-            <Card>
+            <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
-                <h3 className="text-lg font-semibold text-slate-900">Open Positions</h3>
+                <h3 className="text-xl font-semibold text-slate-900">Open Positions</h3>
                 <p className="text-sm text-slate-500">All active positions across accounts</p>
               </CardHeader>
               <CardContent>
                 {positions.length === 0 ? (
                   <div className="text-center py-8 text-slate-500">No open positions</div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
                     <Table>
-                      <TableHeader>
+                      <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead>Account</TableHead>
-                          <TableHead>Symbol</TableHead>
-                          <TableHead className="text-right">Quantity</TableHead>
-                          <TableHead className="text-right">Price</TableHead>
-                          <TableHead className="text-right">P&L</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                          <TableHead className="font-semibold">Account</TableHead>
+                          <TableHead className="font-semibold">Symbol</TableHead>
+                          <TableHead className="font-semibold text-right">Quantity</TableHead>
+                          <TableHead className="font-semibold text-right">Price</TableHead>
+                          <TableHead className="font-semibold text-right">P&L</TableHead>
+                          <TableHead className="font-semibold text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {positions.map((position) => (
-                          <TableRow key={position.id}>
+                          <TableRow key={position.id} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="font-medium">{position.account}</TableCell>
                             <TableCell>{position.symbol}</TableCell>
                             <TableCell className="text-right">{position.quantity}</TableCell>
                             <TableCell className="text-right">${position.price.toFixed(2)}</TableCell>
-                            <TableCell className={`text-right ${position.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <TableCell className={`text-right font-medium ${position.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               ${position.pnl.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-right">
@@ -232,6 +235,7 @@ const DashboardPage: React.FC = () => {
                                 size="sm"
                                 onClick={() => handleExitPosition(position.id)}
                                 disabled={isLoading}
+                                className="hover:bg-red-50 hover:text-red-600 transition-colors"
                               >
                                 Exit
                               </Button>
@@ -248,37 +252,37 @@ const DashboardPage: React.FC = () => {
 
           {/* Orders Tab */}
           {!isLoading && activeTab === 'orders' && (
-            <Card>
+            <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
-                <h3 className="text-lg font-semibold text-slate-900">Orders</h3>
+                <h3 className="text-xl font-semibold text-slate-900">Orders</h3>
                 <p className="text-sm text-slate-500">Working orders and execution history</p>
               </CardHeader>
               <CardContent>
                 {orders.length === 0 ? (
                   <div className="text-center py-8 text-slate-500">No orders found</div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
                     <Table>
-                      <TableHeader>
+                      <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead>Account</TableHead>
-                          <TableHead>Symbol</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead className="text-right">Quantity</TableHead>
-                          <TableHead className="text-right">Price</TableHead>
-                          <TableHead>Status</TableHead>
+                          <TableHead className="font-semibold">Account</TableHead>
+                          <TableHead className="font-semibold">Symbol</TableHead>
+                          <TableHead className="font-semibold">Type</TableHead>
+                          <TableHead className="font-semibold text-right">Quantity</TableHead>
+                          <TableHead className="font-semibold text-right">Price</TableHead>
+                          <TableHead className="font-semibold">Status</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {orders.map((order) => (
-                          <TableRow key={order.id}>
+                          <TableRow key={order.id} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="font-medium">{order.account}</TableCell>
                             <TableCell>{order.symbol}</TableCell>
                             <TableCell>{order.type}</TableCell>
                             <TableCell className="text-right">{order.quantity}</TableCell>
                             <TableCell className="text-right">${order.price.toFixed(2)}</TableCell>
                             <TableCell>
-                              <span className={`px-2 py-1 text-xs rounded-full ${
+                              <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
                                 order.status === 'Filled' ? 'bg-green-100 text-green-800' :
                                 order.status === 'Working' ? 'bg-blue-100 text-blue-800' :
                                 'bg-red-100 text-red-800'
@@ -298,33 +302,33 @@ const DashboardPage: React.FC = () => {
 
           {/* Accounts Tab */}
           {!isLoading && activeTab === 'accounts' && (
-            <Card>
+            <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
-                <h3 className="text-lg font-semibold text-slate-900">Accounts</h3>
+                <h3 className="text-xl font-semibold text-slate-900">Accounts</h3>
                 <p className="text-sm text-slate-500">Performance and account management</p>
               </CardHeader>
               <CardContent>
                 {accounts.length === 0 ? (
                   <div className="text-center py-8 text-slate-500">No accounts found</div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
                     <Table>
-                      <TableHeader>
+                      <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead>Account</TableHead>
-                          <TableHead className="text-right">Realized P&L</TableHead>
-                          <TableHead className="text-right">Unrealized P&L</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                          <TableHead className="font-semibold">Account</TableHead>
+                          <TableHead className="font-semibold text-right">Realized P&L</TableHead>
+                          <TableHead className="font-semibold text-right">Unrealized P&L</TableHead>
+                          <TableHead className="font-semibold text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {accounts.map((account) => (
-                          <TableRow key={account.id}>
+                          <TableRow key={account.id} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="font-medium">{account.account}</TableCell>
-                            <TableCell className={`text-right ${account.realizedPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <TableCell className={`text-right font-medium ${account.realizedPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               ${account.realizedPnl.toFixed(2)}
                             </TableCell>
-                            <TableCell className={`text-right ${account.unrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <TableCell className={`text-right font-medium ${account.unrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               ${account.unrealizedPnl.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-right">
@@ -334,16 +338,17 @@ const DashboardPage: React.FC = () => {
                                   size="sm"
                                   onClick={() => handleFlattenAccount(account.id)}
                                   disabled={isLoading}
+                                  className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
                                 >
                                   Flatten
                                 </Button>
-<Button
-  variant="outline"
-  size="sm"
-  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-  onClick={() => handleExitAll(account.id)}
-  disabled={isLoading}
->
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                                  onClick={() => handleExitAll(account.id)}
+                                  disabled={isLoading}
+                                >
                                   Exit All
                                 </Button>
                               </div>
