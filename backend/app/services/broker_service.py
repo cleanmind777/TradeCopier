@@ -203,6 +203,7 @@ async def get_positions(db: Session, user_id: UUID):
         positions_status.extend(live_positions)
 
     for position in positions_status:
+        print(position)
         db_sub_broker_account = db.query(SubBrokerAccount).filter(
             SubBrokerAccount.sub_account_id == position.accountId
         )
