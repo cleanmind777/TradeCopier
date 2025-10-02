@@ -7,6 +7,12 @@ import {
   SubBrokerInfo,
   SubBrokerChange,
   BrokerChange,
+  TradeDate,
+  TradovateContractItemResponse,
+  TradovateContractMaturityItemResponse,
+  TradovateOrderListResponse,
+  TradovatePositionListResponse,
+  TradovateProductItemResponse
 } from "../types/broker";
 
 const API_BASE =
@@ -118,6 +124,48 @@ export const changeBrokerAccount = async (
       alert(error.response?.data.detail);
     } else {
       console.error("Unexpected Change Sub brokers error:", error);
+    }
+    return null;
+  }
+};
+
+export const getPositions = async (
+  user_id: string
+): Promise<TradovatePositionListResponse[] | null> => {
+  try {
+    const params = { user_id };
+    const response = await axios.get(
+      `${API_BASE}/broker/positions`,
+      { params }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get Postions:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Get Postions error:", error);
+    }
+    return null;
+  }
+};
+
+export const getOrders = async (
+  user_id: string
+): Promise<TradovateOrderListResponse[] | null> => {
+  try {
+    const params = { user_id };
+    const response = await axios.get(
+      `${API_BASE}/broker/orders`,
+      { params }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get Orders:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Get Orders error:", error);
     }
     return null;
   }

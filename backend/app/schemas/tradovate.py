@@ -16,6 +16,9 @@ class TradovateOrderListResponse(BaseModel):
     external: bool
     admin: bool
 
+class TradovateOrderForFrontend(TradovateOrderListResponse):
+    symbol: str
+
 class TradeDate(BaseModel):
     year: int
     month: int
@@ -35,6 +38,19 @@ class TradovatePositionListResponse(BaseModel):
     soldValue: float
     archived: bool
     prevPos: int
+
+class TradovatePositionListForFrontend(BaseModel):
+    id: int
+    accountId: int
+    accountNickname: str
+    symbol: str
+    netPos: int
+    netPrice: float
+    bought: int
+    boughtValue: float
+    sold: int
+    soldValue: float
+
 
 class TradovateProductItemResponse(BaseModel):
     id: int
