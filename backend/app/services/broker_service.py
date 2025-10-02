@@ -205,21 +205,21 @@ async def get_positions(db: Session, user_id: UUID):
         for position in positions_status:
             print("Position: ", position)
             db_sub_broker_account = db.query(SubBrokerAccount).filter(
-                SubBrokerAccount.sub_account_id == str(position.accountId)
+                SubBrokerAccount.sub_account_id == str(position['accountId'])
             )
             contract_item = await get_contract_item(position.contractId, db_broker_account.access_token, is_demo=True)
 
             p = TradovatePositionListForFrontend (
-                id=position.id,
-                accountId=position.accountId,
-                accountNickname=db_sub_broker_account.nickname,
-                symbol=contract_item.name,
-                netPos=position.netPos,
-                netPrice=position.netPrice,
-                bought=position.bought,
-                boughtValue=position.boughtValue,
-                sold=position.sold,
-                soldValue=position.soldValue
+                id=position['id'],
+                accountId=position['accountId'],
+                accountNickname=db_sub_broker_account['nickname'],
+                symbol=contract_item['name'],
+                netPos=position['netPos'],
+                netPrice=position['netPrice'],
+                bought=position['bought'],
+                boughtValue=position['boughtValue'],
+                sold=position['sold'],
+                soldValue=position['soldValue']
             )
             positions_for_frontend.append(p)
     return positions_for_frontend
