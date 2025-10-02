@@ -51,7 +51,7 @@ def change_Broker(broker_change: BrokerChange, db: Session = Depends(get_db)):
 
 @router.get("/positions", status_code=status.HTTP_200_OK)
 def get_Positions(user_id: UUID, db: Session = Depends(get_db)):
-    response = get_positions(user_id)
+    response = get_positions(db, user_id)
     if response is None:
         raise HTTPException(status_code=404, detail="Positions not found")
     return response
