@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -7,6 +7,7 @@ import Button from '../components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/Table';
 import { Trash2, Activity, Package, CreditCard } from 'lucide-react';
 import { TradovateContractItemResponse, TradovateOrderListResponse, TradovatePositionListResponse } from '../types/broker';
+import { getPositions, getOrders } from '../api/brokerApi';
 
 type Account = {
   id: number;
@@ -58,6 +59,29 @@ const DashboardPage: React.FC = () => {
     { id: 1, account: 'Account #123', realizedPnl: 2500.00, unrealizedPnl: 1200.50 },
     { id: 2, account: 'Account #456', realizedPnl: -800.00, unrealizedPnl: -500.75 },
   ]);
+  const user = localStorage.getItem('user');
+  const user_id = user ? JSON.parse(user).id : null;
+  
+  useEffect(() => {
+    const fetchPositions = async () => {
+      const positionData = await getPositions(user_id)
+      if (positionData != null) {
+        setPositions(positionData)
+      }
+    }
+    fetchPositions()
+  }, [user_id])
+
+  
+  useEffect(() => {
+    const fetchOrders = async () => {
+      const orderData = await getOrders(user_id)
+      if (orderData != null) {
+        setOrders(orderData)
+    }
+    }
+    fetchOrders()
+  }, [user_id])
 
   const handleExitPosition = async (positionId: number) => {
     try {
