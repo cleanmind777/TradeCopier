@@ -201,27 +201,27 @@ async def get_positions(db: Session, user_id: UUID):
         )
         positions_status.extend(demo_positions)
         positions_status.extend(live_positions)
+    if positions_status != []:
+        for position in positions_status:
+            print(position)
+            db_sub_broker_account = db.query(SubBrokerAccount).filter(
+                SubBrokerAccount.sub_account_id == position.accountId
+            )
+            contract_item = await get_contract_item(position.contractId, db_broker_account.access_token, is_demo=True)
 
-    for position in positions_status:
-        print(position)
-        db_sub_broker_account = db.query(SubBrokerAccount).filter(
-            SubBrokerAccount.sub_account_id == position.accountId
-        )
-        contract_item = await get_contract_item(position.contractId, db_broker_account.access_token, is_demo=True)
-
-        p = TradovatePositionListForFrontend (
-            id=position.id,
-            accountId=position.accountId,
-            accountNickname=db_sub_broker_account.nickname,
-            symbol=contract_item.name,
-            netPos=position.netPos,
-            netPrice=position.netPrice,
-            bought=position.bought,
-            boughtValue=position.boughtValue,
-            sold=position.sold,
-            soldValue=position.soldValue
-        )
-        positions_for_frontend.append(p)
+            p = TradovatePositionListForFrontend (
+                id=position.id,
+                accountId=position.accountId,
+                accountNickname=db_sub_broker_account.nickname,
+                symbol=contract_item.name,
+                netPos=position.netPos,
+                netPrice=position.netPrice,
+                bought=position.bought,
+                boughtValue=position.boughtValue,
+                sold=position.sold,
+                soldValue=position.soldValue
+            )
+            positions_for_frontend.append(p)
     return positions_for_frontend
 
 async def get_orders(db: Session, user_id: UUID):
@@ -239,20 +239,21 @@ async def get_orders(db: Session, user_id: UUID):
         )
         order_status.extend(demo_orders)
         order_status.extend(live_orders)
-    for order in order_status:
-        contract_item = await get_contract_item(order.contractId, db_broker_account.access_token, is_demo=True)
-        o = TradovateOrderForFrontend (
-            id=order.id,
-            accountId=order.accountId,
-            contractId=order.contractId,
-            timestamp=order.timestamp,
-            action=order.action,
-            ordStatus=order.ordStatus,
-            executionProviderId=order.executionProviderId,
-            archived=order.archived,
-            external=order.external,
-            admin=order.admin,
-            symbol=contract_item.name
-        )
-        order_for_frontend.append(o)
+    if order_status != []:
+        for order in order_status:
+            contract_item = await get_contract_item(order.contractId, db_broker_account.access_token, is_demo=True)
+            o = TradovateOrderForFrontend (
+                id=order.id,
+                accountId=order.accountId,
+                contractId=order.contractId,
+                timestamp=order.timestamp,
+                action=order.action,
+                ordStatus=order.ordStatus,
+                executionProviderId=order.executionProviderId,
+                archived=order.archived,
+                external=order.external,
+                admin=order.admin,
+                symbol=contract_item.name
+            )
+            order_for_frontend.append(o)
     return order_for_frontend
