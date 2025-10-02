@@ -71,6 +71,7 @@ export interface TradovatePositionListResponse{
     id: number
     accountId: number
     account_nickname: string
+    symbol: string
     netPos: number
     netPrice: number
     bought: number
@@ -90,6 +91,7 @@ export interface TradovateOrderListResponse {
     archived: boolean
     external: boolean
     admin: boolean
+    symbol: string
 }
 
 export interface TradovateProductItemResponse{

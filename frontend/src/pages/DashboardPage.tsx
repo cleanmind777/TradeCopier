@@ -3,28 +3,10 @@ import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
-import  Button  from '../components/ui/Button';
+import Button from '../components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/Table';
 import { Trash2, Activity, Package, CreditCard } from 'lucide-react';
-
-type Position = {
-  id: number;
-  account: string;
-  symbol: string;
-  quantity: number;
-  price: number;
-  pnl: number;
-};
-
-type Order = {
-  id: number;
-  account: string;
-  symbol: string;
-  type: string;
-  quantity: number;
-  price: number;
-  status: 'Working' | 'Filled' | 'Cancelled';
-};
+import { TradovateContractItemResponse, TradovateOrderListResponse, TradovatePositionListResponse } from '../types/broker';
 
 type Account = {
   id: number;
@@ -39,14 +21,37 @@ const DashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Mock data - replace with real API calls
-  const [positions, setPositions] = useState<Position[]>([
-    { id: 1, account: 'Account #123', symbol: 'AAPL', quantity: 100, price: 150.25, pnl: 1200.50 },
-    { id: 2, account: 'Account #456', symbol: 'TSLA', quantity: 50, price: 700.00, pnl: -500.75 },
+  const [positions, setPositions] = useState<TradovatePositionListResponse[]>([
+    {
+      id: 1,
+      accountId: 123,
+      account_nickname: 'Main Account',
+      symbol: 'AAPL',
+      netPos: 100,
+      netPrice: 150.25,
+      bought: 150,
+      boughtValue: 22500,
+      sold: 50,
+      soldValue: 7500
+    },
+    // ... more positions
   ]);
 
-  const [orders, setOrders] = useState<Order[]>([
-    { id: 1, account: 'Account #123', symbol: 'GOOGL', type: 'Limit Buy', quantity: 10, price: 2800.00, status: 'Working' },
-    { id: 2, account: 'Account #456', symbol: 'AMZN', type: 'Market Sell', quantity: 5, price: 3200.00, status: 'Filled' },
+  const [orders, setOrders] = useState<TradovateOrderListResponse[]>([
+    {
+      id: 1,
+      accountId: 123,
+      contractId: 456,
+      timestamp: new Date(),
+      action: 'Buy',
+      ordStatus: 'Working',
+      executionProviderId: 789,
+      archived: false,
+      external: false,
+      admin: false,
+      symbol: 'AAPL'
+    },
+    // ... more orders
   ]);
 
   const [accounts, setAccounts] = useState<Account[]>([
@@ -77,7 +82,7 @@ const DashboardPage: React.FC = () => {
       // TODO: Replace with actual API call
       console.log('Flattening account:', accountId);
       await new Promise(resolve => setTimeout(resolve, 500));
-      setPositions(prev => prev.filter(p => !p.account.includes(accountId.toString())));
+      setPositions(prev => prev.filter(p => p.accountId !== accountId));
     } catch (err) {
       setError('Failed to flatten account');
       console.error(err);
@@ -93,7 +98,7 @@ const DashboardPage: React.FC = () => {
       // TODO: Replace with actual API call
       console.log('Exiting all positions for account:', accountId);
       await new Promise(resolve => setTimeout(resolve, 500));
-      setPositions(prev => prev.filter(p => !p.account.includes(accountId.toString())));
+      setPositions(prev => prev.filter(p => p.accountId !== accountId));
     } catch (err) {
       setError('Failed to exit all positions');
       console.error(err);
@@ -110,7 +115,7 @@ const DashboardPage: React.FC = () => {
       console.log('Flattening all positions and canceling all orders');
       await new Promise(resolve => setTimeout(resolve, 500));
       setPositions([]);
-      setOrders(prev => prev.map(order => ({ ...order, status: 'Cancelled' })));
+      setOrders(prev => prev.map(order => ({ ...order, ordStatus: 'Cancelled' })));
     } catch (err) {
       setError('Failed to flatten all positions and orders');
       console.error(err);
@@ -131,7 +136,7 @@ const DashboardPage: React.FC = () => {
               variant="primary"
               onClick={handleFlattenAll}
               disabled={isLoading}
-              className="flex items-center space-x-2 shadow-lg hover:shadow-xl transition-shadow bg-red-600 hover:bg-red-700"
+              className="flex items-center space-x-2 shadow-lg hover:shadow-xl transition-shadow"
             >
               <Trash2 className="h-4 w-4" />
               <span>Flatten All / Exit All & Cancel All</span>
@@ -213,22 +218,22 @@ const DashboardPage: React.FC = () => {
                         <TableRow>
                           <TableHead className="font-semibold">Account</TableHead>
                           <TableHead className="font-semibold">Symbol</TableHead>
-                          <TableHead className="font-semibold text-right">Quantity</TableHead>
-                          <TableHead className="font-semibold text-right">Price</TableHead>
-                          <TableHead className="font-semibold text-right">P&L</TableHead>
+                          <TableHead className="font-semibold text-right">Net Position</TableHead>
+                          <TableHead className="font-semibold text-right">Net Price</TableHead>
+                          <TableHead className="font-semibold text-right">Bought</TableHead>
+                          <TableHead className="font-semibold text-right">Sold</TableHead>
                           <TableHead className="font-semibold text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {positions.map((position) => (
                           <TableRow key={position.id} className="hover:bg-slate-50 transition-colors">
-                            <TableCell className="font-medium">{position.account}</TableCell>
+                            <TableCell className="font-medium">{position.account_nickname}</TableCell>
                             <TableCell>{position.symbol}</TableCell>
-                            <TableCell className="text-right">{position.quantity}</TableCell>
-                            <TableCell className="text-right">${position.price.toFixed(2)}</TableCell>
-                            <TableCell className={`text-right font-medium ${position.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              ${position.pnl.toFixed(2)}
-                            </TableCell>
+                            <TableCell className="text-right">{position.netPos}</TableCell>
+                            <TableCell className="text-right">${position.netPrice.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{position.bought}</TableCell>
+                            <TableCell className="text-right">{position.sold}</TableCell>
                             <TableCell className="text-right">
                               <Button
                                 variant="outline"
@@ -267,29 +272,29 @@ const DashboardPage: React.FC = () => {
                         <TableRow>
                           <TableHead className="font-semibold">Account</TableHead>
                           <TableHead className="font-semibold">Symbol</TableHead>
-                          <TableHead className="font-semibold">Type</TableHead>
-                          <TableHead className="font-semibold text-right">Quantity</TableHead>
-                          <TableHead className="font-semibold text-right">Price</TableHead>
+                          <TableHead className="font-semibold">Action</TableHead>
                           <TableHead className="font-semibold">Status</TableHead>
+                          <TableHead className="font-semibold">Timestamp</TableHead>
+                          <TableHead className="font-semibold">External</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {orders.map((order) => (
                           <TableRow key={order.id} className="hover:bg-slate-50 transition-colors">
-                            <TableCell className="font-medium">{order.account}</TableCell>
+                            <TableCell className="font-medium">{order.accountId}</TableCell>
                             <TableCell>{order.symbol}</TableCell>
-                            <TableCell>{order.type}</TableCell>
-                            <TableCell className="text-right">{order.quantity}</TableCell>
-                            <TableCell className="text-right">${order.price.toFixed(2)}</TableCell>
+                            <TableCell>{order.action}</TableCell>
                             <TableCell>
                               <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                                order.status === 'Filled' ? 'bg-green-100 text-green-800' :
-                                order.status === 'Working' ? 'bg-blue-100 text-blue-800' :
+                                order.ordStatus === 'Filled' ? 'bg-green-100 text-green-800' :
+                                order.ordStatus === 'Working' ? 'bg-blue-100 text-blue-800' :
                                 'bg-red-100 text-red-800'
                               }`}>
-                                {order.status}
+                                {order.ordStatus}
                               </span>
                             </TableCell>
+                            <TableCell>{order.timestamp.toLocaleString()}</TableCell>
+                            <TableCell>{order.external ? 'Yes' : 'No'}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
