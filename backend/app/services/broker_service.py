@@ -296,7 +296,7 @@ async def get_accounts(db: Session, user_id: UUID):
                     accountId=account['accountId'],
                     accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
                     timestamp=account['timestamp'],
-                    currencyId=account['currenyId'],
+                    currencyId=account['currencyId'],
                     amount=account['amount'],
                     realizedPnL=account['realizedPnL'],
                     weekRealizedPnL=account['weekRealizedPnL'],
