@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     broker,
     tradovate,
     sub_broker,
+    group,
 )
 
 api_router = APIRouter()
@@ -15,3 +16,4 @@ api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(broker.router, prefix="/broker", tags=["broker"])
 api_router.include_router(sub_broker.router, prefix="/subbroker", tags=["subbroker"])
 api_router.include_router(tradovate.router, prefix="/tradovate", tags=["tradovate"])
+api_router.include_router(group.router, prefix="/group", tags=["group"])
