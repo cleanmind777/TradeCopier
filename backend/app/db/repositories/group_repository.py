@@ -26,7 +26,7 @@ def  user_change_group_name(db: Session, change_name: GroupNameChange):
     db_group = (
         db.query(Group)
         .filter(Group.id == change_name.group_id)
-        .all()
+        .first()
     )
     db_group.name = change_name.new_name
     db.add(db_group)
