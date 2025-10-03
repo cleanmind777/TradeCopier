@@ -24,7 +24,7 @@ def change_Group_name(change_name: GroupNameChange, db: Session = Depends(get_db
     return change_group_name(db, change_name)
 
 @router.post(
-    "/change-name", status_code=status.HTTP_201_CREATED
+    "/add-broker", status_code=status.HTTP_201_CREATED
 )
 def add_Broker_to_group(group_add_broker: GroupAddBroker, db: Session = Depends(get_db)):
     return add_broker_to_group(db, group_add_broker)
