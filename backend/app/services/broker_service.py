@@ -284,6 +284,7 @@ async def get_Accounts(db: Session, user_id: UUID):
         )
         accounts_status.extend(demo_accounts)
         accounts_status.extend(live_accounts)
+    print("Accounts: ", accounts_status)
     if accounts_status != []:
         for account in accounts_status:
             db_sub_broker_account = db.query(SubBrokerAccount).filter(
