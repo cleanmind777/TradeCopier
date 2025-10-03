@@ -326,6 +326,9 @@ const [orders, setOrders] = useState<TradovateOrderListResponse[]>([]);
                         {accounts.map((account) => (
                           <TableRow key={account.id} className="hover:bg-slate-50 transition-colors">
                             <TableCell className="font-medium">{account.accountNickname}</TableCell>
+                            <TableCell className={`text-right font-medium ${account.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ${account.amount.toFixed(2)}
+                            </TableCell>
                             <TableCell className={`text-right font-medium ${account.realizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                               ${account.realizedPnL.toFixed(2)}
                             </TableCell>
