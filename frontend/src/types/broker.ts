@@ -61,79 +61,90 @@ export interface SubBrokerChange {
   is_active?: boolean;
 }
 
-
-export interface TradeDate{
-    year: number;
-    month: number;
-    day: number;
+export interface TradeDate {
+  year: number;
+  month: number;
+  day: number;
 }
-export interface TradovatePositionListResponse{
-    id: number
-    accountId: number
-    accountNickname: string
-    symbol: string
-    netPos: number
-    netPrice: number
-    bought: number
-    boughtValue: number
-    sold: number
-    soldValue: number
+export interface TradovatePositionListResponse {
+  id: number;
+  accountId: number;
+  accountNickname: string;
+  symbol: string;
+  netPos: number;
+  netPrice: number;
+  bought: number;
+  boughtValue: number;
+  sold: number;
+  soldValue: number;
 }
 
 export interface TradovateOrderListResponse {
-    id: number
-    accountId: number
-    accountNickname: string
-    contractId: number
-    timestamp: Date
-    action: string
-    ordStatus: string
-    executionProviderId: number
-    archived: boolean
-    external: boolean
-    admin: boolean
-    symbol: string
+  id: number;
+  accountId: number;
+  accountNickname: string;
+  contractId: number;
+  timestamp: Date;
+  action: string;
+  ordStatus: string;
+  executionProviderId: number;
+  archived: boolean;
+  external: boolean;
+  admin: boolean;
+  symbol: string;
 }
 
-export interface TradovateProductItemResponse{
-    id: number
-    name: string
-    currencyId: number
-    productType: string
-    description: string
-    exchangeId: number
-    exchangeChannelId: number
-    contractGroupId: number
-    riskDiscountContractGroupId: number
-    status: string
-    months: string
-    valuePerPoint: number
-    priceFormatType: string
-    priceFormat: number
-    tickSize: number
-    allowProviderContractInfo: boolean
-    isMicro: boolean
-    marketDataSource: string
-    lookupWeight: number
-    hasReplay: boolean
-    settlementMethod: string
+export interface TradovateProductItemResponse {
+  id: number;
+  name: string;
+  currencyId: number;
+  productType: string;
+  description: string;
+  exchangeId: number;
+  exchangeChannelId: number;
+  contractGroupId: number;
+  riskDiscountContractGroupId: number;
+  status: string;
+  months: string;
+  valuePerPoint: number;
+  priceFormatType: string;
+  priceFormat: number;
+  tickSize: number;
+  allowProviderContractInfo: boolean;
+  isMicro: boolean;
+  marketDataSource: string;
+  lookupWeight: number;
+  hasReplay: boolean;
+  settlementMethod: string;
 }
 
-export interface TradovateContractMaturityItemResponse{
-    id: number
-    productId: number
-    expirationMonth: number
-    expirationDate: Date
-    archived: boolean
-    seqNo: number
-    isFront: boolean
-
+export interface TradovateContractMaturityItemResponse {
+  id: number;
+  productId: number;
+  expirationMonth: number;
+  expirationDate: Date;
+  archived: boolean;
+  seqNo: number;
+  isFront: boolean;
 }
 
-export interface TradovateContractItemResponse{
-    id: number
-    name: string
-    contractMaturityId: number
-    status: string
-    providerTickSize: number
+export interface TradovateContractItemResponse {
+  id: number;
+  name: string;
+  contractMaturityId: number;
+  status: string;
+  providerTickSize: number;
+}
+
+export interface TradovateAccountsResponse {
+  id: number;
+  accountId: number;
+  accountNickname: string;
+  timestamp: Date;
+  currencyId: number;
+  amount: number;
+  realizedPnL: number;
+  weekRealizedPnL: number;
+  archived: boolean;
+  amountSOD: number;
 }

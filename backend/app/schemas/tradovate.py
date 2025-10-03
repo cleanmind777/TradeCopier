@@ -91,3 +91,27 @@ class TradovateContractItemResponse(BaseModel):
     contractMaturityId: int
     status: str
     providerTickSize: float
+
+class TradovateCashBalanceResponse(BaseModel):
+    id: int
+    accountId: int
+    timestamp: datetime
+    tradeDate: TradeDate
+    currencyId: int
+    amount: float
+    realizedPnL: float
+    weekRealizedPnL: float
+    archived: bool
+    amountSOD: float
+
+class TradovateAccountsForFrontend(BaseModel):
+    id: int
+    accountId: int
+    timestamp: datetime
+    currencyId: int
+    amount: float
+    realizedPnL: float
+    weekRealizedPnL: float
+    archived: bool
+    amountSOD: float
+    accountNickname: str

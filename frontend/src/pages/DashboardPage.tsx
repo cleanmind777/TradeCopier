@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/Table';
 import { Trash2, Activity, Package, CreditCard } from 'lucide-react';
-import { TradovateContractItemResponse, TradovateOrderListResponse, TradovatePositionListResponse } from '../types/broker';
+import { TradovateAccountsResponse, TradovateOrderListResponse, TradovatePositionListResponse } from '../types/broker';
 import { getPositions, getOrders } from '../api/brokerApi';
 
 type Account = {
@@ -22,44 +22,11 @@ const DashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Mock data - replace with real API calls
-  const [positions, setPositions] = useState<TradovatePositionListResponse[]>([
-    {
-      id: 1,
-      accountId: 123,
-      accountNickname: 'Main Account',
-      symbol: 'AAPL',
-      netPos: 100,
-      netPrice: 150.25,
-      bought: 150,
-      boughtValue: 22500,
-      sold: 50,
-      soldValue: 7500
-    },
-    // ... more positions
-  ]);
+  const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
 
-  const [orders, setOrders] = useState<TradovateOrderListResponse[]>([
-    {
-      id: 1,
-      accountId: 123,
-      accountNickname: "SubAccount 0",
-      contractId: 456,
-      timestamp: new Date(),
-      action: 'Buy',
-      ordStatus: 'Working',
-      executionProviderId: 789,
-      archived: false,
-      external: false,
-      admin: false,
-      symbol: 'AAPL'
-    },
-    // ... more orders
-  ]);
+const [orders, setOrders] = useState<TradovateOrderListResponse[]>([]);
 
-  const [accounts, setAccounts] = useState<Account[]>([
-    { id: 1, account: 'Account #123', realizedPnl: 2500.00, unrealizedPnl: 1200.50 },
-    { id: 2, account: 'Account #456', realizedPnl: -800.00, unrealizedPnl: -500.75 },
-  ]);
+  const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
   const user = localStorage.getItem('user');
   const user_id = user ? JSON.parse(user).id : null;
   
@@ -346,20 +313,21 @@ const DashboardPage: React.FC = () => {
                       <TableHeader className="bg-slate-50">
                         <TableRow>
                           <TableHead className="font-semibold">Account</TableHead>
+                          <TableHead className="font-semibold text-right">Amount</TableHead>
                           <TableHead className="font-semibold text-right">Realized P&L</TableHead>
-                          <TableHead className="font-semibold text-right">Unrealized P&L</TableHead>
+                          <TableHead className="font-semibold text-right">Week P&L</TableHead>
                           <TableHead className="font-semibold text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {accounts.map((account) => (
                           <TableRow key={account.id} className="hover:bg-slate-50 transition-colors">
-                            <TableCell className="font-medium">{account.account}</TableCell>
-                            <TableCell className={`text-right font-medium ${account.realizedPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              ${account.realizedPnl.toFixed(2)}
+                            <TableCell className="font-medium">{account.accountNickname}</TableCell>
+                            <TableCell className={`text-right font-medium ${account.realizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ${account.realizedPnL.toFixed(2)}
                             </TableCell>
-                            <TableCell className={`text-right font-medium ${account.unrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              ${account.unrealizedPnl.toFixed(2)}
+                            <TableCell className={`text-right font-medium ${account.weekRealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ${account.weekRealizedPnL.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">

@@ -208,3 +208,22 @@ async def get_product_item(
         # Log error or handle non-200 statuses and empty responses gracefully
         data = None
     return data
+
+def get_cash_balances(access_token: str, is_demo: bool):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    if is_demo:
+        url = f"{TRADO_DEMO_URL}/cashBalance/list"
+    else:
+        url = f"{TRADO_LIVE_URL}/cashBalance/list"
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print(data)
+        except ValueError:
+            # Log error or handle malformed JSON
+            return None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        return None
+    return data

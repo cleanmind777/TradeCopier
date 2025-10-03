@@ -26,6 +26,8 @@ from app.schemas.tradovate import (
     TradovatePositionListResponse,
     TradovateProductItemResponse,
     TradovateOrderForFrontend,
+    TradovateCashBalanceResponse,
+    TradovateAccountsForFrontend
 )
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
 from app.utils.broker import getAccessTokenForTradoVate
@@ -39,7 +41,8 @@ from app.utils.tradovate import (
     get_order_list_of_live_account,
     get_contract_item,
     get_contract_maturity_item,
-    get_product_item
+    get_product_item,
+    get_cash_balances
 )
 from app.db.repositories.broker_repository import (
     user_add_broker,
@@ -208,22 +211,23 @@ async def get_positions(db: Session, user_id: UUID):
                 SubBrokerAccount.sub_account_id == str(position['accountId'])
             ).first()
             
-            contract_item = await get_contract_item(position['contractId'], db_broker_account.access_token, is_demo=True)
+            if db_sub_broker_account.is_active:
+                contract_item = await get_contract_item(position['contractId'], db_broker_account.access_token, is_demo=True)
 
-            p = TradovatePositionListForFrontend (
-                id=position['id'],
-                accountId=position['accountId'],
-                accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
-                symbol=contract_item['name'],
-                netPos=position['netPos'],
-                netPrice = position['netPrice'] if 'netPrice' in position else 0,
-                bought=position['bought'],
-                boughtValue=position['boughtValue'],
-                sold=position['sold'],
-                soldValue=position['soldValue']
-            )
+                p = TradovatePositionListForFrontend (
+                    id=position['id'],
+                    accountId=position['accountId'],
+                    accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
+                    symbol=contract_item['name'],
+                    netPos=position['netPos'],
+                    netPrice = position['netPrice'] if 'netPrice' in position else 0,
+                    bought=position['bought'],
+                    boughtValue=position['boughtValue'],
+                    sold=position['sold'],
+                    soldValue=position['soldValue']
+                )
 
-            positions_for_frontend.append(p)
+                positions_for_frontend.append(p)
     return positions_for_frontend
 
 async def get_orders(db: Session, user_id: UUID):
@@ -246,20 +250,57 @@ async def get_orders(db: Session, user_id: UUID):
             db_sub_broker_account = db.query(SubBrokerAccount).filter(
                 SubBrokerAccount.sub_account_id == str(order['accountId'])
             ).first()
-            contract_item = await get_contract_item(order['contractId'], db_broker_account.access_token, is_demo=True)
-            o = TradovateOrderForFrontend (
-                id=order['id'],
-                accountId=order['accountId'],
-                accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
-                contractId=order['contractId'],
-                timestamp=order['timestamp'],
-                action=order['action'],
-                ordStatus=order['ordStatus'],
-                executionProviderId=order['executionProviderId'],
-                archived=order['archived'],
-                external=order['external'],
-                admin=order['admin'],
-                symbol=contract_item['name']
-            )
-            order_for_frontend.append(o)
+            if db_sub_broker_account.is_active:
+                contract_item = await get_contract_item(order['contractId'], db_broker_account.access_token, is_demo=True)
+                o = TradovateOrderForFrontend (
+                    id=order['id'],
+                    accountId=order['accountId'],
+                    accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
+                    contractId=order['contractId'],
+                    timestamp=order['timestamp'],
+                    action=order['action'],
+                    ordStatus=order['ordStatus'],
+                    executionProviderId=order['executionProviderId'],
+                    archived=order['archived'],
+                    external=order['external'],
+                    admin=order['admin'],
+                    symbol=contract_item['name']
+                )
+                order_for_frontend.append(o)
     return order_for_frontend
+
+async def get_Accounts(db: Session, user_id: UUID):
+    accounts_status:list[TradovateCashBalanceResponse] = []
+    accounts_for_dashboard = []
+    db_broker_accounts = db.query(BrokerAccount).filter(
+        BrokerAccount.user_id == user_id
+    )
+    for db_broker_account in db_broker_accounts:
+        demo_accounts = get_cash_balances(
+            db_broker_account.access_token, True
+        )
+        live_accounts = get_cash_balances(
+            db_broker_account.access_token, False
+        )
+        accounts_status.extend(demo_accounts)
+        accounts_status.extend(live_accounts)
+    if accounts_status != []:
+        for account in accounts_status:
+            db_sub_broker_account = db.query(SubBrokerAccount).filter(
+                SubBrokerAccount.sub_account_id == str(account['accountId'])
+            ).first()
+            if db_sub_broker_account.is_active:
+                a = TradovateAccountsForFrontend (
+                    id=account['id'],
+                    accountId=account['accountId'],
+                    accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
+                    timestamp=account['timestamp'],
+                    currencyId=account['currenyId'],
+                    amount=account['amount'],
+                    realizedPnL=account['realizedPnL'],
+                    weekRealizedPnL=account['weekRealizedPnL'],
+                    archived=account['archived'],
+                    amountSOD=account['amountSOD']
+                )
+                accounts_for_dashboard.append(a)
+    return accounts_for_dashboard
