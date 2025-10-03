@@ -62,3 +62,16 @@ def  user_set_qty_to_group(db: Session, group_set_qty: GroupSetQTY):
     db.commit()
     db.refresh(db_group)
     return db.query(Group).filter(Group.user_id==db_group.user_id).all()
+
+def user_del_group(db: Session, group_id: UUID):
+    db_group = (
+        db.query(Group).filter(Group.id == group_id).first()
+    )
+    user_id = db_group.user_id
+    query = db.query(GroupBroker).filter(GroupBroker.group_id == group_id).all()
+    query.delete(synchronize_session=False)
+    db.commit()
+    query = db.query(Group).filter(Group.id == group_id)
+    query.delete(synchronize_session=False)
+    db.commit()
+    return db.query(Group).filter(Group.user_id == user_id).all()
