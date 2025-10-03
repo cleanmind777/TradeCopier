@@ -37,6 +37,9 @@ def  user_change_group_name(db: Session, change_name: GroupNameChange):
 
 def user_add_broker_to_group(db: Session, group_add_broker: GroupAddBroker):
     for sub_broker in group_add_broker.sub_brokers:
+        db_check = db.query(GroupBroker).filter(GroupBroker.group_id==group_add_broker.group_id).filter(GroupBroker.sub_broker_id==sub_broker).all()
+        if db_check:
+            continue
         db_group_broker = GroupBroker (
             group_id = group_add_broker.group_id,
             sub_broker_id = sub_broker
