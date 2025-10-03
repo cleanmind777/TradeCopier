@@ -34,3 +34,4 @@ class User(Base):
 
     broker_accounts = relationship("BrokerAccount", back_populates="user")
     sub_broker_accounts = relationship("SubBrokerAccount", back_populates="user")
+    groups = relationship("Group", secondary="association_table", back_populates="users")
