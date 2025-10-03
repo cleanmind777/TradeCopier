@@ -269,7 +269,7 @@ async def get_orders(db: Session, user_id: UUID):
                 order_for_frontend.append(o)
     return order_for_frontend
 
-async def get_Accounts(db: Session, user_id: UUID):
+async def get_accounts(db: Session, user_id: UUID):
     accounts_status:list[TradovateCashBalanceResponse] = []
     accounts_for_dashboard = []
     db_broker_accounts = db.query(BrokerAccount).filter(

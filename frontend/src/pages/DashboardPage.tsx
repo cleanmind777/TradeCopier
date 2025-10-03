@@ -7,14 +7,7 @@ import Button from '../components/ui/Button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/Table';
 import { Trash2, Activity, Package, CreditCard } from 'lucide-react';
 import { TradovateAccountsResponse, TradovateOrderListResponse, TradovatePositionListResponse } from '../types/broker';
-import { getPositions, getOrders } from '../api/brokerApi';
-
-type Account = {
-  id: number;
-  account: string;
-  realizedPnl: number;
-  unrealizedPnl: number;
-};
+import { getPositions, getOrders, getAccounts } from '../api/brokerApi';
 
 const DashboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'positions' | 'orders' | 'accounts'>('positions');
@@ -49,6 +42,16 @@ const [orders, setOrders] = useState<TradovateOrderListResponse[]>([]);
     }
     }
     fetchOrders()
+  }, [user_id])
+
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      const accountData = await getAccounts(user_id)
+      if (accountData != null) {
+        setAccounts(accountData)
+    }
+    }
+    fetchAccounts()
   }, [user_id])
 
   const handleExitPosition = async (positionId: number) => {

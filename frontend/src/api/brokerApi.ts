@@ -12,7 +12,8 @@ import {
   TradovateContractMaturityItemResponse,
   TradovateOrderListResponse,
   TradovatePositionListResponse,
-  TradovateProductItemResponse
+  TradovateProductItemResponse,
+  TradovateAccountsResponse
 } from "../types/broker";
 
 const API_BASE =
@@ -166,6 +167,27 @@ export const getOrders = async (
       alert(error.response?.data?.detail ?? "Unknown error");
     } else {
       console.error("Unexpected Get Orders error:", error);
+    }
+    return null;
+  }
+};
+
+export const getAccounts = async (
+  user_id: string
+): Promise<TradovateAccountsResponse[] | null> => {
+  try {
+    const params = { user_id };
+    const response = await axios.get(
+      `${API_BASE}/broker/accounts`,
+      { params }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get Accounts:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Get Accounts error:", error);
     }
     return null;
   }
