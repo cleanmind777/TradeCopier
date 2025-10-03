@@ -64,14 +64,18 @@ def  user_set_qty_to_group(db: Session, group_set_qty: GroupSetQTY):
     return db.query(Group).filter(Group.user_id==db_group.user_id).all()
 
 def user_del_group(db: Session, group_id: UUID):
-    db_group = (
-        db.query(Group).filter(Group.id == group_id).first()
-    )
+    db_group = db.query(Group).filter(Group.id == group_id).first()
+    if not db_group:
+        return None  # or raise exception
     user_id = db_group.user_id
-    query = db.query(GroupBroker).filter(GroupBroker.group_id == group_id).all()
-    query.delete(synchronize_session=False)
+
+    # Delete associated GroupBroker entries without calling .all()
+    db.query(GroupBroker).filter(GroupBroker.group_id == group_id).delete(synchronize_session=False)
+
+    # Delete the group itself
+    db.query(Group).filter(Group.id == group_id).delete(synchronize_session=False)
+
     db.commit()
-    query = db.query(Group).filter(Group.id == group_id)
-    query.delete(synchronize_session=False)
-    db.commit()
+
+    # Return remaining groups for that user
     return db.query(Group).filter(Group.user_id == user_id).all()
