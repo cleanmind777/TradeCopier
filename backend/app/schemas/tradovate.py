@@ -18,6 +18,7 @@ class TradovateOrderListResponse(BaseModel):
 
 class TradovateOrderForFrontend(TradovateOrderListResponse):
     symbol: str
+    accountNickname: str
 
 class TradeDate(BaseModel):
     year: int

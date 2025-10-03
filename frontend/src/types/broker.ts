@@ -70,7 +70,7 @@ export interface TradeDate{
 export interface TradovatePositionListResponse{
     id: number
     accountId: number
-    account_nickname: string
+    accountNickname: string
     symbol: string
     netPos: number
     netPrice: number
@@ -83,6 +83,7 @@ export interface TradovatePositionListResponse{
 export interface TradovateOrderListResponse {
     id: number
     accountId: number
+    accountNickname: string
     contractId: number
     timestamp: Date
     action: string

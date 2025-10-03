@@ -26,7 +26,7 @@ const DashboardPage: React.FC = () => {
     {
       id: 1,
       accountId: 123,
-      account_nickname: 'Main Account',
+      accountNickname: 'Main Account',
       symbol: 'AAPL',
       netPos: 100,
       netPrice: 150.25,
@@ -42,6 +42,7 @@ const DashboardPage: React.FC = () => {
     {
       id: 1,
       accountId: 123,
+      accountNickname: "SubAccount 0",
       contractId: 456,
       timestamp: new Date(),
       action: 'Buy',
@@ -252,7 +253,7 @@ const DashboardPage: React.FC = () => {
                       <TableBody>
                         {positions.map((position) => (
                           <TableRow key={position.id} className="hover:bg-slate-50 transition-colors">
-                            <TableCell className="font-medium">{position.account_nickname}</TableCell>
+                            <TableCell className="font-medium">{position.accountNickname}</TableCell>
                             <TableCell>{position.symbol}</TableCell>
                             <TableCell className="text-right">{position.netPos}</TableCell>
                             <TableCell className="text-right">${position.netPrice.toFixed(2)}</TableCell>
@@ -305,7 +306,7 @@ const DashboardPage: React.FC = () => {
                       <TableBody>
                         {orders.map((order) => (
                           <TableRow key={order.id} className="hover:bg-slate-50 transition-colors">
-                            <TableCell className="font-medium">{order.accountId}</TableCell>
+                            <TableCell className="font-medium">{order.accountNickname}</TableCell>
                             <TableCell>{order.symbol}</TableCell>
                             <TableCell>{order.action}</TableCell>
                             <TableCell>

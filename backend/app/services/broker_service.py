@@ -243,10 +243,14 @@ async def get_orders(db: Session, user_id: UUID):
         order_status.extend(live_orders)
     if order_status != []:
         for order in order_status:
+            db_sub_broker_account = db.query(SubBrokerAccount).filter(
+                SubBrokerAccount.sub_account_id == str(order['accountId'])
+            ).first()
             contract_item = await get_contract_item(order['contractId'], db_broker_account.access_token, is_demo=True)
             o = TradovateOrderForFrontend (
                 id=order['id'],
                 accountId=order['accountId'],
+                accountNickname = db_sub_broker_account.nickname if db_sub_broker_account else None,
                 contractId=order['contractId'],
                 timestamp=order['timestamp'],
                 action=order['action'],
