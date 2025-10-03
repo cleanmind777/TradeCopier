@@ -46,4 +46,4 @@ def user_add_broker_to_group(db: Session, group_add_broker: GroupAddBroker):
         db.refresh(db_group_broker)
     
 
-    return db.query(GroupBroker).filter(GroupBroker.user_id==group_add_broker.group_id).all()
+    return db.query(GroupBroker).filter(GroupBroker.group_id==group_add_broker.group_id).all()
