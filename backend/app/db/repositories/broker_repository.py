@@ -22,12 +22,8 @@ from sqlalchemy.future import select
 
 
 async def user_add_broker(db: Session, broker_add: BrokerAdd) -> BrokerInfo:
-    db_broker_account = (
-        db.query(BrokerAccount)
-        .filter(BrokerAccount.user_id == broker_add.user_id)
-        .filter(BrokerAccount.type == broker_add.type)
-        .all()
-    )
+        
+
     counter = len(db_broker_account)
     db_broker = BrokerAccount(
         user_id=broker_add.user_id,

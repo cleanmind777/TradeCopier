@@ -1,145 +1,372 @@
-import React from 'react';
-import { Users, DollarSign, ShoppingCart, TrendingUp } from 'lucide-react';
-import Header from '../components/layout/Header';
-import Footer from '../components/layout/Footer'
+import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
-import StatsCard from '../components/dashboard/StatsCard';
+import Header from '../components/layout/Header';
+import Footer from '../components/layout/Footer';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/Table';
+import { Trash2, Activity, Package, CreditCard } from 'lucide-react';
+import { TradovateAccountsResponse, TradovateOrderListResponse, TradovatePositionListResponse } from '../types/broker';
+import { getPositions, getOrders, getAccounts } from '../api/brokerApi';
 
 const DashboardPage: React.FC = () => {
-  const stats = [
-    {
-      title: 'Total Users',
-      value: '12,543',
-      change: '+12% from last month',
-      changeType: 'positive' as const,
-      icon: Users,
-    },
-    {
-      title: 'Revenue',
-      value: '$89,243',
-      change: '+8% from last month',
-      changeType: 'positive' as const,
-      icon: DollarSign,
-    },
-    {
-      title: 'Orders',
-      value: '2,345',
-      change: '-3% from last month',
-      changeType: 'negative' as const,
-      icon: ShoppingCart,
-    },
-    {
-      title: 'Growth',
-      value: '15.8%',
-      change: '+2.1% from last month',
-      changeType: 'positive' as const,
-      icon: TrendingUp,
-    },
-  ];
+  const [activeTab, setActiveTab] = useState<'positions' | 'orders' | 'accounts'>('positions');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const recentActivity = [
-    { id: 1, user: 'John Doe', action: 'Created new account', time: '2 minutes ago' },
-    { id: 2, user: 'Jane Smith', action: 'Made a purchase', time: '5 minutes ago' },
-    { id: 3, user: 'Mike Johnson', action: 'Updated profile', time: '10 minutes ago' },
-    { id: 4, user: 'Sarah Wilson', action: 'Left a review', time: '15 minutes ago' },
-  ];
+  // Mock data - replace with real API calls
+  const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
+
+const [orders, setOrders] = useState<TradovateOrderListResponse[]>([]);
+
+  const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
+  const user = localStorage.getItem('user');
+  const user_id = user ? JSON.parse(user).id : null;
+  
+  useEffect(() => {
+    const fetchPositions = async () => {
+      const positionData = await getPositions(user_id)
+      if (positionData != null) {
+        setPositions(positionData)
+      }
+    }
+    fetchPositions()
+  }, [user_id])
+
+  
+  useEffect(() => {
+    const fetchOrders = async () => {
+      const orderData = await getOrders(user_id)
+      if (orderData != null) {
+        setOrders(orderData)
+    }
+    }
+    fetchOrders()
+  }, [user_id])
+
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      const accountData = await getAccounts(user_id)
+      if (accountData != null) {
+        setAccounts(accountData)
+    }
+    }
+    fetchAccounts()
+  }, [user_id])
+
+  const handleExitPosition = async (positionId: number) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // TODO: Replace with actual API call
+      console.log('Exiting position:', positionId);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setPositions(prev => prev.filter(p => p.id !== positionId));
+    } catch (err) {
+      setError('Failed to exit position');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFlattenAccount = async (accountId: number) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // TODO: Replace with actual API call
+      console.log('Flattening account:', accountId);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setPositions(prev => prev.filter(p => p.accountId !== accountId));
+    } catch (err) {
+      setError('Failed to flatten account');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExitAll = async (accountId: number) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // TODO: Replace with actual API call
+      console.log('Exiting all positions for account:', accountId);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setPositions(prev => prev.filter(p => p.accountId !== accountId));
+    } catch (err) {
+      setError('Failed to exit all positions');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFlattenAll = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // TODO: Replace with actual API call
+      console.log('Flattening all positions and canceling all orders');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setPositions([]);
+      setOrders(prev => prev.map(order => ({ ...order, ordStatus: 'Cancelled' })));
+    } catch (err) {
+      setError('Failed to flatten all positions and orders');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <div className="flex bg-slate-50 min-h-screen">
+    <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
       <Sidebar />
-      
       <div className="flex-1 flex flex-col">
         <Header />
-        
-        <main className="flex-1 p-6 space-y-6">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {stats.map((stat, index) => (
-              <StatsCard key={index} {...stat} />
-            ))}
+        <main className="flex-1 p-8 space-y-8">
+          {/* Global Action Button */}
+          <div className="flex justify-end">
+            <Button
+              variant="primary"
+              onClick={handleFlattenAll}
+              disabled={isLoading}
+              className="flex items-center space-x-2 shadow-lg hover:shadow-xl transition-shadow"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Flatten All / Exit All & Cancel All</span>
+            </Button>
           </div>
-          
-          {/* Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chart Placeholder */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-slate-900">Revenue Overview</h3>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64 bg-slate-50 rounded-lg flex items-center justify-center">
-                  <p className="text-slate-500">Chart visualization would go here</p>
-                </div>
-              </CardContent>
-            </Card>
-            
-            {/* Recent Activity */}
-            <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-slate-900">Recent Activity</h3>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start space-x-3">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900">{activity.user}</p>
-                        <p className="text-sm text-slate-600">{activity.action}</p>
-                        <p className="text-xs text-slate-400">{activity.time}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          
-          {/* Additional Content */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-slate-900">Quick Actions</h3>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  <button className="p-4 bg-blue-50 rounded-lg text-center hover:bg-blue-100 transition-colors duration-200">
-                    <Users className="h-6 w-6 text-blue-600 mx-auto mb-2" />
-                    <span className="text-sm font-medium text-blue-900">Add User</span>
-                  </button>
-                  <button className="p-4 bg-green-50 rounded-lg text-center hover:bg-green-100 transition-colors duration-200">
-                    <DollarSign className="h-6 w-6 text-green-600 mx-auto mb-2" />
-                    <span className="text-sm font-medium text-green-900">New Sale</span>
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <h3 className="text-lg font-semibold text-slate-900">System Status</h3>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Server Status</span>
-                    <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Online</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">Database</span>
-                    <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Connected</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-600">API Status</span>
-                    <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Healthy</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
 
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative shadow-sm">
+              <span className="block sm:inline">{error}</span>
+              <button 
+                onClick={() => setError(null)} 
+                className="absolute top-0 right-0 px-4 py-3 hover:text-red-900 transition-colors"
+                aria-label="Close error message"
+              >
+                &times;
+              </button>
+            </div>
+          )}
+
+          {/* Tabs Navigation */}
+          <div className="flex border-b border-slate-200 bg-white rounded-lg p-1 shadow-sm">
+            <button
+              onClick={() => setActiveTab('positions')}
+              className={`flex items-center px-4 py-2.5 font-medium text-sm rounded-md transition-all ${
+                activeTab === 'positions'
+                  ? 'bg-blue-50 text-blue-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Activity className="mr-2 h-4 w-4" />
+              Positions
+            </button>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`flex items-center px-4 py-2.5 font-medium text-sm rounded-md transition-all ${
+                activeTab === 'orders'
+                  ? 'bg-blue-50 text-blue-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Package className="mr-2 h-4 w-4" />
+              Orders
+            </button>
+            <button
+              onClick={() => setActiveTab('accounts')}
+              className={`flex items-center px-4 py-2.5 font-medium text-sm rounded-md transition-all ${
+                activeTab === 'accounts'
+                  ? 'bg-blue-50 text-blue-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              Accounts
+            </button>
+          </div>
+
+          {/* Loading State */}
+          {isLoading && (
+            <div className="flex justify-center items-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+            </div>
+          )}
+
+          {/* Positions Tab */}
+          {!isLoading && activeTab === 'positions' && (
+            <Card className="shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader>
+                <h3 className="text-xl font-semibold text-slate-900">Open Positions</h3>
+                <p className="text-sm text-slate-500">All active positions across accounts</p>
+              </CardHeader>
+              <CardContent>
+                {positions.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500">No open positions</div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow>
+                          <TableHead className="font-semibold">Account</TableHead>
+                          <TableHead className="font-semibold">Symbol</TableHead>
+                          <TableHead className="font-semibold text-right">Net Position</TableHead>
+                          <TableHead className="font-semibold text-right">Net Price</TableHead>
+                          <TableHead className="font-semibold text-right">Bought</TableHead>
+                          <TableHead className="font-semibold text-right">Sold</TableHead>
+                          <TableHead className="font-semibold text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {positions.map((position) => (
+                          <TableRow key={position.id} className="hover:bg-slate-50 transition-colors">
+                            <TableCell className="font-medium">{position.accountNickname}</TableCell>
+                            <TableCell>{position.symbol}</TableCell>
+                            <TableCell className="text-right">{position.netPos}</TableCell>
+                            <TableCell className="text-right">${position.netPrice.toFixed(2)}</TableCell>
+                            <TableCell className="text-right">{position.bought}</TableCell>
+                            <TableCell className="text-right">{position.sold}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleExitPosition(position.id)}
+                                disabled={isLoading}
+                                className="hover:bg-red-50 hover:text-red-600 transition-colors"
+                              >
+                                Exit
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Orders Tab */}
+          {!isLoading && activeTab === 'orders' && (
+            <Card className="shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader>
+                <h3 className="text-xl font-semibold text-slate-900">Orders</h3>
+                <p className="text-sm text-slate-500">Working orders and execution history</p>
+              </CardHeader>
+              <CardContent>
+                {orders.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500">No orders found</div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow>
+                          <TableHead className="font-semibold">Account</TableHead>
+                          <TableHead className="font-semibold">Symbol</TableHead>
+                          <TableHead className="font-semibold">Action</TableHead>
+                          <TableHead className="font-semibold">Status</TableHead>
+                          <TableHead className="font-semibold">Timestamp</TableHead>
+                          <TableHead className="font-semibold">External</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {orders.map((order) => (
+                          <TableRow key={order.id} className="hover:bg-slate-50 transition-colors">
+                            <TableCell className="font-medium">{order.accountNickname}</TableCell>
+                            <TableCell>{order.symbol}</TableCell>
+                            <TableCell>{order.action}</TableCell>
+                            <TableCell>
+                              <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                                order.ordStatus === 'Filled' ? 'bg-green-100 text-green-800' :
+                                order.ordStatus === 'Working' ? 'bg-blue-100 text-blue-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {order.ordStatus}
+                              </span>
+                            </TableCell>
+                            <TableCell>{order.timestamp.toLocaleString()}</TableCell>
+                            <TableCell>{order.external ? 'Yes' : 'No'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Accounts Tab */}
+          {!isLoading && activeTab === 'accounts' && (
+            <Card className="shadow-lg hover:shadow-xl transition-shadow">
+              <CardHeader>
+                <h3 className="text-xl font-semibold text-slate-900">Accounts</h3>
+                <p className="text-sm text-slate-500">Performance and account management</p>
+              </CardHeader>
+              <CardContent>
+                {accounts.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500">No accounts found</div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow>
+                          <TableHead className="font-semibold">Account</TableHead>
+                          <TableHead className="font-semibold text-right">Amount</TableHead>
+                          <TableHead className="font-semibold text-right">Realized P&L</TableHead>
+                          <TableHead className="font-semibold text-right">Week P&L</TableHead>
+                          <TableHead className="font-semibold text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {accounts.map((account) => (
+                          <TableRow key={account.id} className="hover:bg-slate-50 transition-colors">
+                            <TableCell className="font-medium">{account.accountNickname}</TableCell>
+                            <TableCell className={`text-right font-medium ${account.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ${account.amount.toFixed(2)}
+                            </TableCell>
+                            <TableCell className={`text-right font-medium ${account.realizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ${account.realizedPnL.toFixed(2)}
+                            </TableCell>
+                            <TableCell className={`text-right font-medium ${account.weekRealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ${account.weekRealizedPnL.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleFlattenAccount(account.id)}
+                                  disabled={isLoading}
+                                  className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                >
+                                  Flatten
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                                  onClick={() => handleExitAll(account.id)}
+                                  disabled={isLoading}
+                                >
+                                  Exit All
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </main>
         <Footer />
       </div>
     </div>
