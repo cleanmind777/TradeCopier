@@ -260,7 +260,7 @@ async def get_orders(db: Session, user_id: UUID):
                     timestamp=order['timestamp'],
                     action=order['action'],
                     ordStatus=order['ordStatus'],
-                    executionProviderId=order['executionProviderId'],
+                    execution_provider_id = order.get('executionProviderId'),
                     archived=order['archived'],
                     external=order['external'],
                     admin=order['admin'],
