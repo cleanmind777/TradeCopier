@@ -12,7 +12,7 @@ import {
   TableBody,
   TableCell,
 } from "../components/ui/Table";
-import { Trash2, Activity, Package, CreditCard } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
 
@@ -27,8 +27,10 @@ const GroupPage: React.FC = () => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupQuantity, setNewGroupQuantity] = useState(1);
+  const [editGroupData, setEditGroupData] = useState<Group | null>(null);
   const [availableBrokers, setAvailableBrokers] = useState<string[]>([]);
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
 
@@ -51,6 +53,22 @@ const GroupPage: React.FC = () => {
     setSelectedBrokers([]);
   };
 
+  const handleUpdateGroup = () => {
+    if (!editGroupData) return;
+    
+    setGroups(
+      groups.map((group) =>
+        group.id === editGroupData.id ? editGroupData : group
+      )
+    );
+    
+    if (selectedGroup?.id === editGroupData.id) {
+      setSelectedGroup(editGroupData);
+    }
+    
+    setIsEditModalOpen(false);
+  };
+
   const handleUpdateQuantity = (groupId: string, newQuantity: number) => {
     setGroups(
       groups.map((group) =>
@@ -59,6 +77,19 @@ const GroupPage: React.FC = () => {
     );
     if (selectedGroup?.id === groupId) {
       setSelectedGroup({ ...selectedGroup, quantity: newQuantity });
+    }
+  };
+
+  const handleEditClick = (group: Group) => {
+    setEditGroupData(group);
+    setSelectedBrokers(group.subBrokers);
+    setIsEditModalOpen(true);
+  };
+
+  const handleDeleteGroup = (groupId: string) => {
+    setGroups(groups.filter((group) => group.id !== groupId));
+    if (selectedGroup?.id === groupId) {
+      setSelectedGroup(null);
     }
   };
 
@@ -111,7 +142,13 @@ const GroupPage: React.FC = () => {
                     }
                     className="w-20"
                   />
-                  <Button variant="primary">
+                  <Button onClick={() => handleEditClick(selectedGroup)}>
+                    Edit
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => handleDeleteGroup(selectedGroup.id)}
+                  >
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
@@ -192,6 +229,74 @@ const GroupPage: React.FC = () => {
                 Create Group
               </Button>
             </div>
+          </Modal>
+
+          {/* Edit Group Modal */}
+          <Modal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            title="Edit Group"
+          >
+            {editGroupData && (
+              <div className="space-y-4">
+                <Input
+                  label="Group Name"
+                  value={editGroupData.name}
+                  onChange={(e) =>
+                    setEditGroupData({ ...editGroupData, name: e.target.value })
+                  }
+                  placeholder="Enter group name"
+                  required
+                />
+                <Input
+                  type="number"
+                  label="Quantity"
+                  value={editGroupData.quantity}
+                  onChange={(e) =>
+                    setEditGroupData({
+                      ...editGroupData,
+                      quantity: parseInt(e.target.value),
+                    })
+                  }
+                  min="1"
+                  required
+                />
+                <div>
+                  <label className="block mb-2 text-sm font-medium">
+                    Select Sub Brokers
+                  </label>
+                  <div className="border rounded-lg p-2 max-h-40 overflow-auto">
+                    {availableBrokers.map((broker) => (
+                      <div key={broker} className="flex items-center mb-2">
+                        <input
+                          type="checkbox"
+                          id={`edit-${broker}`}
+                          checked={editGroupData.subBrokers.includes(broker)}
+                          onChange={(e) => {
+                            const updatedBrokers = e.target.checked
+                              ? [...editGroupData.subBrokers, broker]
+                              : editGroupData.subBrokers.filter((b) => b !== broker);
+                            setEditGroupData({
+                              ...editGroupData,
+                              subBrokers: updatedBrokers,
+                            });
+                          }}
+                          className="mr-2"
+                        />
+                        <label htmlFor={`edit-${broker}`}>{broker}</label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  onClick={handleUpdateGroup}
+                  disabled={!editGroupData.name || editGroupData.subBrokers.length === 0}
+                  className="w-full"
+                >
+                  Save Changes
+                </Button>
+              </div>
+            )}
           </Modal>
         </main>
         <Footer />
