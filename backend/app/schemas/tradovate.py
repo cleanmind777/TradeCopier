@@ -11,7 +11,7 @@ class TradovateOrderListResponse(BaseModel):
     timestamp: datetime
     action: str
     ordStatus: str
-    executionProviderId: int
+    executionProviderId: Optional[int] = None
     archived: bool
     external: bool
     admin: bool
