@@ -10,6 +10,7 @@ from sqlalchemy.future import select
 from app.schemas.group import GroupCreate, GroupNameChange, GroupAddBroker, GroupSetQTY, GroupInfo, GroupEdit
 from app.models.group import Group
 from app.models.group_broker import GroupBroker
+from app.models.broker_account import SubBrokerAccount
 
 def user_create_group(
     db: Session, group_create: GroupCreate
@@ -31,13 +32,17 @@ def user_create_group(
     groups_summary : list[GroupInfo] = []
     for group in db_groups:
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
+        response_brokers = []
+        for sub_broker in sub_brokers:
+            response_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            response_brokers.append(response_broker)
         group_summary = GroupInfo (
             id=group.id,
             name=group.name,
             qty=group.qty,
-            sub_brokers=sub_brokers
+            sub_brokers=response_brokers
         )
-        groups_summary.append(group)
+        groups_summary.append(group_summary)
     return groups_summary
 
 def user_edit_group(
@@ -70,13 +75,17 @@ def user_edit_group(
     groups_summary : list[GroupInfo] = []
     for group in db_groups:
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
+        response_brokers = []
+        for sub_broker in sub_brokers:
+            response_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            response_brokers.append(response_broker)
         group_summary = GroupInfo (
             id=group.id,
             name=group.name,
             qty=group.qty,
-            sub_brokers=sub_brokers
+            sub_brokers=response_brokers
         )
-        groups_summary.append(group)
+        groups_summary.append(group_summary)
     return groups_summary
 
 def  user_change_group_name(db: Session, change_name: GroupNameChange):
@@ -137,11 +146,15 @@ def user_del_group(db: Session, group_id: UUID):
     groups_summary : list[GroupInfo] = []
     for group in db_groups:
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
+        response_brokers = []
+        for sub_broker in sub_brokers:
+            response_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            response_brokers.append(response_broker)
         group_summary = GroupInfo (
             id=group.id,
             name=group.name,
             qty=group.qty,
-            sub_brokers=sub_brokers
+            sub_brokers=response_brokers
         )
-        groups_summary.append(group)
+        groups_summary.append(group_summary)
     return groups_summary
