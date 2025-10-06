@@ -170,13 +170,16 @@ const GroupPage: React.FC = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Sub Brokers</TableHead>
+                      <TableHead>Sub Brokers Name</TableHead>
+                    </TableRow>
+                    <TableRow>
+                      <TableHead>Display Name</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedGroup.sub_brokers.map((sub_broker) => (
                       <TableRow key={sub_broker.id}>
-                        <TableCell>{sub_broker.nickname}</TableCell>
+                        <TableCell>{sub_broker.sub_account_name}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -190,6 +193,7 @@ const GroupPage: React.FC = () => {
             isOpen={isCreateModalOpen}
             onClose={() => setIsCreateModalOpen(false)}
             title="Create New Group"
+            className="w-[800px]"  // Added width
           >
             <div className="space-y-4">
               <Input
@@ -230,6 +234,7 @@ const GroupPage: React.FC = () => {
                         className="mr-2"
                       />
                       <label htmlFor={broker.nickname}>{broker.nickname}</label>
+                      <label htmlFor={broker.sub_account_name}>{broker.nickname}</label>
                     </div>
                   ))}
                 </div>
@@ -249,6 +254,7 @@ const GroupPage: React.FC = () => {
             isOpen={isEditModalOpen}
             onClose={() => setIsEditModalOpen(false)}
             title="Edit Group"
+            className="w-[800px]"  // Added width
           >
             {editGroupData && (
               <div className="space-y-4">
@@ -302,6 +308,9 @@ const GroupPage: React.FC = () => {
                         />
                         <label htmlFor={`edit-${broker}`}>
                           {broker.nickname}
+                        </label>
+                        <label htmlFor={`edit-${broker}`}>
+                          {broker.sub_account_name}
                         </label>
                       </div>
                     ))}

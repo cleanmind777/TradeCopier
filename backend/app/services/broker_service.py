@@ -238,6 +238,7 @@ async def get_positions(db: Session, user_id: UUID):
                     boughtValue=position["boughtValue"],
                     sold=position["sold"],
                     soldValue=position["soldValue"],
+                    accountDisplayName=db_sub_broker_account.sub_account_name
                 )
 
                 positions_for_frontend.append(p)
@@ -283,6 +284,7 @@ async def get_orders(db: Session, user_id: UUID):
                     external=order["external"],
                     admin=order["admin"],
                     symbol=contract_item["name"],
+                    accountDisplayName=db_sub_broker_account.sub_account_name
                 )
                 order_for_frontend.append(o)
     return order_for_frontend
@@ -323,6 +325,7 @@ async def get_accounts(db: Session, user_id: UUID):
                     weekRealizedPnL=account["weekRealizedPnL"],
                     archived=account["archived"],
                     amountSOD=account["amountSOD"],
+                    accountDisplayName=db_sub_broker_account.sub_account_name
                 )
                 accounts_for_dashboard.append(a)
     return accounts_for_dashboard

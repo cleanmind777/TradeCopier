@@ -19,6 +19,7 @@ class TradovateOrderListResponse(BaseModel):
 class TradovateOrderForFrontend(TradovateOrderListResponse):
     symbol: str
     accountNickname: str
+    accountDisplayName: str
 
 class TradeDate(BaseModel):
     year: int
@@ -44,6 +45,7 @@ class TradovatePositionListForFrontend(BaseModel):
     id: int
     accountId: int
     accountNickname: str
+    accountDisplayName: str
     symbol: str
     netPos: int
     netPrice: float
@@ -115,3 +117,4 @@ class TradovateAccountsForFrontend(BaseModel):
     archived: bool
     amountSOD: float
     accountNickname: str
+    accountDisplayName: str

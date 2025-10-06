@@ -270,7 +270,7 @@ const DashboardPage: React.FC = () => {
                             Account
                           </TableHead>
                           <TableHead className="font-semibold">
-                            ID
+                            Display Name
                           </TableHead>
                           <TableHead className="font-semibold">
                             Symbol
@@ -302,7 +302,7 @@ const DashboardPage: React.FC = () => {
                               {position.accountNickname}
                             </TableCell>
                             <TableCell className="font-medium">
-                              {position.accountId}
+                              {position.accountDisplayName}
                             </TableCell>
                             <TableCell>{position.symbol}</TableCell>
                             <TableCell className="text-right">
@@ -367,7 +367,7 @@ const DashboardPage: React.FC = () => {
                             Account
                           </TableHead>
                           <TableHead className="font-semibold">
-                            ID
+                            Display Name
                           </TableHead>
                           <TableHead className="font-semibold">
                             Symbol
@@ -396,7 +396,7 @@ const DashboardPage: React.FC = () => {
                               {order.accountNickname}
                             </TableCell>
                             <TableCell className="font-medium">
-                              {order.accountId}
+                              {order.accountDisplayName}
                             </TableCell>
                             <TableCell>{order.symbol}</TableCell>
                             <TableCell>{order.action}</TableCell>
@@ -454,7 +454,7 @@ const DashboardPage: React.FC = () => {
                             Account
                           </TableHead>
                           <TableHead className="font-semibold">
-                            ID
+                            Display Name
                           </TableHead>
                           <TableHead className="font-semibold text-right">
                             Amount
@@ -480,7 +480,7 @@ const DashboardPage: React.FC = () => {
                               {account.accountNickname}
                             </TableCell>
                             <TableCell className="font-medium">
-                              {account.accountId}
+                              {account.accountDisplayName}
                             </TableCell>
                             <TableCell
                               className={`text-right font-medium ${

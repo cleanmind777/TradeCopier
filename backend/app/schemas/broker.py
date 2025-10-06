@@ -104,6 +104,7 @@ class SubBrokerChange(BaseModel):
 class SubBrokerSumary(BaseModel):
     id: UUID
     nickname: str
+    sub_account_name: str
     
 class ExitPosition(BaseModel):
     accountId: int

@@ -54,6 +54,7 @@ export interface SubBroker {
 export interface SubBrokerSummary {
   id: string;
   nickname: string;
+  sub_account_name: string;
 }
 
 export interface SubBrokerFilter {
@@ -97,6 +98,7 @@ export interface TradovatePositionListResponse {
   boughtValue: number;
   sold: number;
   soldValue: number;
+  accountDisplayName: string;
 }
 
 export interface TradovateOrderListResponse {
@@ -112,6 +114,7 @@ export interface TradovateOrderListResponse {
   external: boolean;
   admin: boolean;
   symbol: string;
+  accountDisplayName: string;
 }
 
 export interface TradovateProductItemResponse {
@@ -167,6 +170,7 @@ export interface TradovateAccountsResponse {
   weekRealizedPnL: number;
   archived: boolean;
   amountSOD: number;
+  accountDisplayName: string;
 }
 
 export interface ExitPostion {
