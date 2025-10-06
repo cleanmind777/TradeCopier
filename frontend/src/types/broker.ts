@@ -168,3 +168,12 @@ export interface TradovateAccountsResponse {
   archived: boolean;
   amountSOD: number;
 }
+
+export interface ExitPostion {
+  accountId: number;
+  action: string;
+  symbol: string;
+  orderQty: number;
+  orderType: string;
+  isAutomated: boolean;
+}

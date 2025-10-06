@@ -14,7 +14,8 @@ import {
   TradovatePositionListResponse,
   TradovateProductItemResponse,
   TradovateAccountsResponse,
-  SubBrokerSummary
+  SubBrokerSummary,
+  ExitPostion
 } from "../types/broker";
 
 const API_BASE =
@@ -210,6 +211,26 @@ export const getSubBrokersForGroup = async (
       alert(error.response?.data?.detail ?? "Unknown error");
     } else {
       console.error("Unexpected Get SubBrokers error:", error);
+    }
+    return null;
+  }
+};
+
+export const exitPostion = async (
+  exitPostionData: ExitPostion
+) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/position/exit`,
+      exitPostionData
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      console.error("Exit Postion:", error.response?.data);
+      alert(error.response?.data.detail);
+    } else {
+      console.error("Unexpected exit position error:", error);
     }
     return null;
   }
