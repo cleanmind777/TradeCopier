@@ -87,7 +87,9 @@ def user_edit_group(
     db.commit()
     db.refresh(db_group)
     sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group_edit.id).all()
-    sub_brokers.delete(synchronize_session=False)
+    for sub_broker in sub_brokers:
+        db.delete(sub_broker)
+    db.commit()
     for sub_broker in group_edit.sub_brokers:
         db_check = db.query(GroupBroker).filter(GroupBroker.group_id==group_edit.id).filter(GroupBroker.sub_broker_id==sub_broker).all()
         if db_check:
