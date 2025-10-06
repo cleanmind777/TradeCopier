@@ -61,6 +61,7 @@ async def get_Positions(user_id: UUID, db: Session = Depends(get_db)):
 
 @router.get("/position/exit", status_code=status.HTTP_200_OK)
 async def exit_Position(exit_position_data: ExitPosition, db: Session = Depends(get_db)):
+    print("111111111111")
     response = await exit_position(db, exit_position_data)
     if response is None:
         raise HTTPException(status_code=404, detail="Positions not found")
