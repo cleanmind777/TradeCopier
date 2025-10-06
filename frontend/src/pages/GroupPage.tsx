@@ -178,9 +178,7 @@ const GroupPage: React.FC = () => {
           <Modal
             isOpen={isDetailsModalOpen}
             onClose={() => setIsDetailsModalOpen(false)}
-            title={
-              "Group Details"
-            }
+            title={"Group Details"}
             className="max-w-2xl"
           >
             {selectedGroup && (
@@ -245,7 +243,7 @@ const GroupPage: React.FC = () => {
             isOpen={isCreateModalOpen}
             onClose={() => setIsCreateModalOpen(false)}
             title="Create New Group"
-            className="max-w-[800px] w-full"
+            className="max-w-[1000px] w-full"
           >
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -278,7 +276,7 @@ const GroupPage: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   Select Sub Brokers
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto p-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-2">
                   {availableBrokers.map((broker) => (
                     <div
                       key={broker.id}
@@ -359,7 +357,7 @@ const GroupPage: React.FC = () => {
             isOpen={isEditModalOpen}
             onClose={() => setIsEditModalOpen(false)}
             title="Edit Group"
-            className="max-w-[800px] w-full"
+            className="max-w-[1000px] w-full"
           >
             {editGroupData && (
               <div className="space-y-6">
@@ -401,7 +399,7 @@ const GroupPage: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-3">
                     Select Sub Brokers
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto p-2">
+                  <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-2">
                     {availableBrokers.map((broker) => (
                       <div
                         key={broker.id}
