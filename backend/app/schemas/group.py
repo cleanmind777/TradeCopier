@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, ConfigDict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
 import json
@@ -21,7 +21,7 @@ class GroupInfo(BaseModel):
     id: UUID
     name: str
     qty: int
-    sub_brokers: list[SubBrokerAccount]
+    sub_brokers: List[SubBrokerAccount]
     class Config:
         arbitrary_types_allowed = True
 
