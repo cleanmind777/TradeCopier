@@ -9,6 +9,8 @@ from app.schemas.tradovate import (
     TradovateProductItemResponse,
 )
 
+from app.schemas.broker import ExitPosition
+
 CLIENT_ID = settings.CID
 REDIRECT_URI = settings.TRADOVATE_REDIRECT_URL
 AUTH_URL = settings.TRADOVATE_AUTH_URL
@@ -227,3 +229,24 @@ def get_cash_balances(access_token: str, is_demo: bool):
         # Log error or handle non-200 statuses and empty responses gracefully
         return None
     return data
+
+def place_order(access_token: str, is_demo: bool, order: ExitPosition):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    url = f"{TRADO_DEMO_URL}/order/placeorder" if is_demo else f"{TRADO_LIVE_URL}/order/placeorder"
+
+    try:
+        response = requests.post(url, headers=headers, json=order)
+        if response.status_code == 200 and response.content:
+            try:
+                data = response.json()
+                print(data)
+                return data
+            except ValueError:
+                # Handle malformed JSON
+                return None
+        else:
+            # Handle non-200 response
+            return None
+    except requests.RequestException as e:
+        # Log or handle request error
+        return None

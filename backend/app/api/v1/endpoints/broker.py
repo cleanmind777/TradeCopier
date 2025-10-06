@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from uuid import UUID
-from app.schemas.broker import BrokerConnect, BrokerInfo, BrokerFilter, BrokerChange
+from app.schemas.broker import BrokerConnect, BrokerInfo, BrokerFilter, BrokerChange, ExitPosition
 from app.services.broker_service import (
     add_broker,
     get_brokers,
@@ -11,7 +11,8 @@ from app.services.broker_service import (
     change_broker,
     get_positions,
     get_orders,
-    get_accounts
+    get_accounts,
+    exit_position
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -54,6 +55,13 @@ def change_Broker(broker_change: BrokerChange, db: Session = Depends(get_db)):
 @router.get("/positions", status_code=status.HTTP_200_OK)
 async def get_Positions(user_id: UUID, db: Session = Depends(get_db)):
     response = await get_positions(db, user_id)
+    if response is None:
+        raise HTTPException(status_code=404, detail="Positions not found")
+    return response
+
+@router.get("/position/exit", status_code=status.HTTP_200_OK)
+async def exit_Position(exit_position: ExitPosition, db: Session = Depends(get_db)):
+    response = await exit_position(db, exit_position)
     if response is None:
         raise HTTPException(status_code=404, detail="Positions not found")
     return response

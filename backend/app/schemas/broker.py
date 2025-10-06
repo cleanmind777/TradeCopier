@@ -105,3 +105,10 @@ class SubBrokerSumary(BaseModel):
     id: UUID
     nickname: str
     
+class ExitPosition(BaseModel):
+    accountId: int
+    action: str
+    symbol: str
+    orderQty: int
+    orderType: str
+    isAutomated: bool
