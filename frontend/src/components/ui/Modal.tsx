@@ -16,7 +16,7 @@ const Modal = ({ isOpen, onClose, title, children, className }: ModalProps) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className={clsx(
-                "bg-white rounded-lg shadow-xl w-full max-w-md mx-4",
+                "bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4",
                 className
             )}>
                 <div className="flex items-center justify-between p-4 border-b">
