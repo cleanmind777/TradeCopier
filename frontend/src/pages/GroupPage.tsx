@@ -243,7 +243,7 @@ const GroupPage: React.FC = () => {
             isOpen={isCreateModalOpen}
             onClose={() => setIsCreateModalOpen(false)}
             title="Create New Group"
-            className="max-w-[1000px] w-full"
+            className="max-w-[1200px] w-full" // Changed from 1000px to 1200px
           >
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -357,7 +357,7 @@ const GroupPage: React.FC = () => {
             isOpen={isEditModalOpen}
             onClose={() => setIsEditModalOpen(false)}
             title="Edit Group"
-            className="max-w-[1000px] w-full"
+            className="max-w-[1200px] w-full" // Changed from 1000px to 1200px
           >
             {editGroupData && (
               <div className="space-y-6">
