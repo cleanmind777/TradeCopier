@@ -15,9 +15,9 @@ import {
 import { Trash2 } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
-import { SubBrokerInfo } from "../types/broker";
+import { SubBrokerInfo, SubBrokerSummary } from "../types/broker";
 import { SubBrokerFilter } from "../types/broker";
-import { getSubBrokers } from "../api/brokerApi";
+import { getSubBrokers, getSubBrokersForGroup } from "../api/brokerApi";
 import { GroupCreate, GroupInfo } from "../types/group";
 import { createGroup, editGroup, deleteGroup, getGroup } from "../api/groupApi";
 
@@ -29,15 +29,12 @@ const GroupPage: React.FC = () => {
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupQuantity, setNewGroupQuantity] = useState(1);
   const [editGroupData, setEditGroupData] = useState<GroupInfo | null>(null);
-  const [availableBrokers, setAvailableBrokers] = useState<SubBrokerInfo[]>([]);
+  const [availableBrokers, setAvailableBrokers] = useState<SubBrokerSummary[]>([]);
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
   const getSubBrokerAccounts = async () => {
-    const subBrokerFilter: SubBrokerFilter = {
-      user_id,
-    };
-    const brokers = await getSubBrokers(subBrokerFilter);
+    const brokers = await getSubBrokersForGroup(user_id);
     if (brokers) {
       setAvailableBrokers(brokers);
     }
