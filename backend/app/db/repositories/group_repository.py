@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from sqlalchemy.future import select
 from app.schemas.group import GroupCreate, GroupNameChange, GroupAddBroker, GroupSetQTY, GroupInfo, GroupEdit
+from app.schemas.broker import SubBrokerSumary
 from app.models.group import Group
 from app.models.group_broker import GroupBroker
 from app.models.broker_account import SubBrokerAccount
@@ -35,13 +36,16 @@ def user_create_group(
         print("2")
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
         print("3")
-        response_brokers = []
+        response_brokers : list[SubBrokerSumary] = []
         print("4")
         for sub_broker in sub_brokers:
+            response_broker : SubBrokerSumary = {}
             print("5")
-            response_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            db_sub_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
             print('6')
-            response_brokers.append(response_broker.model_dump())
+            response_broker['id'] = db_sub_broker.id
+            response_broker['nickname'] = db_sub_broker.nickname
+            response_brokers.append(response_broker)
             print('7')
         print('8')
         group_summary = GroupInfo (
