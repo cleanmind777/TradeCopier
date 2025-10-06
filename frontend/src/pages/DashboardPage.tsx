@@ -308,7 +308,7 @@ const DashboardPage: React.FC = () => {
                                   handleExitPosition(
                                     position.accountId,
                                     position.symbol,
-                                    position.netPrice
+                                    position.netPos
                                   )
                                 }
                                 disabled={isLoading}
