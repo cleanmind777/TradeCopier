@@ -1,4 +1,4 @@
-import { SubBroker } from "./broker";
+import { SubBrokerSummary } from "./broker";
 
 export interface GroupCreate {
   user_id: string;
@@ -18,5 +18,5 @@ export interface GroupInfo {
     id: string;
     name: string;
     qty: number;
-    sub_brokers: SubBroker[];
+    sub_brokers: SubBrokerSummary[];
 }

@@ -51,6 +51,11 @@ export interface SubBroker {
   is_active: boolean;
 }
 
+export interface SubBrokerSummary {
+  id: string;
+  nickname: string;
+}
+
 export interface SubBrokerFilter {
   id?: string;
   user_id?: string;
