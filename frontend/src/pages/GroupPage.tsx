@@ -15,42 +15,58 @@ import {
 import { Trash2 } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
-
-interface Group {
-  id: string;
-  name: string;
-  quantity: number;
-  subBrokers: string[];
-}
+import { SubBrokerInfo, SubBrokerSummary } from "../types/broker";
+import { SubBrokerFilter } from "../types/broker";
+import { getSubBrokers, getSubBrokersForGroup } from "../api/brokerApi";
+import { GroupCreate, GroupInfo } from "../types/group";
+import { createGroup, editGroup, deleteGroup, getGroup } from "../api/groupApi";
 
 const GroupPage: React.FC = () => {
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [groups, setGroups] = useState<GroupInfo[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupQuantity, setNewGroupQuantity] = useState(1);
-  const [editGroupData, setEditGroupData] = useState<Group | null>(null);
-  const [availableBrokers, setAvailableBrokers] = useState<string[]>([]);
+  const [editGroupData, setEditGroupData] = useState<GroupInfo | null>(null);
+  const [availableBrokers, setAvailableBrokers] = useState<SubBrokerSummary[]>([]);
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
+  
+  const user = localStorage.getItem("user");
+  const user_id = user ? JSON.parse(user).id : null;
+
+  const getSubBrokerAccounts = async () => {
+    const brokers = await getSubBrokersForGroup(user_id);
+    if (brokers) {
+      setAvailableBrokers(brokers);
+    }
+  };
+
+  const getGroups = async () => {
+    const groups = await getGroup(user_id);
+    setGroups(groups);
+  };
 
   useEffect(() => {
-    // TODO: Load available brokers (subbrokers) from API
-    setAvailableBrokers(["Broker 1", "Broker 2", "Broker 3"]);
-  }, []);
+    getSubBrokerAccounts();
+  }, [user_id]);
 
-  const handleCreateGroup = () => {
-    const newGroup: Group = {
-      id: Date.now().toString(),
+  useEffect(() => {
+    getGroups();
+  }, [user_id]);
+
+  const handleCreateGroup = async () => {
+    const newGroup: GroupCreate = {
+      user_id: user_id,
       name: newGroupName,
-      quantity: newGroupQuantity,
-      subBrokers: selectedBrokers,
+      qty: newGroupQuantity,
+      sub_brokers: selectedBrokers,
     };
-    setGroups([...groups, newGroup]);
+    const response = await createGroup(newGroup);
+    setGroups(response);
     setIsCreateModalOpen(false);
     setNewGroupName("");
-    setNewGroupQuantity(1);
     setSelectedBrokers([]);
   };
 
@@ -70,35 +86,18 @@ const GroupPage: React.FC = () => {
     setIsEditModalOpen(false);
   };
 
-  const handleUpdateQuantity = (groupId: string, newQuantity: number) => {
-    setGroups(
-      groups.map((group) =>
-        group.id === groupId ? { ...group, quantity: newQuantity } : group
-      )
-    );
-    if (selectedGroup?.id === groupId) {
-      setSelectedGroup({ ...selectedGroup, quantity: newQuantity });
-    }
-  };
-
-  const handleEditClick = (group: Group) => {
+  const handleEditClick = (group: GroupInfo) => {
     setEditGroupData(group);
-    setSelectedBrokers(group.subBrokers);
     setIsEditModalOpen(true);
-    setIsDetailsModalOpen(false);
   };
 
-  const handleDeleteGroup = (groupId: string) => {
-    setGroups(groups.filter((group) => group.id !== groupId));
-    if (selectedGroup?.id === groupId) {
+  const handleDeleteGroup = async (groupID: string) => {
+    const response = await deleteGroup(groupID);
+    setGroups(response);
+    if (selectedGroup?.id === groupID) {
       setSelectedGroup(null);
+      setIsDetailsModalOpen(false);
     }
-    setIsDetailsModalOpen(false);
-  };
-
-  const handleTileClick = (group: Group) => {
-    setSelectedGroup(group);
-    setIsDetailsModalOpen(true);
   };
 
   return (
@@ -120,13 +119,16 @@ const GroupPage: React.FC = () => {
               <Card
                 key={group.id}
                 className="cursor-pointer hover:bg-gray-50"
-                onClick={() => handleTileClick(group)}
+                onClick={() => {
+                  setSelectedGroup(group);
+                  setIsDetailsModalOpen(true);
+                }}
               >
                 <CardHeader>{group.name}</CardHeader>
                 <CardContent>
                   <div className="flex justify-between">
-                    <span>Quantity: {group.quantity}</span>
-                    <span>Brokers: {group.subBrokers.length}</span>
+                    <span>Quantity: {group.qty}</span>
+                    <span>Brokers: {group.sub_brokers.length}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -138,60 +140,39 @@ const GroupPage: React.FC = () => {
             isOpen={isDetailsModalOpen}
             onClose={() => setIsDetailsModalOpen(false)}
             title={selectedGroup?.name || "Group Details"}
-            className="max-w-4xl"
           >
             {selectedGroup && (
               <div className="space-y-4">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex-1">
-                    <Input
-                      type="number"
-                      label="Quantity"
-                      value={selectedGroup.quantity}
-                      onChange={(e) =>
-                        handleUpdateQuantity(
-                          selectedGroup.id,
-                          parseInt(e.target.value)
-                        )
-                      }
-                      className="w-full"
-                    />
-                  </div>
-                  <Button
-                    onClick={() => handleEditClick(selectedGroup)}
-                    className="mt-6"
-                  >
-                    Edit Group
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="number"
+                    value={selectedGroup.qty}
+                    className="w-20"
+                  />
+                  <Button onClick={() => handleEditClick(selectedGroup)}>
+                    Edit
                   </Button>
                   <Button
                     variant="primary"
                     onClick={() => handleDeleteGroup(selectedGroup.id)}
-                    className="mt-6"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">
-                    Sub Brokers ({selectedGroup.subBrokers.length})
-                  </h3>
-                  <div className="border rounded-lg">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Broker Name</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedGroup.subBrokers.map((broker) => (
-                          <TableRow key={broker}>
-                            <TableCell>{broker}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Sub Brokers</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedGroup.sub_brokers.map((sub_broker) => (
+                      <TableRow key={sub_broker.id}>
+                        <TableCell>{sub_broker.nickname}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </Modal>
@@ -224,23 +205,23 @@ const GroupPage: React.FC = () => {
                 </label>
                 <div className="border rounded-lg p-2 max-h-40 overflow-auto">
                   {availableBrokers.map((broker) => (
-                    <div key={broker} className="flex items-center mb-2">
+                    <div key={broker.id} className="flex items-center mb-2">
                       <input
                         type="checkbox"
-                        id={broker}
-                        checked={selectedBrokers.includes(broker)}
+                        id={broker.id}
+                        checked={selectedBrokers.includes(broker.id)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedBrokers([...selectedBrokers, broker]);
+                            setSelectedBrokers([...selectedBrokers, broker.id]);
                           } else {
                             setSelectedBrokers(
-                              selectedBrokers.filter((b) => b !== broker)
+                              selectedBrokers.filter((b) => b !== broker.id)
                             );
                           }
                         }}
                         className="mr-2"
                       />
-                      <label htmlFor={broker}>{broker}</label>
+                      <label htmlFor={broker.nickname}>{broker.nickname}</label>
                     </div>
                   ))}
                 </div>
@@ -248,7 +229,7 @@ const GroupPage: React.FC = () => {
               <Button
                 onClick={handleCreateGroup}
                 disabled={!newGroupName || selectedBrokers.length === 0}
-                className="w-full mt-4"
+                className="w-full"
               >
                 Create Group
               </Button>
@@ -275,11 +256,11 @@ const GroupPage: React.FC = () => {
                 <Input
                   type="number"
                   label="Quantity"
-                  value={editGroupData.quantity}
+                  value={editGroupData.qty}
                   onChange={(e) =>
                     setEditGroupData({
                       ...editGroupData,
-                      quantity: parseInt(e.target.value),
+                      qty: parseInt(e.target.value),
                     })
                   }
                   min="1"
@@ -291,25 +272,27 @@ const GroupPage: React.FC = () => {
                   </label>
                   <div className="border rounded-lg p-2 max-h-40 overflow-auto">
                     {availableBrokers.map((broker) => (
-                      <div key={broker} className="flex items-center mb-2">
+                      <div key={broker.id} className="flex items-center mb-2">
                         <input
                           type="checkbox"
                           id={`edit-${broker}`}
-                          checked={editGroupData.subBrokers.includes(broker)}
+                          checked={editGroupData.sub_brokers.some(b => b.id === broker.id)}
                           onChange={(e) => {
                             const updatedBrokers = e.target.checked
-                              ? [...editGroupData.subBrokers, broker]
-                              : editGroupData.subBrokers.filter(
-                                  (b) => b !== broker
+                              ? [...editGroupData.sub_brokers, broker]
+                              : editGroupData.sub_brokers.filter(
+                                  (b) => b.id !== broker.id
                                 );
                             setEditGroupData({
                               ...editGroupData,
-                              subBrokers: updatedBrokers,
+                              sub_brokers: updatedBrokers,
                             });
                           }}
                           className="mr-2"
                         />
-                        <label htmlFor={`edit-${broker}`}>{broker}</label>
+                        <label htmlFor={`edit-${broker}`}>
+                          {broker.nickname}
+                        </label>
                       </div>
                     ))}
                   </div>
@@ -317,9 +300,9 @@ const GroupPage: React.FC = () => {
                 <Button
                   onClick={handleUpdateGroup}
                   disabled={
-                    !editGroupData.name || editGroupData.subBrokers.length === 0
+                    !editGroupData.name || editGroupData.sub_brokers.length === 0
                   }
-                  className="w-full mt-4"
+                  className="w-full"
                 >
                   Save Changes
                 </Button>
