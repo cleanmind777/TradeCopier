@@ -22,6 +22,8 @@ class GroupInfo(BaseModel):
     name: str
     qty: int
     sub_brokers: list[SubBrokerAccount]
+    class Config:
+        arbitrary_types_allowed = True
 
 class GroupNameChange(BaseModel):
     group_id: UUID
