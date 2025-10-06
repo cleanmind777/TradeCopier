@@ -214,7 +214,7 @@ async def get_positions(db: Session, user_id: UUID):
                 SubBrokerAccount.sub_account_id == str(position['accountId'])
             ).first()
             
-            if db_sub_broker_account.is_active:
+            if db_sub_broker_account.is_active and position['netPos'] != 0:
                 contract_item = await get_contract_item(position['contractId'], db_broker_account.access_token, is_demo=True)
 
                 p = TradovatePositionListForFrontend (
