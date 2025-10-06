@@ -3,12 +3,25 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
 import json
+from app.models.broker_account import SubBrokerAccount 
 
 class GroupCreate(BaseModel):
     user_id: UUID
     name: str
     qty: int
     sub_brokers: list[UUID]
+
+class GroupEdit(BaseModel):
+    group_id: UUID
+    name: str
+    qty: int
+    sub_brokers: list[UUID]
+
+class GroupInfo(BaseModel):
+    id: UUID
+    name: str
+    qty: int
+    sub_brokers: list[SubBrokerAccount]
 
 class GroupNameChange(BaseModel):
     group_id: UUID

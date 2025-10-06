@@ -5,8 +5,8 @@ from datetime import timedelta
 from uuid import UUID
 from app.dependencies.database import get_db
 from app.core.config import settings
-from app.schemas.group import GroupAddBroker, GroupCreate, GroupNameChange, GroupSetQTY
-from app.services.group_service import create_group, change_group_name, add_broker_to_group, set_qty_to_group, del_group
+from app.schemas.group import GroupAddBroker, GroupCreate, GroupNameChange, GroupSetQTY, GroupEdit
+from app.services.group_service import create_group, change_group_name, add_broker_to_group, set_qty_to_group, del_group, edit_group
 
 router = APIRouter()
 
@@ -16,6 +16,12 @@ router = APIRouter()
 )
 def create_Group(group_create: GroupCreate, db: Session = Depends(get_db)):
     return create_group(db, group_create)
+
+@router.post(
+    "/edit", status_code=status.HTTP_201_CREATED
+)
+def edit_Group(group_edit: GroupEdit, db: Session = Depends(get_db)):
+    return edit_group(db, group_edit)
 
 @router.post(
     "/change-name", status_code=status.HTTP_201_CREATED

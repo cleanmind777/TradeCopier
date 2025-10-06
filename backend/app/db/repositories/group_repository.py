@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timezone
 from uuid import UUID
 from sqlalchemy.future import select
-from app.schemas.group import GroupCreate, GroupNameChange, GroupAddBroker, GroupSetQTY
+from app.schemas.group import GroupCreate, GroupNameChange, GroupAddBroker, GroupSetQTY, GroupInfo, GroupEdit
 from app.models.group import Group
 from app.models.group_broker import GroupBroker
 
@@ -27,7 +27,57 @@ def user_create_group(
         sub_brokers=group_create.sub_brokers
     )
     user_add_broker_to_group(db, group_add_broker)
-    return db.query(Group).filter(Group.user_id==group_create.user_id).all()
+    db_groups = db.query(Group).filter(Group.user_id==group_create.user_id).all()
+    groups_summary : list[GroupInfo] = []
+    for group in db_groups:
+        sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
+        group_summary = GroupInfo (
+            id=group.id,
+            name=group.name,
+            qty=group.qty,
+            sub_brokers=sub_brokers
+        )
+        groups_summary.append(group)
+    return groups_summary
+
+def user_edit_group(
+    db: Session, group_edit: GroupEdit
+):
+    db_group = (
+        db.query(Group)
+        .filter(Group.id == group_edit.group_id)
+        .first()
+    )
+    user_id = db_group.user_id
+    db_group.name=group_edit.name
+    db_group.qty=group_edit.qty
+    db.commit()
+    db.refresh(db_group)
+    sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group_edit.group_id).all()
+    sub_brokers.delete(synchronize_session=False)
+    for sub_broker in group_edit.sub_brokers:
+        db_check = db.query(GroupBroker).filter(GroupBroker.group_id==group_edit.group_id).filter(GroupBroker.sub_broker_id==sub_broker).all()
+        if db_check:
+            continue
+        db_group_broker = GroupBroker (
+            group_id = group_edit.group_id,
+            sub_broker_id = sub_broker
+        )
+        db.add(db_group_broker)
+        db.commit() 
+        db.refresh(db_group_broker)
+    db_groups = db.query(Group).filter(Group.user_id==user_id).all()
+    groups_summary : list[GroupInfo] = []
+    for group in db_groups:
+        sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
+        group_summary = GroupInfo (
+            id=group.id,
+            name=group.name,
+            qty=group.qty,
+            sub_brokers=sub_brokers
+        )
+        groups_summary.append(group)
+    return groups_summary
 
 def  user_change_group_name(db: Session, change_name: GroupNameChange):
     db_group = (
@@ -83,5 +133,15 @@ def user_del_group(db: Session, group_id: UUID):
 
     db.commit()
 
-    # Return remaining groups for that user
-    return db.query(Group).filter(Group.user_id == user_id).all()
+    db_groups = db.query(Group).filter(Group.user_id==user_id).all()
+    groups_summary : list[GroupInfo] = []
+    for group in db_groups:
+        sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
+        group_summary = GroupInfo (
+            id=group.id,
+            name=group.name,
+            qty=group.qty,
+            sub_brokers=sub_brokers
+        )
+        groups_summary.append(group)
+    return groups_summary

@@ -100,3 +100,4 @@ class SubBrokerChange(BaseModel):
     id: UUID
     nickname: Optional[str] = None
     is_active: Optional[bool] = None
+    

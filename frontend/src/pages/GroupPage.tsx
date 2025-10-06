@@ -18,51 +18,57 @@ import Input from "../components/ui/Input";
 import { SubBrokerInfo } from "../types/broker";
 import { SubBrokerFilter } from "../types/broker";
 import { getSubBrokers } from "../api/brokerApi";
-
-interface Group {
-  id: string;
-  name: string;
-  quantity: number;
-  subBrokers: SubBrokerInfo[];
-}
+import { GroupCreate, GroupInfo } from "../types/group";
+import { createGroup, editGroup, deleteGroup, getGroup } from "../api/groupApi";
 
 const GroupPage: React.FC = () => {
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [groups, setGroups] = useState<GroupInfo[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupQuantity, setNewGroupQuantity] = useState(1);
-  const [editGroupData, setEditGroupData] = useState<Group | null>(null);
+  const [editGroupData, setEditGroupData] = useState<GroupInfo | null>(null);
   const [availableBrokers, setAvailableBrokers] = useState<SubBrokerInfo[]>([]);
-  const [selectedBrokers, setSelectedBrokers] = useState<SubBrokerInfo[]>([]);
+  const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
   const getSubBrokerAccounts = async () => {
     const subBrokerFilter: SubBrokerFilter = {
-      user_id
+      user_id,
     };
     const brokers = await getSubBrokers(subBrokerFilter);
     if (brokers) {
       setAvailableBrokers(brokers);
     }
   };
-  useEffect(() => {
-    // TODO: Load available brokers (subbrokers) from API
-    getSubBrokerAccounts()
-  }, []);
 
-  const handleCreateGroup = () => {
-    const newGroup: Group = {
-      id: Date.now().toString(),
+  const getGroups = async () => {
+    const groups = await getGroup(user_id);
+    setGroups(groups);
+  };
+
+  useEffect(() => {
+    getSubBrokerAccounts();
+  }, [user_id]);
+
+  useEffect(() => {
+    getGroups();
+  }, [user_id]);
+
+  const handleCreateGroup = async () => {
+    const newGroup: GroupCreate = {
+      user_id: user_id,
       name: newGroupName,
-      quantity: newGroupQuantity,
-      subBrokers: selectedBrokers,
+      qty: newGroupQuantity,
+      sub_brokers: selectedBrokers,
     };
-    setGroups([...groups, newGroup]);
+    // setGroups([...groups, newGroup]);
+    const response = await createGroup(newGroup);
+    setGroups(response);
     setIsCreateModalOpen(false);
     setNewGroupName("");
-    setNewGroupQuantity(1);
+    // setNewGroupQuantity(1);
     setSelectedBrokers([]);
   };
 
@@ -82,28 +88,26 @@ const GroupPage: React.FC = () => {
     setIsEditModalOpen(false);
   };
 
-  const handleUpdateQuantity = (groupId: string, newQuantity: number) => {
-    setGroups(
-      groups.map((group) =>
-        group.id === groupId ? { ...group, quantity: newQuantity } : group
-      )
-    );
-    if (selectedGroup?.id === groupId) {
-      setSelectedGroup({ ...selectedGroup, quantity: newQuantity });
-    }
-  };
+  // const handleUpdateQuantity = (groupId: string, newQuantity: number) => {
+  //   setGroups(
+  //     groups.map((group) =>
+  //       group.id === groupId ? { ...group, quantity: newQuantity } : group
+  //     )
+  //   );
+  //   if (selectedGroup?.id === groupId) {
+  //     setSelectedGroup({ ...selectedGroup, quantity: newQuantity });
+  //   }
+  // };
 
-  const handleEditClick = (group: Group) => {
+  const handleEditClick = (group: GroupInfo) => {
     setEditGroupData(group);
-    setSelectedBrokers(group.subBrokers);
+    // setSelectedBrokers(group.sub_brokers);
     setIsEditModalOpen(true);
   };
 
-  const handleDeleteGroup = (groupId: string) => {
-    setGroups(groups.filter((group) => group.id !== groupId));
-    if (selectedGroup?.id === groupId) {
-      setSelectedGroup(null);
-    }
+  const handleDeleteGroup = async (groupID: string) => {
+    const response = await deleteGroup(groupID);
+    setGroups(response);
   };
 
   return (
@@ -130,8 +134,8 @@ const GroupPage: React.FC = () => {
                 <CardHeader>{group.name}</CardHeader>
                 <CardContent>
                   <div className="flex justify-between">
-                    <span>Quantity: {group.quantity}</span>
-                    <span>Brokers: {group.subBrokers.length}</span>
+                    <span>Quantity: {group.qty}</span>
+                    <span>Brokers: {group.sub_brokers.length}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -146,13 +150,13 @@ const GroupPage: React.FC = () => {
                 <div className="flex gap-2">
                   <Input
                     type="number"
-                    value={selectedGroup.quantity}
-                    onChange={(e) =>
-                      handleUpdateQuantity(
-                        selectedGroup.id,
-                        parseInt(e.target.value)
-                      )
-                    }
+                    value={selectedGroup.qty}
+                    // onChange={(e) =>
+                    //   handleUpdateQuantity(
+                    //     selectedGroup.id,
+                    //     parseInt(e.target.value)
+                    //   )
+                    // }
                     className="w-20"
                   />
                   <Button onClick={() => handleEditClick(selectedGroup)}>
@@ -174,9 +178,9 @@ const GroupPage: React.FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedGroup.subBrokers.map((broker) => (
-                      <TableRow key={broker.id}>
-                        <TableCell>{broker.nickname}</TableCell>
+                    {selectedGroup.sub_brokers.map((sub_broker) => (
+                      <TableRow key={sub_broker.id}>
+                        <TableCell>{sub_broker.nickname}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -217,13 +221,13 @@ const GroupPage: React.FC = () => {
                       <input
                         type="checkbox"
                         id={broker.id}
-                        checked={selectedBrokers.includes(broker)}
+                        checked={selectedBrokers.includes(broker.id)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedBrokers([...selectedBrokers, broker]);
+                            setSelectedBrokers([...selectedBrokers, broker.id]);
                           } else {
                             setSelectedBrokers(
-                              selectedBrokers.filter((b) => b !== broker)
+                              selectedBrokers.filter((b) => b !== broker.id)
                             );
                           }
                         }}
@@ -264,11 +268,11 @@ const GroupPage: React.FC = () => {
                 <Input
                   type="number"
                   label="Quantity"
-                  value={editGroupData.quantity}
+                  value={editGroupData.qty}
                   onChange={(e) =>
                     setEditGroupData({
                       ...editGroupData,
-                      quantity: parseInt(e.target.value),
+                      qty: parseInt(e.target.value),
                     })
                   }
                   min="1"
@@ -284,21 +288,23 @@ const GroupPage: React.FC = () => {
                         <input
                           type="checkbox"
                           id={`edit-${broker}`}
-                          checked={editGroupData.subBrokers.includes(broker)}
+                          checked={editGroupData.sub_brokers.includes(broker)}
                           onChange={(e) => {
                             const updatedBrokers = e.target.checked
-                              ? [...editGroupData.subBrokers, broker]
-                              : editGroupData.subBrokers.filter(
+                              ? [...editGroupData.sub_brokers, broker]
+                              : editGroupData.sub_brokers.filter(
                                   (b) => b !== broker
                                 );
                             setEditGroupData({
                               ...editGroupData,
-                              subBrokers: updatedBrokers,
+                              sub_brokers: updatedBrokers,
                             });
                           }}
                           className="mr-2"
                         />
-                        <label htmlFor={`edit-${broker}`}>{broker.nickname}</label>
+                        <label htmlFor={`edit-${broker}`}>
+                          {broker.nickname}
+                        </label>
                       </div>
                     ))}
                   </div>
@@ -306,7 +312,7 @@ const GroupPage: React.FC = () => {
                 <Button
                   onClick={handleUpdateGroup}
                   disabled={
-                    !editGroupData.name || editGroupData.subBrokers.length === 0
+                    !editGroupData.name || editGroupData.sub_brokers.length === 0
                   }
                   className="w-full"
                 >
