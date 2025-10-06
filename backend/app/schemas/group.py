@@ -12,7 +12,7 @@ class GroupCreate(BaseModel):
     sub_brokers: list[UUID]
 
 class GroupEdit(BaseModel):
-    group_id: UUID
+    id: UUID
     name: str
     qty: int
     sub_brokers: list[UUID]
