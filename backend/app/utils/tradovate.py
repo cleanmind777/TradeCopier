@@ -236,7 +236,7 @@ def place_order(access_token: str, is_demo: bool, order: ExitPosition):
     url = f"{TRADO_DEMO_URL}/order/placeorder" if is_demo else f"{TRADO_LIVE_URL}/order/placeorder"
 
     try:
-        response = requests.post(url, headers=headers, json=order)
+        response = requests.post(url, headers=headers, json=order.dict())
         if response.status_code == 200 and response.content:
             try:
                 data = response.json()
