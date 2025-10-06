@@ -13,6 +13,29 @@ from app.models.group import Group
 from app.models.group_broker import GroupBroker
 from app.models.broker_account import SubBrokerAccount
 
+def user_get_group(
+    db: Session, user_id: UUID
+)->list[GroupInfo]:
+    db_groups = db.query(Group).filter(Group.user_id==user_id).all()
+    groups_summary : list[GroupInfo] = []
+    for group in db_groups:
+        sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
+        response_brokers : list[SubBrokerSumary] = []
+        for sub_broker in sub_brokers:
+            response_broker : SubBrokerSumary = {}
+            db_sub_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            response_broker['id'] = db_sub_broker.id
+            response_broker['nickname'] = db_sub_broker.nickname
+            response_brokers.append(response_broker)
+        group_summary = GroupInfo (
+            id=group.id,
+            name=group.name,
+            qty=group.qty,
+            sub_brokers=response_brokers
+        )
+        groups_summary.append(group_summary)
+    return groups_summary
+
 def user_create_group(
     db: Session, group_create: GroupCreate
 )->list[GroupInfo]:

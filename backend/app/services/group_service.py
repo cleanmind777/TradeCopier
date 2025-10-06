@@ -19,13 +19,15 @@ from app.db.repositories.group_repository import (
     user_set_qty_to_group,
     user_del_group,
     user_edit_group,
+    user_get_group
 )
 
 
 def create_group(db: Session, group_create: GroupCreate)->list[GroupInfo]:
     return user_create_group(db, group_create)
 
-
+def get_group(db: Session, user_id: UUID):
+    return user_get_group(db, user_id)
 def edit_group(db: Session, group_edit: GroupEdit):
     return user_edit_group(db, group_edit)
 

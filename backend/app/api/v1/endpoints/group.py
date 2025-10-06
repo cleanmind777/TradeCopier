@@ -6,7 +6,7 @@ from uuid import UUID
 from app.dependencies.database import get_db
 from app.core.config import settings
 from app.schemas.group import GroupAddBroker, GroupCreate, GroupNameChange, GroupSetQTY, GroupEdit
-from app.services.group_service import create_group, change_group_name, add_broker_to_group, set_qty_to_group, del_group, edit_group
+from app.services.group_service import create_group, change_group_name, add_broker_to_group, set_qty_to_group, del_group, edit_group, get_group
 
 router = APIRouter()
 
@@ -16,6 +16,12 @@ router = APIRouter()
 )
 def create_Group(group_create: GroupCreate, db: Session = Depends(get_db)):
     return create_group(db, group_create)
+
+@router.get(
+    "/get", status_code=status.HTTP_201_CREATED
+)
+def get_Group(user_id: UUID, db: Session = Depends(get_db)):
+    return get_group(db, user_id)
 
 @router.post(
     "/edit", status_code=status.HTTP_201_CREATED
