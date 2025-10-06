@@ -179,8 +179,10 @@ const GroupPage: React.FC = () => {
                   <TableBody>
                     {selectedGroup.sub_brokers.map((sub_broker) => (
                       <TableRow key={sub_broker.id}>
+                        <TableCell>{sub_broker.nickname}</TableCell>
                         <TableCell>{sub_broker.sub_account_name}</TableCell>
                       </TableRow>
+                      
                     ))}
                   </TableBody>
                 </Table>
