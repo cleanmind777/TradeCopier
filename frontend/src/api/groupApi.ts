@@ -56,7 +56,7 @@ export const editGroup = async (editGroup: GroupEdit): Promise<GroupInfo[]> => {
 export const deleteGroup = async (groupID: string): Promise<GroupInfo[]> => {
   try {
     const response = await axios.delete(`${API_BASE}/group/delete`, {
-      data: { group_id: groupID },
+      params: { group_id: groupID },
     });
     return response.data;
   } catch (error) {
