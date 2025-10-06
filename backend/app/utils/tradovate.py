@@ -231,6 +231,9 @@ def get_cash_balances(access_token: str, is_demo: bool):
     return data
 
 def place_order(access_token: str, is_demo: bool, order: ExitPosition):
+    print(access_token)
+    print(is_demo)
+    print(order)
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{TRADO_DEMO_URL}/order/placeorder" if is_demo else f"{TRADO_LIVE_URL}/order/placeorder"
 
