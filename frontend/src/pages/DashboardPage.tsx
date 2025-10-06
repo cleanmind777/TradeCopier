@@ -53,7 +53,7 @@ const DashboardPage: React.FC = () => {
     
     fetchPositions();
   }, [user_id]);
-
+  useEffect(()=>{}, [positions])
   useEffect(() => {
     const fetchOrders = async () => {
       const orderData = await getOrders(user_id);
