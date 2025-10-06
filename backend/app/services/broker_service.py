@@ -337,10 +337,10 @@ async def get_sub_brokers_for_group(
     return db_broker_accounts
 
 
-def exit_position(db: Session, exit_position: ExitPosition):
+def exit_position(db: Session, exit_position_data: ExitPosition):
     db_sub_broker = (
         db.query(SubBrokerAccount)
-        .filter(SubBrokerAccount.sub_account_id == str(exit_position["accountId"]))
+        .filter(SubBrokerAccount.sub_account_id == str(exit_position_data["accountId"]))
         .first()
     )
     db_broker = (
@@ -349,4 +349,4 @@ def exit_position(db: Session, exit_position: ExitPosition):
         .first()
     )
     access_token = db_broker.access_token
-    return place_order(access_token, db_sub_broker.is_demo, exit_position)
+    return place_order(access_token, db_sub_broker.is_demo, exit_position_data)
