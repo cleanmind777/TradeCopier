@@ -31,32 +31,22 @@ def user_create_group(
     user_add_broker_to_group(db, group_add_broker)
     db_groups = db.query(Group).filter(Group.user_id==group_create.user_id).all()
     groups_summary : list[GroupInfo] = []
-    print("1")
     for group in db_groups:
-        print("2")
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
-        print("3")
         response_brokers : list[SubBrokerSumary] = []
-        print("4")
         for sub_broker in sub_brokers:
             response_broker : SubBrokerSumary = {}
-            print("5")
             db_sub_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
-            print('6')
             response_broker['id'] = db_sub_broker.id
             response_broker['nickname'] = db_sub_broker.nickname
             response_brokers.append(response_broker)
-            print('7')
-        print('8')
         group_summary = GroupInfo (
             id=group.id,
             name=group.name,
             qty=group.qty,
             sub_brokers=response_brokers
         )
-        print('9')
         groups_summary.append(group_summary)
-        print('10')
     return groups_summary
 
 def user_edit_group(
@@ -85,13 +75,16 @@ def user_edit_group(
         db.add(db_group_broker)
         db.commit() 
         db.refresh(db_group_broker)
-    db_groups = db.query(Group).filter(Group.user_id==user_id).all()
+    db_groups = db.query(Group).filter(Group.user_id==group_create.user_id).all()
     groups_summary : list[GroupInfo] = []
     for group in db_groups:
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
-        response_brokers = []
+        response_brokers : list[SubBrokerSumary] = []
         for sub_broker in sub_brokers:
-            response_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            response_broker : SubBrokerSumary = {}
+            db_sub_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            response_broker['id'] = db_sub_broker.id
+            response_broker['nickname'] = db_sub_broker.nickname
             response_brokers.append(response_broker)
         group_summary = GroupInfo (
             id=group.id,
@@ -156,13 +149,16 @@ def user_del_group(db: Session, group_id: UUID):
 
     db.commit()
 
-    db_groups = db.query(Group).filter(Group.user_id==user_id).all()
+    db_groups = db.query(Group).filter(Group.user_id==group_create.user_id).all()
     groups_summary : list[GroupInfo] = []
     for group in db_groups:
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
-        response_brokers = []
+        response_brokers : list[SubBrokerSumary] = []
         for sub_broker in sub_brokers:
-            response_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            response_broker : SubBrokerSumary = {}
+            db_sub_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            response_broker['id'] = db_sub_broker.id
+            response_broker['nickname'] = db_sub_broker.nickname
             response_brokers.append(response_broker)
         group_summary = GroupInfo (
             id=group.id,
