@@ -309,7 +309,7 @@ async def get_accounts(db: Session, user_id: UUID):
                 accounts_for_dashboard.append(a)
     return accounts_for_dashboard
 
-def get_sub_brokers_for_group(db: Session, user_id: UUID)->list[SubBrokerSumary]:
+async def get_sub_brokers_for_group(db: Session, user_id: UUID)->list[SubBrokerSumary]:
     db_broker_accounts = db.query(SubBrokerAccount).filter(
         SubBrokerAccount.user_id == user_id
     ).all()
