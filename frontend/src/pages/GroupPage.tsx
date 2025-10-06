@@ -15,12 +15,15 @@ import {
 import { Trash2 } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
+import { SubBrokerInfo } from "../types/broker";
+import { SubBrokerFilter } from "../types/broker";
+import { getSubBrokers } from "../api/brokerApi";
 
 interface Group {
   id: string;
   name: string;
   quantity: number;
-  subBrokers: string[];
+  subBrokers: SubBrokerInfo[];
 }
 
 const GroupPage: React.FC = () => {
@@ -31,12 +34,22 @@ const GroupPage: React.FC = () => {
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupQuantity, setNewGroupQuantity] = useState(1);
   const [editGroupData, setEditGroupData] = useState<Group | null>(null);
-  const [availableBrokers, setAvailableBrokers] = useState<string[]>([]);
-  const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
-
+  const [availableBrokers, setAvailableBrokers] = useState<SubBrokerInfo[]>([]);
+  const [selectedBrokers, setSelectedBrokers] = useState<SubBrokerInfo[]>([]);
+  const user = localStorage.getItem("user");
+  const user_id = user ? JSON.parse(user).id : null;
+  const getSubBrokerAccounts = async () => {
+    const subBrokerFilter: SubBrokerFilter = {
+      user_id
+    };
+    const brokers = await getSubBrokers(subBrokerFilter);
+    if (brokers) {
+      setAvailableBrokers(brokers);
+    }
+  };
   useEffect(() => {
     // TODO: Load available brokers (subbrokers) from API
-    setAvailableBrokers(["Broker 1", "Broker 2", "Broker 3"]);
+    getSubBrokerAccounts()
   }, []);
 
   const handleCreateGroup = () => {
@@ -55,17 +68,17 @@ const GroupPage: React.FC = () => {
 
   const handleUpdateGroup = () => {
     if (!editGroupData) return;
-    
+
     setGroups(
       groups.map((group) =>
         group.id === editGroupData.id ? editGroupData : group
       )
     );
-    
+
     if (selectedGroup?.id === editGroupData.id) {
       setSelectedGroup(editGroupData);
     }
-    
+
     setIsEditModalOpen(false);
   };
 
@@ -162,8 +175,8 @@ const GroupPage: React.FC = () => {
                   </TableHeader>
                   <TableBody>
                     {selectedGroup.subBrokers.map((broker) => (
-                      <TableRow key={broker}>
-                        <TableCell>{broker}</TableCell>
+                      <TableRow key={broker.id}>
+                        <TableCell>{broker.nickname}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -200,10 +213,10 @@ const GroupPage: React.FC = () => {
                 </label>
                 <div className="border rounded-lg p-2 max-h-40 overflow-auto">
                   {availableBrokers.map((broker) => (
-                    <div key={broker} className="flex items-center mb-2">
+                    <div key={broker.id} className="flex items-center mb-2">
                       <input
                         type="checkbox"
-                        id={broker}
+                        id={broker.id}
                         checked={selectedBrokers.includes(broker)}
                         onChange={(e) => {
                           if (e.target.checked) {
@@ -216,7 +229,7 @@ const GroupPage: React.FC = () => {
                         }}
                         className="mr-2"
                       />
-                      <label htmlFor={broker}>{broker}</label>
+                      <label htmlFor={broker.nickname}>{broker.nickname}</label>
                     </div>
                   ))}
                 </div>
@@ -267,7 +280,7 @@ const GroupPage: React.FC = () => {
                   </label>
                   <div className="border rounded-lg p-2 max-h-40 overflow-auto">
                     {availableBrokers.map((broker) => (
-                      <div key={broker} className="flex items-center mb-2">
+                      <div key={broker.id} className="flex items-center mb-2">
                         <input
                           type="checkbox"
                           id={`edit-${broker}`}
@@ -275,7 +288,9 @@ const GroupPage: React.FC = () => {
                           onChange={(e) => {
                             const updatedBrokers = e.target.checked
                               ? [...editGroupData.subBrokers, broker]
-                              : editGroupData.subBrokers.filter((b) => b !== broker);
+                              : editGroupData.subBrokers.filter(
+                                  (b) => b !== broker
+                                );
                             setEditGroupData({
                               ...editGroupData,
                               subBrokers: updatedBrokers,
@@ -283,14 +298,16 @@ const GroupPage: React.FC = () => {
                           }}
                           className="mr-2"
                         />
-                        <label htmlFor={`edit-${broker}`}>{broker}</label>
+                        <label htmlFor={`edit-${broker}`}>{broker.nickname}</label>
                       </div>
                     ))}
                   </div>
                 </div>
                 <Button
                   onClick={handleUpdateGroup}
-                  disabled={!editGroupData.name || editGroupData.subBrokers.length === 0}
+                  disabled={
+                    !editGroupData.name || editGroupData.subBrokers.length === 0
+                  }
                   className="w-full"
                 >
                   Save Changes

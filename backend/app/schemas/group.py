@@ -7,6 +7,14 @@ import json
 class GroupCreate(BaseModel):
     user_id: UUID
     name: str
+    qty: int
+    sub_brokers: list[UUID]
+
+class GroupCreate(BaseModel):
+    group_id: UUID
+    name: str
+    qty: int
+    sub_brokers: list[UUID]
 
 class GroupNameChange(BaseModel):
     group_id: UUID
