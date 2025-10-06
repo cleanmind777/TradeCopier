@@ -10,6 +10,7 @@ from app.schemas.group import (
     GroupAddBroker,
     GroupSetQTY,
     GroupEdit,
+    GroupInfo
 )
 from app.db.repositories.group_repository import (
     user_create_group,
@@ -21,7 +22,7 @@ from app.db.repositories.group_repository import (
 )
 
 
-def create_group(db: Session, group_create: GroupCreate):
+def create_group(db: Session, group_create: GroupCreate)->list[GroupInfo]:
     return user_create_group(db, group_create)
 
 

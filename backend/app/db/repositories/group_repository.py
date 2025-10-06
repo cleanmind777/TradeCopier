@@ -14,7 +14,7 @@ from app.models.broker_account import SubBrokerAccount
 
 def user_create_group(
     db: Session, group_create: GroupCreate
-):
+)->list[GroupInfo]:
     db_group = Group (
         user_id=group_create.user_id,
         name=group_create.name,
