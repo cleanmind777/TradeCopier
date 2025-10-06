@@ -41,7 +41,7 @@ def user_create_group(
             print("5")
             response_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
             print('6')
-            response_brokers.append(response_broker)
+            response_brokers.append(response_broker.model_dump())
             print('7')
         print('8')
         group_summary = GroupInfo (
