@@ -105,7 +105,7 @@ const GroupPage: React.FC = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="p-6">
+        <main className="flex-1 p-8 space-y-8">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Groups</h1>
             <Button onClick={() => setIsCreateModalOpen(true)}>
