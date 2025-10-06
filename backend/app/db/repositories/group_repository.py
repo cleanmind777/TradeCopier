@@ -172,7 +172,7 @@ def user_del_group(db: Session, group_id: UUID):
 
     db.commit()
 
-    db_groups = db.query(Group).filter(Group.user_id==group_create.user_id).all()
+    db_groups = db.query(Group).filter(Group.user_id==user_id).all()
     groups_summary : list[GroupInfo] = []
     for group in db_groups:
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
