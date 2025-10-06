@@ -134,6 +134,8 @@ async def get_sub_brokers(
 ) -> list[SubBrokerInfoPlus] | None:
     sub_broker_info_plus_list: list[SubBrokerInfoPlus] = []
     sub_broker_info_list = user_get_sub_brokers(db, sub_broker_filter)
+    if sub_broker_info_list == None:
+        return None
     db_broker_account = (
         db.query(BrokerAccount)
         .filter(BrokerAccount.user_broker_id == sub_broker_filter.user_broker_id)

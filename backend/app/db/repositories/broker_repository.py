@@ -128,8 +128,10 @@ def user_get_sub_brokers(
         query = query.filter(SubBrokerAccount.is_active == sub_broker_filter.is_active)
     result = db.execute(query)
     brokers = result.scalars().all()
-    print("SubBrokers:", brokers)
-    return brokers
+    if brokers:
+        print("SubBrokers:", brokers)
+        return brokers
+    return None
 
 
 def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
