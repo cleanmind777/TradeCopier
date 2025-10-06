@@ -80,9 +80,6 @@ const DashboardPage: React.FC = () => {
     netPos: number
   ) => {
     try {
-      setIsLoading(true);
-      setError(null);
-      // TODO: Replace with actual API call
       let action = "Buy";
       if (netPos > 0) {
         action = "Sell";
@@ -98,6 +95,10 @@ const DashboardPage: React.FC = () => {
       };
       exitPostion(exitPostionData);
       fetchPositions();
+      setIsLoading(true);
+      setError(null);
+      // TODO: Replace with actual API call
+      
     } catch (err) {
       setError("Failed to exit position");
       console.error(err);
