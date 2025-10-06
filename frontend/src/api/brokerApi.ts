@@ -221,7 +221,7 @@ export const exitPostion = async (
 ) => {
   try {
     const response = await axios.post(
-      `${API_BASE}/position/exit`,
+      `${API_BASE}/broker/position/exit`,
       exitPostionData
     );
     return response.data;
