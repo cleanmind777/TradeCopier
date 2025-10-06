@@ -48,5 +48,6 @@ class SubBrokerAccount(Base):
     status = Column(Boolean, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
 
+
     user = relationship("User", back_populates="sub_broker_accounts")
     broker_account = relationship("BrokerAccount", back_populates="sub_broker_accounts")

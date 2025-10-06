@@ -1,16 +1,21 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import AdminProtectedRoute from './components/AdminProtectedRoute';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import BrokerPage from './pages/BrokerPage';
-import SignUpPage from './pages/SignUpPage';
-import AdminPage from './pages/admin/AdminPage';
-import AdminUsersPage from './pages/admin/AdminUsersPage';
-import SubBrokerPage from './pages/SubBrokerPage';
-
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminProtectedRoute from "./components/AdminProtectedRoute";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import BrokerPage from "./pages/BrokerPage";
+import SignUpPage from "./pages/SignUpPage";
+import AdminPage from "./pages/admin/AdminPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import SubBrokerPage from "./pages/SubBrokerPage";
+import GroupPage from "./pages/GroupPage";
 
 function App() {
   return (
@@ -57,6 +62,12 @@ function App() {
               <AdminProtectedRoute>
                 <AdminUsersPage />
               </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/group"
+            element={
+                <GroupPage />
             }
           />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

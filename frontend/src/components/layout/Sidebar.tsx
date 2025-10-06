@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, BarChart3, Settings, LogOut } from 'lucide-react';
+import { Home, Users, BarChart3, Settings, LogOut, Group } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -11,6 +11,7 @@ const Sidebar: React.FC = () => {
   const menuItems = [
     { icon: Home, label: 'Dashboard', path: '/dashboard' },
     { icon: Users, label: 'Broker Accounts', path: '/broker' },
+    { icon: Group, label: 'Group', path: '/group' },
   ];
 
   return (

@@ -10,6 +10,7 @@ from app.schemas.broker import (
     SubBrokerFilter,
     SubBrokerInfoPlus,
     SubBrokerChange,
+    SubBrokerSumary
 )
 from app.services.broker_service import (
     add_broker,
@@ -17,6 +18,7 @@ from app.services.broker_service import (
     del_broker,
     get_sub_brokers,
     change_sub_brokers,
+    get_sub_brokers_for_group
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -33,6 +35,19 @@ async def get_Sub_brokers(
     sub_broker_filter: SubBrokerFilter, db: Session = Depends(get_db)
 ):
     response = await get_sub_brokers(db, sub_broker_filter)
+    if response is None:
+        raise HTTPException(status_code=404, detail="SubBrokers not found")
+    return response
+
+@router.get(
+    "/get-for-group",
+    response_model=list[SubBrokerSumary] | None,
+    status_code=status.HTTP_201_CREATED,
+)
+async def get_Sub_brokers_for_group(
+    user_id: UUID, db: Session = Depends(get_db)
+):
+    response = await get_sub_brokers_for_group(db, user_id)
     if response is None:
         raise HTTPException(status_code=404, detail="SubBrokers not found")
     return response

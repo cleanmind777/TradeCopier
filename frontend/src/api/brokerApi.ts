@@ -13,7 +13,9 @@ import {
   TradovateOrderListResponse,
   TradovatePositionListResponse,
   TradovateProductItemResponse,
-  TradovateAccountsResponse
+  TradovateAccountsResponse,
+  SubBrokerSummary,
+  ExitPostion
 } from "../types/broker";
 
 const API_BASE =
@@ -188,6 +190,67 @@ export const getAccounts = async (
       alert(error.response?.data?.detail ?? "Unknown error");
     } else {
       console.error("Unexpected Get Accounts error:", error);
+    }
+    return null;
+  }
+};
+
+export const getSubBrokersForGroup = async (
+  user_id: string
+): Promise<SubBrokerSummary[] | null> => {
+  try {
+    const params = { user_id };
+    const response = await axios.get(
+      `${API_BASE}/subbroker/get-for-group`,
+      { params }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get SubBrokers:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Get SubBrokers error:", error);
+    }
+    return null;
+  }
+};
+
+export const exitPostion = async (
+  exitPostionData: ExitPostion
+) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/broker/position/exit`,
+      exitPostionData
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      console.error("Exit Postion:", error.response?.data);
+      alert(error.response?.data.detail);
+    } else {
+      console.error("Unexpected exit position error:", error);
+    }
+    return null;
+  }
+};
+
+export const exitAllPostions = async (
+  exitPostionData: ExitPostion[]
+) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/broker/position/exitall`,
+      exitPostionData
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      console.error("Exit Postion:", error.response?.data);
+      alert(error.response?.data.detail);
+    } else {
+      console.error("Unexpected exit position error:", error);
     }
     return null;
   }

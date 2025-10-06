@@ -36,6 +36,27 @@ export interface SubBrokerInfo {
   balance?: number;
 }
 
+export interface SubBroker {
+  id: string;
+  user_id: string;
+  user_broker_id: string;
+  sub_account_id: string;
+  nickname: string;
+  sub_account_name: string;
+  type: string;
+  account_type: string;
+  last_sync: Date;
+  is_demo: boolean;
+  status: boolean;
+  is_active: boolean;
+}
+
+export interface SubBrokerSummary {
+  id: string;
+  nickname: string;
+  sub_account_name: string;
+}
+
 export interface SubBrokerFilter {
   id?: string;
   user_id?: string;
@@ -77,6 +98,7 @@ export interface TradovatePositionListResponse {
   boughtValue: number;
   sold: number;
   soldValue: number;
+  accountDisplayName: string;
 }
 
 export interface TradovateOrderListResponse {
@@ -92,6 +114,7 @@ export interface TradovateOrderListResponse {
   external: boolean;
   admin: boolean;
   symbol: string;
+  accountDisplayName: string;
 }
 
 export interface TradovateProductItemResponse {
@@ -147,4 +170,14 @@ export interface TradovateAccountsResponse {
   weekRealizedPnL: number;
   archived: boolean;
   amountSOD: number;
+  accountDisplayName: string;
+}
+
+export interface ExitPostion {
+  accountId: number;
+  action: string;
+  symbol: string;
+  orderQty: number;
+  orderType: string;
+  isAutomated: boolean;
 }
