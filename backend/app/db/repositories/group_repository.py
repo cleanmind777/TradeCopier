@@ -30,19 +30,29 @@ def user_create_group(
     user_add_broker_to_group(db, group_add_broker)
     db_groups = db.query(Group).filter(Group.user_id==group_create.user_id).all()
     groups_summary : list[GroupInfo] = []
+    print("1")
     for group in db_groups:
+        print("2")
         sub_brokers = db.query(GroupBroker).filter(GroupBroker.group_id==group.id).all()
+        print("3")
         response_brokers = []
+        print("4")
         for sub_broker in sub_brokers:
+            print("5")
             response_broker = db.query(SubBrokerAccount).filter(SubBrokerAccount.id==sub_broker.sub_broker_id).first()
+            print('6')
             response_brokers.append(response_broker)
+            print('7')
+        print('8')
         group_summary = GroupInfo (
             id=group.id,
             name=group.name,
             qty=group.qty,
             sub_brokers=response_brokers
         )
+        print('9')
         groups_summary.append(group_summary)
+        print('10')
     return groups_summary
 
 def user_edit_group(
