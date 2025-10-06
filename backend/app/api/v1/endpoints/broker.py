@@ -66,6 +66,14 @@ async def exit_Position(exit_position_data: ExitPosition, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Positions not found")
     return response
 
+@router.post("/position/exitall", status_code=status.HTTP_200_OK)
+async def exit_Position(exit_positions_data: list[ExitPosition], db: Session = Depends(get_db)):
+    for exit_position_data in exit_positions_data:
+        response = exit_position(db, exit_position_data)
+    if response is None:
+        raise HTTPException(status_code=404, detail="Positions not found")
+    return True
+
 @router.get("/orders", status_code=status.HTTP_200_OK)
 async def get_Orders(user_id: UUID, db: Session = Depends(get_db)):
     response = await get_orders(db, user_id)
