@@ -235,3 +235,23 @@ export const exitPostion = async (
     return null;
   }
 };
+
+export const exitAllPostions = async (
+  exitPostionData: ExitPostion[]
+) => {
+  try {
+    const response = await axios.post(
+      `${API_BASE}/broker/position/exitall`,
+      exitPostionData
+    );
+    return response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      console.error("Exit Postion:", error.response?.data);
+      alert(error.response?.data.detail);
+    } else {
+      console.error("Unexpected exit position error:", error);
+    }
+    return null;
+  }
+};

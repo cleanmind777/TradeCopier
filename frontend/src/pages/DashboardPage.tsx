@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, act } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -24,6 +24,7 @@ import {
   getOrders,
   getAccounts,
   exitPostion,
+  exitAllPostions
 } from "../api/brokerApi";
 
 const DashboardPage: React.FC = () => {
@@ -44,16 +45,15 @@ const DashboardPage: React.FC = () => {
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
   const fetchPositions = async () => {
-      const positionData = await getPositions(user_id);
-      if (positionData != null) {
-        setPositions(positionData);
-      }
-    };
+    const positionData = await getPositions(user_id);
+    if (positionData != null) {
+      setPositions(positionData);
+    }
+  };
   useEffect(() => {
-    
     fetchPositions();
   }, [user_id]);
-  useEffect(()=>{}, [positions])
+  useEffect(() => {}, [positions]);
   useEffect(() => {
     const fetchOrders = async () => {
       const orderData = await getOrders(user_id);
@@ -106,49 +106,60 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  const handleFlattenAccount = async (accountId: number) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      // TODO: Replace with actual API call
-      console.log("Flattening account:", accountId);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      setPositions((prev) => prev.filter((p) => p.accountId !== accountId));
-    } catch (err) {
-      setError("Failed to flatten account");
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // const handleFlattenAccount = async (accountId: number) => {
+  //   try {
+  //     setIsLoading(true);
+  //     setError(null);
+  //     // TODO: Replace with actual API call
+  //     console.log("Flattening account:", accountId);
+  //     await new Promise((resolve) => setTimeout(resolve, 500));
+  //     setPositions((prev) => prev.filter((p) => p.accountId !== accountId));
+  //   } catch (err) {
+  //     setError("Failed to flatten account");
+  //     console.error(err);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
-  const handleExitAll = async (accountId: number) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      // TODO: Replace with actual API call
-      console.log("Exiting all positions for account:", accountId);
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      setPositions((prev) => prev.filter((p) => p.accountId !== accountId));
-    } catch (err) {
-      setError("Failed to exit all positions");
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // const handleExitAll = async (accountId: number) => {
+  //   try {
+  //     setIsLoading(true);
+  //     setError(null);
+  //     // TODO: Replace with actual API call
+  //     console.log("Exiting all positions for account:", accountId);
+  //     await new Promise((resolve) => setTimeout(resolve, 500));
+  //     setPositions((prev) => prev.filter((p) => p.accountId !== accountId));
+  //   } catch (err) {
+  //     setError("Failed to exit all positions");
+  //     console.error(err);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
   const handleFlattenAll = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      // TODO: Replace with actual API call
-      console.log("Flattening all positions and canceling all orders");
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      setPositions([]);
-      setOrders((prev) =>
-        prev.map((order) => ({ ...order, ordStatus: "Cancelled" }))
-      );
+      let exitPostions: ExitPostion[] = []
+      
+      positions.forEach((position) => {
+        let action = "Buy"
+        if (position.netPos > 0) action = "Sell";
+        const exitPostion = {
+          accountId: position.accountId,
+          action: action,
+          symbol: position.symbol,
+          orderQty: Math.abs(position.netPos),
+          orderType: "Market",
+          isAutomated: true
+        }
+        exitPostions.push(exitPostion)
+      });
+      exitAllPostions(exitPostions)
+      fetchPositions()
+      
     } catch (err) {
       setError("Failed to flatten all positions and orders");
       console.error(err);
@@ -439,9 +450,9 @@ const DashboardPage: React.FC = () => {
                           <TableHead className="font-semibold text-right">
                             Week P&L
                           </TableHead>
-                          <TableHead className="font-semibold text-right">
+                          {/* <TableHead className="font-semibold text-right">
                             Actions
-                          </TableHead>
+                          </TableHead> */}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -480,7 +491,7 @@ const DashboardPage: React.FC = () => {
                             >
                               ${account.weekRealizedPnL.toFixed(2)}
                             </TableCell>
-                            <TableCell className="text-right">
+                            {/* <TableCell className="text-right">
                               <div className="flex justify-end space-x-2">
                                 <Button
                                   variant="outline"
@@ -503,7 +514,7 @@ const DashboardPage: React.FC = () => {
                                   Exit All
                                 </Button>
                               </div>
-                            </TableCell>
+                            </TableCell> */}
                           </TableRow>
                         ))}
                       </TableBody>
