@@ -67,9 +67,7 @@ function App() {
           <Route
             path="/group"
             element={
-              <AdminProtectedRoute>
                 <GroupPage />
-              </AdminProtectedRoute>
             }
           />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

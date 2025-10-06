@@ -30,9 +30,11 @@ const GroupPage: React.FC = () => {
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupQuantity, setNewGroupQuantity] = useState(1);
   const [editGroupData, setEditGroupData] = useState<GroupInfo | null>(null);
-  const [availableBrokers, setAvailableBrokers] = useState<SubBrokerSummary[]>([]);
+  const [availableBrokers, setAvailableBrokers] = useState<SubBrokerSummary[]>(
+    []
+  );
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
-  
+
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
 
@@ -40,6 +42,8 @@ const GroupPage: React.FC = () => {
     const brokers = await getSubBrokersForGroup(user_id);
     if (brokers) {
       setAvailableBrokers(brokers);
+    } else {
+      alert("You don't have Trading Account, Plz connect!");
     }
   };
 
@@ -108,9 +112,15 @@ const GroupPage: React.FC = () => {
         <main className="flex-1 p-8 space-y-8">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold">Groups</h1>
-            <Button onClick={() => setIsCreateModalOpen(true)}>
-              Create Group
-            </Button>
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl font-bold">Groups</h1>
+              <Button
+                onClick={() => setIsCreateModalOpen(true)}
+                disabled={!availableBrokers || availableBrokers.length === 0}
+              >
+                Create Group
+              </Button>
+            </div>
           </div>
 
           {/* Groups Grid */}
@@ -276,7 +286,9 @@ const GroupPage: React.FC = () => {
                         <input
                           type="checkbox"
                           id={`edit-${broker}`}
-                          checked={editGroupData.sub_brokers.some(b => b.id === broker.id)}
+                          checked={editGroupData.sub_brokers.some(
+                            (b) => b.id === broker.id
+                          )}
                           onChange={(e) => {
                             const updatedBrokers = e.target.checked
                               ? [...editGroupData.sub_brokers, broker]
@@ -300,7 +312,8 @@ const GroupPage: React.FC = () => {
                 <Button
                   onClick={handleUpdateGroup}
                   disabled={
-                    !editGroupData.name || editGroupData.sub_brokers.length === 0
+                    !editGroupData.name ||
+                    editGroupData.sub_brokers.length === 0
                   }
                   className="w-full"
                 >
