@@ -338,7 +338,6 @@ async def get_sub_brokers_for_group(
 
 
 def exit_position(db: Session, exit_position_data: ExitPosition):
-    print("2222222222222222222222222")
     db_sub_broker = (
         db.query(SubBrokerAccount)
         .filter(SubBrokerAccount.sub_account_id == str(exit_position_data.accountId))
