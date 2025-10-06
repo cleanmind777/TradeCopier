@@ -110,8 +110,7 @@ const GroupPage: React.FC = () => {
       <div className="flex-1 flex flex-col">
         <Header />
         <main className="flex-1 p-8 space-y-8">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Groups</h1>
+          
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-2xl font-bold">Groups</h1>
               <Button
@@ -121,7 +120,6 @@ const GroupPage: React.FC = () => {
                 Create Group
               </Button>
             </div>
-          </div>
 
           {/* Groups Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
