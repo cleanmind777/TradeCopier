@@ -179,7 +179,7 @@ const GroupPage: React.FC = () => {
             isOpen={isDetailsModalOpen}
             onClose={() => setIsDetailsModalOpen(false)}
             title={"Group Details"}
-            className="max-w-2xl"
+            className="max-w-2xl w-[550px]"
           >
             {selectedGroup && (
               <div className="space-y-6">
