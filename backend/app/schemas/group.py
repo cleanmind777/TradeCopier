@@ -3,19 +3,18 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
 import json
-from app.schemas.broker import SubBrokerSumary
+from app.schemas.broker import SubBrokerSumary, SubBrokersWithQty
 
 class GroupCreate(BaseModel):
     user_id: UUID
     name: str
-    qty: int
-    sub_brokers: list[UUID]
+    sub_brokers: list[SubBrokersWithQty]
 
 class GroupEdit(BaseModel):
     id: UUID
     name: str
     qty: int
-    sub_brokers: list[UUID]
+    sub_brokers: list[SubBrokersWithQty]
 
 class GroupInfo(BaseModel):
     id: UUID
@@ -29,7 +28,7 @@ class GroupNameChange(BaseModel):
 
 class GroupAddBroker(BaseModel):
     group_id: UUID
-    sub_brokers: list[UUID]
+    sub_brokers: list[SubBrokersWithQty]
 
 class GroupSetQTY (BaseModel):
     group_id: UUID

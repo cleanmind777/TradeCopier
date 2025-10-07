@@ -41,12 +41,6 @@ def change_Group_name(change_name: GroupNameChange, db: Session = Depends(get_db
 def add_Broker_to_group(group_add_broker: GroupAddBroker, db: Session = Depends(get_db)):
     return add_broker_to_group(db, group_add_broker)
 
-@router.post(
-    "/set-qty", status_code=status.HTTP_201_CREATED
-)
-def set_Qty_to_group(group_set_qty: GroupSetQTY, db: Session = Depends(get_db)):
-    return set_qty_to_group(db, group_set_qty)
-
 @router.delete(
     "/delete", status_code=status.HTTP_201_CREATED
 )

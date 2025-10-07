@@ -25,6 +25,5 @@ class Group(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    qty = Column(Integer, nullable=False, default=0)
 
     user = relationship("User", back_populates="groups")
