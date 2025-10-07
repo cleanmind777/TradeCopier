@@ -45,12 +45,13 @@ CREATE TABLE groups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
     name VARCHAR NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    qty INTEGER NOT NULL DEFAULT 0
-)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    
+);
 
 CREATE TABLE groups_brokers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     group_id UUID NOT NULL,
-    sub_broker_id UUID NOT NULL
-)
+    sub_broker_id UUID NOT NULL,
+    qty INTEGER NOT NULL DEFAULT 0
+);
