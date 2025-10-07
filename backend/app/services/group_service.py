@@ -16,7 +16,6 @@ from app.db.repositories.group_repository import (
     user_create_group,
     user_change_group_name,
     user_add_broker_to_group,
-    user_set_qty_to_group,
     user_del_group,
     user_edit_group,
     user_get_group
