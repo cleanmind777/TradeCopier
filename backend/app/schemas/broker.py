@@ -107,7 +107,7 @@ class SubBrokerSumary(BaseModel):
     sub_account_name: str
     qty: int
 
-class SubBrokerSumaryForGet(BaseModel):
+class SubBrokerSummaryForGet(BaseModel):
     id: UUID
     nickname: str
     sub_account_name: str
