@@ -58,6 +58,12 @@ export interface SubBrokerSummary {
   qty: number;
 }
 
+export interface SubBrokerSummaryForGet {
+  id: string;
+  nickname: string;
+  sub_account_name: string;
+}
+
 export interface SubBrokerFilter {
   id?: string;
   user_id?: string;

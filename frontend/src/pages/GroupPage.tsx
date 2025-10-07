@@ -15,7 +15,7 @@ import {
 import { Trash2 } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
-import { SubBrokerForCreate, SubBrokerSummary } from "../types/broker";
+import { SubBrokerForCreate,SubBrokerSummaryForGet, SubBrokerSummary } from "../types/broker";
 import { getSubBrokers, getSubBrokersForGroup } from "../api/brokerApi";
 import { GroupCreate, GroupInfo } from "../types/group";
 import { createGroup, editGroup, deleteGroup, getGroup } from "../api/groupApi";
@@ -28,7 +28,7 @@ const GroupPage: React.FC = () => {
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [editGroupData, setEditGroupData] = useState<GroupInfo | null>(null);
-  const [availableBrokers, setAvailableBrokers] = useState<SubBrokerSummary[]>([]);
+  const [availableBrokers, setAvailableBrokers] = useState<SubBrokerSummaryForGet[]>([]);
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
   const [brokerQuantities, setBrokerQuantities] = useState<{ [key: string]: number }>({});
 

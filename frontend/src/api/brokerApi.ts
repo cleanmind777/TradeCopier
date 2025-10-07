@@ -15,6 +15,7 @@ import {
   TradovateProductItemResponse,
   TradovateAccountsResponse,
   SubBrokerSummary,
+  SubBrokerSummaryForGet,
   ExitPostion
 } from "../types/broker";
 
@@ -197,7 +198,7 @@ export const getAccounts = async (
 
 export const getSubBrokersForGroup = async (
   user_id: string
-): Promise<SubBrokerSummary[] | null> => {
+): Promise<SubBrokerSummaryForGet[] | null> => {
   try {
     const params = { user_id };
     const response = await axios.get(
