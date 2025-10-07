@@ -39,10 +39,10 @@ def user_get_group(db: Session, user_id: UUID) -> list[GroupInfo]:
             response_broker["id"] = db_sub_broker.id
             response_broker["nickname"] = db_sub_broker.nickname
             response_broker["sub_account_name"] = db_sub_broker.sub_account_name
-            response_brokers['qty'] = db_sub_broker.qty
+            response_brokers['qty'] = sub_broker.qty
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, qty=group.qty, sub_brokers=response_brokers
+            id=group.id, name=group.name, sub_brokers=response_brokers
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -77,10 +77,10 @@ def user_create_group(db: Session, group_create: GroupCreate) -> list[GroupInfo]
             response_broker["id"] = db_sub_broker.id
             response_broker["nickname"] = db_sub_broker.nickname
             response_broker["sub_account_name"] = db_sub_broker.sub_account_name
-            response_broker["qty"] = db_sub_broker.qty
+            response_broker["qty"] = sub_broker.qty
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, qty=group.qty, sub_brokers=response_brokers
+            id=group.id, name=group.name, sub_brokers=response_brokers
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -130,10 +130,10 @@ def user_edit_group(db: Session, group_edit: GroupEdit):
             response_broker["id"] = db_sub_broker.id
             response_broker["nickname"] = db_sub_broker.nickname
             response_broker["sub_account_name"] = db_sub_broker.sub_account_name
-            response_broker['qty'] = db_sub_broker.qty
+            response_broker['qty'] = sub_broker.qty
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, qty=group.qty, sub_brokers=response_brokers
+            id=group.id, name=group.name, sub_brokers=response_brokers
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -206,10 +206,10 @@ def user_del_group(db: Session, group_id: UUID):
             response_broker["id"] = db_sub_broker.id
             response_broker["nickname"] = db_sub_broker.nickname
             response_broker["sub_account_name"] = db_sub_broker.sub_account_name
-            response_broker['qty'] = db_sub_broker.qty
+            response_broker['qty'] = sub_broker.qty
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, qty=group.qty, sub_brokers=response_brokers
+            id=group.id, name=group.name, sub_brokers=response_brokers
         )
         groups_summary.append(group_summary)
     return groups_summary
