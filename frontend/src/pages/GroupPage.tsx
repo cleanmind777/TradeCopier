@@ -319,15 +319,15 @@ const GroupPage: React.FC = () => {
                   {availableBrokers.map((broker) => (
                     <div
                       key={broker.id}
-                      className={`p-3 rounded-md border cursor-pointer transition-colors ${
+                      className={`p-3 rounded-md border ${
                         selectedBrokers.includes(broker.id)
                           ? "bg-blue-50 border-blue-200"
-                          : "hover:bg-gray-50"
+                          : "bg-white border-gray-200"
                       }`}
                     >
                       <div className="flex items-center">
                         <div
-                          className={`w-4 h-4 rounded-sm border mr-3 flex items-center justify-center ${
+                          className={`w-4 h-4 rounded-sm border mr-3 flex items-center justify-center cursor-pointer ${
                             selectedBrokers.includes(broker.id)
                               ? "bg-blue-500 border-blue-500"
                               : "bg-white border-gray-300"
@@ -455,20 +455,20 @@ const GroupPage: React.FC = () => {
                       return (
                         <div
                           key={broker.id}
-                          className={`p-3 rounded-md border cursor-pointer transition-colors ${
+                          className={`p-3 rounded-md border ${
                             isSelected
                               ? "bg-blue-50 border-blue-200"
-                              : "hover:bg-gray-50"
+                              : "bg-white border-gray-200"
                           }`}
-                          onClick={() => handleBrokerSelection(broker)}
                         >
                           <div className="flex items-center">
                             <div
-                              className={`w-4 h-4 rounded-sm border mr-3 flex items-center justify-center ${
+                              className={`w-4 h-4 rounded-sm border mr-3 flex items-center justify-center cursor-pointer ${
                                 isSelected
                                   ? "bg-blue-500 border-blue-500"
                                   : "bg-white border-gray-300"
                               }`}
+                              onClick={() => handleBrokerSelection(broker)}
                             >
                               {isSelected && (
                                 <svg
