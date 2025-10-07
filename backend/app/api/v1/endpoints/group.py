@@ -5,7 +5,7 @@ from datetime import timedelta
 from uuid import UUID
 from app.dependencies.database import get_db
 from app.core.config import settings
-from app.schemas.group import GroupAddBroker, GroupCreate, GroupNameChange, GroupSetQTY, GroupEdit
+from app.schemas.group import GroupAddBroker, GroupCreate, GroupNameChange, GroupEdit
 from app.services.group_service import create_group, change_group_name, add_broker_to_group, del_group, edit_group, get_group
 
 router = APIRouter()

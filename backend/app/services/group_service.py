@@ -8,7 +8,6 @@ from app.schemas.group import (
     GroupCreate,
     GroupNameChange,
     GroupAddBroker,
-    GroupSetQTY,
     GroupEdit,
     GroupInfo
 )
