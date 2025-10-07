@@ -38,7 +38,7 @@ def user_get_group(db: Session, user_id: UUID) -> list[GroupInfo]:
             response_broker["id"] = db_sub_broker.id
             response_broker["nickname"] = db_sub_broker.nickname
             response_broker["sub_account_name"] = db_sub_broker.sub_account_name
-            response_brokers['qty'] = sub_broker.qty
+            response_broker['qty'] = sub_broker.qty
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
             id=group.id, name=group.name, sub_brokers=response_brokers
