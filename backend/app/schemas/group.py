@@ -13,13 +13,11 @@ class GroupCreate(BaseModel):
 class GroupEdit(BaseModel):
     id: UUID
     name: str
-    qty: int
     sub_brokers: list[SubBrokersWithQty]
 
 class GroupInfo(BaseModel):
     id: UUID
     name: str
-    qty: int
     sub_brokers: list[SubBrokerSumary]
 
 class GroupNameChange(BaseModel):
@@ -30,6 +28,3 @@ class GroupAddBroker(BaseModel):
     group_id: UUID
     sub_brokers: list[SubBrokersWithQty]
 
-class GroupSetQTY (BaseModel):
-    group_id: UUID
-    qty: int
