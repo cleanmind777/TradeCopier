@@ -24,6 +24,7 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
+    avatar = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
     admin_role = Column(Boolean, default=False)
     is_accepted = Column(Boolean, default=False)

@@ -2,6 +2,7 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR NOT NULL UNIQUE,
     name VARCHAR NOT NULL,
+    avatar VARCHAR DEFAULT https://3imk3zxook.ucarecd.net/04300285-b692-497a-8162-ccda61694037/6b4e6a8aa55a4b54ad68d17d8225f9c4.jpg,
     admin_role BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     is_verified BOOLEAN DEFAULT FALSE,
