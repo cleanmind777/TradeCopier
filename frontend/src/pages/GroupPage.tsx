@@ -31,6 +31,7 @@ const GroupPage: React.FC = () => {
   const [availableBrokers, setAvailableBrokers] = useState<SubBrokerSummaryForGet[]>([]);
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
   const [brokerQuantities, setBrokerQuantities] = useState<{ [key: string]: number }>({});
+  const [allSelected, setAllSelected] = useState(false);
 
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
@@ -92,6 +93,7 @@ const GroupPage: React.FC = () => {
   const handleEditClick = (group: GroupInfo) => {
     setEditGroupData(group);
     setIsEditModalOpen(true);
+    setAllSelected(group.sub_brokers.length === availableBrokers.length);
   };
 
   const handleDeleteGroup = async (groupID: string) => {
@@ -101,6 +103,54 @@ const GroupPage: React.FC = () => {
       setSelectedGroup(null);
       setIsDetailsModalOpen(false);
     }
+  };
+
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setEditGroupData(prev => prev ? {
+        ...prev,
+        sub_brokers: []
+      } : null);
+    } else {
+      setEditGroupData(prev => prev ? {
+        ...prev,
+        sub_brokers: availableBrokers.map(broker => ({
+          id: broker.id,
+          nickname: broker.nickname,
+          sub_account_name: broker.sub_account_name,
+          qty: 1
+        }))
+      } : null);
+    }
+    setAllSelected(!allSelected);
+  };
+
+  const handleBrokerSelection = (broker: SubBrokerSummaryForGet) => {
+    setEditGroupData(prev => {
+      if (!prev) return null;
+      
+      const isSelected = prev.sub_brokers.some(b => b.id === broker.id);
+      
+      if (isSelected) {
+        return {
+          ...prev,
+          sub_brokers: prev.sub_brokers.filter(b => b.id !== broker.id)
+        };
+      } else {
+        return {
+          ...prev,
+          sub_brokers: [
+            ...prev.sub_brokers,
+            {
+              id: broker.id,
+              nickname: broker.nickname,
+              sub_account_name: broker.sub_account_name,
+              qty: 1
+            }
+          ]
+        };
+      }
+    });
   };
 
   return (
@@ -385,46 +435,94 @@ const GroupPage: React.FC = () => {
                 </div>
 
                 <div className="border rounded-lg p-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    Sub Brokers and Quantities
-                  </label>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Sub Brokers and Quantities
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={handleSelectAll}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">Select All</span>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-2">
-                    {editGroupData.sub_brokers.map((broker) => (
-                      <div
-                        key={broker.id}
-                        className="p-3 rounded-md border bg-blue-50 border-blue-200"
-                      >
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">
-                            {broker.nickname}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {broker.sub_account_name}
-                          </p>
-                          <div className="mt-2">
-                            <Input
-                              type="number"
-                              label="Quantity"
-                              value={broker.qty || 1}
-                              onChange={(e) => {
-                                const updatedBrokers = editGroupData.sub_brokers.map(b => 
-                                  b.id === broker.id 
-                                    ? {...b, qty: parseInt(e.target.value) || 1} 
-                                    : b
-                                );
-                                setEditGroupData({
-                                  ...editGroupData,
-                                  sub_brokers: updatedBrokers
-                                });
-                              }}
-                              min="1"
-                              className="w-full"
-                              required
-                            />
+                    {availableBrokers.map((broker) => {
+                      const isSelected = editGroupData.sub_brokers.some(b => b.id === broker.id);
+                      return (
+                        <div
+                          key={broker.id}
+                          className={`p-3 rounded-md border cursor-pointer transition-colors ${
+                            isSelected
+                              ? "bg-blue-50 border-blue-200"
+                              : "hover:bg-gray-50"
+                          }`}
+                          onClick={() => handleBrokerSelection(broker)}
+                        >
+                          <div className="flex items-center">
+                            <div
+                              className={`w-4 h-4 rounded-sm border mr-3 flex items-center justify-center ${
+                                isSelected
+                                  ? "bg-blue-500 border-blue-500"
+                                  : "bg-white border-gray-300"
+                              }`}
+                            >
+                              {isSelected && (
+                                <svg
+                                  className="w-3 h-3 text-white"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">
+                                {broker.nickname}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {broker.sub_account_name}
+                              </p>
+                              {isSelected && (
+                                <div className="mt-2">
+                                  <Input
+                                    type="number"
+                                    label="Quantity"
+                                    value={
+                                      editGroupData.sub_brokers.find(b => b.id === broker.id)?.qty || 1
+                                    }
+                                    onChange={(e) => {
+                                      const updatedBrokers = editGroupData.sub_brokers.map(b => 
+                                        b.id === broker.id 
+                                          ? {...b, qty: parseInt(e.target.value) || 1} 
+                                          : b
+                                      );
+                                      setEditGroupData({
+                                        ...editGroupData,
+                                        sub_brokers: updatedBrokers
+                                      });
+                                    }}
+                                    min="1"
+                                    className="w-full"
+                                    required
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
