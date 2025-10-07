@@ -26,6 +26,7 @@ app = FastAPI(title="My FastAPI App")
 # CORS origins
 origins = [
     "http://localhost:5173",
+    "http://localhost:5175",
     "http://tc.streetagent.ai",
     "http://dev.tc.streetagent.ai",
     "https://tc.streetagent.ai",
