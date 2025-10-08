@@ -256,7 +256,7 @@ def place_order(access_token: str, is_demo: bool, order: ExitPosition):
 
 async def get_order_version_depends(
     id: int, access_token: str, is_demo: bool
-) -> TradovateContractItemResponse:
+):
     headers = {
         "Authorization": f"Bearer {access_token}",
     }
