@@ -39,7 +39,6 @@ const GroupPage: React.FC = () => {
   const [brokerQuantities, setBrokerQuantities] = useState<{
     [key: string]: number;
   }>({});
-  const [allSelected, setAllSelected] = useState(false);
 
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
@@ -105,7 +104,6 @@ const GroupPage: React.FC = () => {
   const handleEditClick = (group: GroupInfo) => {
     setEditGroupData(group);
     setIsEditModalOpen(true);
-    setAllSelected(group.sub_brokers.length === availableBrokers.length);
   };
 
   const handleDeleteGroup = async (groupID: string) => {
@@ -118,7 +116,7 @@ const GroupPage: React.FC = () => {
   };
 
   const handleSelectAllCreate = () => {
-    if (selectedBrokers.length === availableBrokers.length) {
+    if (selectedBrokers.length > 0) {
       setSelectedBrokers([]);
       setBrokerQuantities({});
     } else {
@@ -134,31 +132,23 @@ const GroupPage: React.FC = () => {
   };
 
   const handleSelectAll = () => {
-    if (allSelected) {
+    if (editGroupData?.sub_brokers.length) {
       setEditGroupData((prev) =>
-        prev
-          ? {
-              ...prev,
-              sub_brokers: [],
-            }
-          : null
+        prev ? { ...prev, sub_brokers: [] } : null
       );
     } else {
       setEditGroupData((prev) =>
-        prev
-          ? {
-              ...prev,
-              sub_brokers: availableBrokers.map((broker) => ({
-                id: broker.id,
-                nickname: broker.nickname,
-                sub_account_name: broker.sub_account_name,
-                qty: 1,
-              })),
-            }
-          : null
+        prev ? {
+          ...prev,
+          sub_brokers: availableBrokers.map((broker) => ({
+            id: broker.id,
+            nickname: broker.nickname,
+            sub_account_name: broker.sub_account_name,
+            qty: 1,
+          })),
+        } : null
       );
     }
-    setAllSelected(!allSelected);
   };
 
   const handleBrokerSelection = (broker: SubBrokerSummaryForGet) => {
@@ -188,6 +178,9 @@ const GroupPage: React.FC = () => {
       }
     });
   };
+
+  // Helper function to determine if all brokers are selected (for edit modal)
+  const allBrokersSelected = editGroupData?.sub_brokers.length === availableBrokers.length;
 
   return (
     <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
@@ -360,15 +353,14 @@ const GroupPage: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700">
                     Select Sub Brokers and Set Quantities
                   </label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedBrokers.length === availableBrokers.length}
-                      onChange={handleSelectAllCreate}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">Select All</span>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSelectAllCreate}
+                    className="text-blue-600 hover:bg-blue-50"
+                  >
+                    {selectedBrokers.length > 0 ? 'Deselect All' : 'Select All'}
+                  </Button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-2">
                   {availableBrokers.map((broker) => (
@@ -497,15 +489,14 @@ const GroupPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700">
                       Sub Brokers and Quantities
                     </label>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">Select All</span>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSelectAll}
+                      className="text-blue-600 hover:bg-blue-50"
+                    >
+                      {editGroupData.sub_brokers.length > 0 ? 'Deselect All' : 'Select All'}
+                    </Button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-2">
                     {availableBrokers.map((broker) => {
