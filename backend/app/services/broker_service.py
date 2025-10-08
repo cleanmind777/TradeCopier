@@ -272,6 +272,10 @@ async def get_orders(db: Session, user_id: UUID):
                 order_version = await get_order_version_depends(
                     order['id'], db_broker_account.access_token, is_demo=True
                 )
+                if order_version is not None:
+                    price = order_version.get('price', 0)
+                else:
+                    price = 0
                 o = TradovateOrderForFrontend(
                     id=order["id"],
                     accountId=order["accountId"],
@@ -280,7 +284,7 @@ async def get_orders(db: Session, user_id: UUID):
                         if db_sub_broker_account
                         else None
                     ),
-                    price = order_version.get('price', 0),
+                    price = price,
                     contractId=order["contractId"],
                     timestamp=order["timestamp"],
                     action=order["action"],
