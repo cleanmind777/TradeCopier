@@ -117,6 +117,22 @@ const GroupPage: React.FC = () => {
     }
   };
 
+  const handleSelectAllCreate = () => {
+    if (selectedBrokers.length === availableBrokers.length) {
+      setSelectedBrokers([]);
+      setBrokerQuantities({});
+    } else {
+      const allBrokerIds = availableBrokers.map(broker => broker.id);
+      const initialQuantities = availableBrokers.reduce((acc, broker) => {
+        acc[broker.id] = 1;
+        return acc;
+      }, {} as { [key: string]: number });
+      
+      setSelectedBrokers(allBrokerIds);
+      setBrokerQuantities(initialQuantities);
+    }
+  };
+
   const handleSelectAll = () => {
     if (allSelected) {
       setEditGroupData((prev) =>
@@ -340,9 +356,20 @@ const GroupPage: React.FC = () => {
               </div>
 
               <div className="border rounded-lg p-4">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Select Sub Brokers and Set Quantities
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Select Sub Brokers and Set Quantities
+                  </label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedBrokers.length === availableBrokers.length}
+                      onChange={handleSelectAllCreate}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">Select All</span>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-2">
                   {availableBrokers.map((broker) => (
                     <div
