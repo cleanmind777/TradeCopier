@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, act } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -12,7 +12,7 @@ import {
   TableBody,
   TableCell,
 } from "../components/ui/Table";
-import { Trash2, Activity, Package, CreditCard, ArrowUpDown } from "lucide-react";
+import { Trash2, Activity, Package, CreditCard } from "lucide-react";
 import {
   ExitPostion,
   TradovateAccountsResponse,
@@ -27,50 +27,33 @@ import {
   exitAllPostions
 } from "../api/brokerApi";
 
-type SortConfig = {
-  key: string;
-  direction: 'asc' | 'desc';
-};
-
 const DashboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
     "positions" | "orders" | "accounts"
   >("positions");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
-  const [orders, setOrders] = useState<TradovateOrderListResponse[]>([]);
-  const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
-  const [sortConfig, setSortConfig] = useState<SortConfig>({
-    key: '',
-    direction: 'asc',
-  });
 
+  // Mock data - replace with real API calls
+  const [positions, setPositions] = useState<TradovatePositionListResponse[]>(
+    []
+  );
+
+  const [orders, setOrders] = useState<TradovateOrderListResponse[]>([]);
+
+  const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
-
-  const sortData = (data: any[], key: string) => {
-    const direction = sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc';
-    setSortConfig({ key, direction });
-
-    return [...data].sort((a, b) => {
-      if (a[key] < b[key]) return direction === 'asc' ? -1 : 1;
-      if (a[key] > b[key]) return direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  };
-
   const fetchPositions = async () => {
     const positionData = await getPositions(user_id);
     if (positionData != null) {
       setPositions(positionData);
     }
   };
-
   useEffect(() => {
     fetchPositions();
   }, [user_id]);
-
+  useEffect(() => {}, [positions]);
   useEffect(() => {
     const fetchOrders = async () => {
       const orderData = await getOrders(user_id);
@@ -99,6 +82,7 @@ const DashboardPage: React.FC = () => {
     try {
       setIsLoading(true);
       setError(null);
+      // TODO: Replace with actual API call
       let action = "Buy";
       if (netPos > 0) {
         action = "Sell";
@@ -108,7 +92,7 @@ const DashboardPage: React.FC = () => {
         accountId: accountId,
         action: action,
         symbol: symbol,
-        orderQty: Math.abs(netPos),
+        orderQty: Math.abs(netPos), // absolute value of netPos
         orderType: "Market",
         isAutomated: true,
       };
@@ -121,6 +105,38 @@ const DashboardPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // const handleFlattenAccount = async (accountId: number) => {
+  //   try {
+  //     setIsLoading(true);
+  //     setError(null);
+  //     // TODO: Replace with actual API call
+  //     console.log("Flattening account:", accountId);
+  //     await new Promise((resolve) => setTimeout(resolve, 500));
+  //     setPositions((prev) => prev.filter((p) => p.accountId !== accountId));
+  //   } catch (err) {
+  //     setError("Failed to flatten account");
+  //     console.error(err);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  // const handleExitAll = async (accountId: number) => {
+  //   try {
+  //     setIsLoading(true);
+  //     setError(null);
+  //     // TODO: Replace with actual API call
+  //     console.log("Exiting all positions for account:", accountId);
+  //     await new Promise((resolve) => setTimeout(resolve, 500));
+  //     setPositions((prev) => prev.filter((p) => p.accountId !== accountId));
+  //   } catch (err) {
+  //     setError("Failed to exit all positions");
+  //     console.error(err);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
   const handleFlattenAll = async () => {
     try {
@@ -158,6 +174,7 @@ const DashboardPage: React.FC = () => {
       <div className="flex-1 flex flex-col">
         <Header />
         <main className="flex-1 p-8 space-y-8">
+          {/* Global Action Button */}
           <div className="flex justify-end">
             <Button
               variant="primary"
@@ -170,6 +187,7 @@ const DashboardPage: React.FC = () => {
             </Button>
           </div>
 
+          {/* Error Message */}
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg relative shadow-sm">
               <span className="block sm:inline">{error}</span>
@@ -183,6 +201,7 @@ const DashboardPage: React.FC = () => {
             </div>
           )}
 
+          {/* Tabs Navigation */}
           <div className="flex border-b border-slate-200 bg-white rounded-lg p-1 shadow-sm">
             <button
               onClick={() => setActiveTab("positions")}
@@ -219,12 +238,14 @@ const DashboardPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Loading State */}
           {isLoading && (
             <div className="flex justify-center items-center p-8">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
             </div>
           )}
 
+          {/* Positions Tab */}
           {!isLoading && activeTab === "positions" && (
             <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
@@ -245,47 +266,26 @@ const DashboardPage: React.FC = () => {
                     <Table>
                       <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(positions, 'accountNickname')}>
-                            <div className="flex items-center">
-                              Account
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Account
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(positions, 'accountDisplayName')}>
-                            <div className="flex items-center">
-                              Display Name
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Display Name
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(positions, 'symbol')}>
-                            <div className="flex items-center">
-                              Symbol
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Symbol
                           </TableHead>
-                          <TableHead className="font-semibold text-right cursor-pointer" onClick={() => sortData(positions, 'netPos')}>
-                            <div className="flex items-center justify-end">
-                              Net Position
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold text-right">
+                            Net Position
                           </TableHead>
-                          <TableHead className="font-semibold text-right cursor-pointer" onClick={() => sortData(positions, 'netPrice')}>
-                            <div className="flex items-center justify-end">
-                              Net Price
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold text-right">
+                            Net Price
                           </TableHead>
-                          <TableHead className="font-semibold text-right cursor-pointer" onClick={() => sortData(positions, 'bought')}>
-                            <div className="flex items-center justify-end">
-                              Bought
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold text-right">
+                            Bought
                           </TableHead>
-                          <TableHead className="font-semibold text-right cursor-pointer" onClick={() => sortData(positions, 'sold')}>
-                            <div className="flex items-center justify-end">
-                              Sold
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold text-right">
+                            Sold
                           </TableHead>
                           <TableHead className="font-semibold text-right">
                             Actions
@@ -293,7 +293,7 @@ const DashboardPage: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortData(positions, sortConfig.key).map((position) => (
+                        {positions.map((position) => (
                           <TableRow
                             key={position.id}
                             className="hover:bg-slate-50 transition-colors"
@@ -344,6 +344,7 @@ const DashboardPage: React.FC = () => {
             </Card>
           )}
 
+          {/* Orders Tab */}
           {!isLoading && activeTab === "orders" && (
             <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
@@ -362,52 +363,31 @@ const DashboardPage: React.FC = () => {
                     <Table>
                       <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(orders, 'accountNickname')}>
-                            <div className="flex items-center">
-                              Account
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Account
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(orders, 'accountDisplayName')}>
-                            <div className="flex items-center">
-                              Display Name
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Display Name
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(orders, 'symbol')}>
-                            <div className="flex items-center">
-                              Symbol
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Symbol
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(orders, 'action')}>
-                            <div className="flex items-center">
-                              Action
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Action
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(orders, 'ordStatus')}>
-                            <div className="flex items-center">
-                              Status
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Status
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(orders, 'timestamp')}>
-                            <div className="flex items-center">
-                              Timestamp
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Timestamp
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(orders, 'price')}>
-                            <div className="flex items-center">
-                              Price
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Price
                           </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortData(orders, sortConfig.key).map((order) => (
+                        {orders.map((order) => (
                           <TableRow
                             key={order.id}
                             className="hover:bg-slate-50 transition-colors"
@@ -449,6 +429,7 @@ const DashboardPage: React.FC = () => {
             </Card>
           )}
 
+          {/* Accounts Tab */}
           {!isLoading && activeTab === "accounts" && (
             <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
@@ -469,40 +450,28 @@ const DashboardPage: React.FC = () => {
                     <Table>
                       <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(accounts, 'accountNickname')}>
-                            <div className="flex items-center">
-                              Account
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Account
                           </TableHead>
-                          <TableHead className="font-semibold cursor-pointer" onClick={() => sortData(accounts, 'accountDisplayName')}>
-                            <div className="flex items-center">
-                              Display Name
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold">
+                            Display Name
                           </TableHead>
-                          <TableHead className="font-semibold text-right cursor-pointer" onClick={() => sortData(accounts, 'amount')}>
-                            <div className="flex items-center justify-end">
-                              Amount
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold text-right">
+                            Amount
                           </TableHead>
-                          <TableHead className="font-semibold text-right cursor-pointer" onClick={() => sortData(accounts, 'realizedPnL')}>
-                            <div className="flex items-center justify-end">
-                              Realized P&L
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold text-right">
+                            Realized P&L
                           </TableHead>
-                          <TableHead className="font-semibold text-right cursor-pointer" onClick={() => sortData(accounts, 'weekRealizedPnL')}>
-                            <div className="flex items-center justify-end">
-                              Week P&L
-                              <ArrowUpDown className="ml-1 h-4 w-4" />
-                            </div>
+                          <TableHead className="font-semibold text-right">
+                            Week P&L
                           </TableHead>
+                          {/* <TableHead className="font-semibold text-right">
+                            Actions
+                          </TableHead> */}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {sortData(accounts, sortConfig.key).map((account) => (
+                        {accounts.map((account) => (
                           <TableRow
                             key={account.id}
                             className="hover:bg-slate-50 transition-colors"
@@ -540,6 +509,30 @@ const DashboardPage: React.FC = () => {
                             >
                               ${account.weekRealizedPnL.toFixed(2)}
                             </TableCell>
+                            {/* <TableCell className="text-right">
+                              <div className="flex justify-end space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    handleFlattenAccount(account.id)
+                                  }
+                                  disabled={isLoading}
+                                  className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                >
+                                  Flatten
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
+                                  onClick={() => handleExitAll(account.id)}
+                                  disabled={isLoading}
+                                >
+                                  Exit All
+                                </Button>
+                              </div>
+                            </TableCell> */}
                           </TableRow>
                         ))}
                       </TableBody>
