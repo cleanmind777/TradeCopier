@@ -253,3 +253,28 @@ def place_order(access_token: str, is_demo: bool, order: ExitPosition):
     except requests.RequestException as e:
         # Log or handle request error
         return None
+
+async def get_order_version_depends(
+    id: int, access_token: str, is_demo: bool
+):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+    params = {"id": id}
+    if is_demo:
+        url = f"{TRADO_DEMO_URL}/orderVersion/item"
+    else:
+        url = f"{TRADO_LIVE_URL}/orderVersion/item"
+    response = requests.get(url, headers=headers, params=params)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print("Data: ", data)
+        except ValueError:
+            # Log error or handle malformed JSON
+            print("@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            data = None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        data = None
+    return data

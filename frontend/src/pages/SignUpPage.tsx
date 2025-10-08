@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { UserPlus } from 'lucide-react'; // changed icon
+import { UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
-import { UserCreate } from "../types/user"
+import { UserCreate } from "../types/user";
+import { Widget } from '@uploadcare/react-widget';
 
+const UPLOADCARE_KEY = import.meta.env.VITE_UPLOADCARE_KEY;
 const SignUpPage: React.FC = () => {
-  const { signUp, isAuthenticated, isLoading } = useAuth(); // using signup instead of login
+  const { signUp, isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
+
   if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -28,18 +32,26 @@ const SignUpPage: React.FC = () => {
       setIsSubmitting(false);
       return;
     }
+
     const userInfo: UserCreate = {
-      "email": email,
-      "name": name
-    }
-    const success = await signUp(userInfo); // assuming signup function exists
+      email: email,
+      name: name,
+      avatar: avatarUrl || undefined
+    };
+
+    const success = await signUp(userInfo);
     if (!success) {
       setError('Failed to sign up. Please try again.');
-    }
-    else {
+    } else {
       navigate('/login');
     }
     setIsSubmitting(false);
+  };
+
+  const handleFileUpload = (fileInfo: any) => {
+    if (fileInfo) {
+      setAvatarUrl(fileInfo.cdnUrl);
+    }
   };
 
   if (isLoading) {
@@ -63,6 +75,16 @@ const SignUpPage: React.FC = () => {
 
         <CardContent className="space-y-6">
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex justify-center">
+              <Widget
+                publicKey={UPLOADCARE_KEY} 
+                onChange={handleFileUpload}
+                crop="1:1"
+                previewStep
+                clearable
+              />
+            </div>
+
             <Input
               label="Name"
               type="text"

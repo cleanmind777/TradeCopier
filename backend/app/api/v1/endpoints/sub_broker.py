@@ -10,7 +10,8 @@ from app.schemas.broker import (
     SubBrokerFilter,
     SubBrokerInfoPlus,
     SubBrokerChange,
-    SubBrokerSumary
+    SubBrokerSumary,
+    SubBrokerSummaryForGet
 )
 from app.services.broker_service import (
     add_broker,
@@ -41,7 +42,7 @@ async def get_Sub_brokers(
 
 @router.get(
     "/get-for-group",
-    response_model=list[SubBrokerSumary] | None,
+    response_model=list[SubBrokerSummaryForGet] | None,
     status_code=status.HTTP_201_CREATED,
 )
 async def get_Sub_brokers_for_group(

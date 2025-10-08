@@ -17,6 +17,7 @@ from app.schemas.broker import (
     SubBrokerChange,
     SummarySubBrokers,
     SubBrokerSumary,
+    SubBrokerSummaryForGet,
     ExitPosition,
 )
 from app.schemas.tradovate import (
@@ -45,7 +46,8 @@ from app.utils.tradovate import (
     get_contract_maturity_item,
     get_product_item,
     get_cash_balances,
-    place_order
+    place_order,
+    get_order_version_depends
 )
 from app.db.repositories.broker_repository import (
     user_add_broker,
@@ -180,7 +182,7 @@ def del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
 async def refresh_new_token(db: Session):
     result = await db.execute(select(BrokerAccount))
     db_broker_accounts = result.scalars().all()
-    if db_broker_accounts:
+    if len(db_broker_accounts) != 0 and db_broker_accounts:
         for broker in db_broker_accounts:
             new_token = get_renew_token(broker.access_token)
             await user_refresh_token(db, broker.id, new_token)
@@ -267,6 +269,9 @@ async def get_orders(db: Session, user_id: UUID):
                 contract_item = await get_contract_item(
                     order["contractId"], db_broker_account.access_token, is_demo=True
                 )
+                order_version = await get_order_version_depends(
+                    order['id'], db_broker_account.access_token, is_demo=True
+                )
                 o = TradovateOrderForFrontend(
                     id=order["id"],
                     accountId=order["accountId"],
@@ -275,6 +280,7 @@ async def get_orders(db: Session, user_id: UUID):
                         if db_sub_broker_account
                         else None
                     ),
+                    price = order_version.get('price', 0),
                     contractId=order["contractId"],
                     timestamp=order["timestamp"],
                     action=order["action"],
@@ -333,7 +339,7 @@ async def get_accounts(db: Session, user_id: UUID):
 
 async def get_sub_brokers_for_group(
     db: Session, user_id: UUID
-) -> list[SubBrokerSumary]:
+) -> list[SubBrokerSummaryForGet]:
     db_broker_accounts = (
         db.query(SubBrokerAccount).filter(SubBrokerAccount.user_id == user_id).all()
     )

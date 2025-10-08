@@ -8,7 +8,6 @@ from app.schemas.group import (
     GroupCreate,
     GroupNameChange,
     GroupAddBroker,
-    GroupSetQTY,
     GroupEdit,
     GroupInfo
 )
@@ -16,7 +15,6 @@ from app.db.repositories.group_repository import (
     user_create_group,
     user_change_group_name,
     user_add_broker_to_group,
-    user_set_qty_to_group,
     user_del_group,
     user_edit_group,
     user_get_group
@@ -38,11 +36,6 @@ def change_group_name(db: Session, change_name: GroupNameChange):
 
 def add_broker_to_group(db: Session, group_add_broker: GroupAddBroker):
     return user_add_broker_to_group(db, group_add_broker)
-
-
-def set_qty_to_group(db: Session, group_set_qty: GroupSetQTY):
-    return user_set_qty_to_group(db, group_set_qty)
-
 
 def del_group(db: Session, group_id: UUID):
     return user_del_group(db, group_id)

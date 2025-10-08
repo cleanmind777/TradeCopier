@@ -23,12 +23,12 @@ def create_user(db: Session, user_create: UserBase):
     db_user = User(
         email=user_create.email,
         name=user_create.name,
+        avatar=user_create.avatar if user_create.avatar else None
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     return db_user
-
 
 def user_create_otp_code(db: Session, email: str, otp: OTP):
     db_user = db.query(User).filter(User.email == email).first()

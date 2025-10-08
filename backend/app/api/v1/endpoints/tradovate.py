@@ -110,7 +110,7 @@ async def oauth_callback(
         request.session["access_token"] = token_data["access_token"]
         request.session["expires_in"] = token_data["expires_in"]
         async with httpx.AsyncClient() as client:
-            headers = {"Authorization": f"Bearer {token_data["access_token"]}"}
+            headers = {"Authorization": f"Bearer {token_data['access_token']}"}
             r = await client.get(API_ME_URL, headers=headers)
             print("asdfasdfsdf,", r.status_code)
             if r.status_code == 200:

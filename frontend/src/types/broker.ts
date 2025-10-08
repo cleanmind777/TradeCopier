@@ -55,6 +55,13 @@ export interface SubBrokerSummary {
   id: string;
   nickname: string;
   sub_account_name: string;
+  qty: number;
+}
+
+export interface SubBrokerSummaryForGet {
+  id: string;
+  nickname: string;
+  sub_account_name: string;
 }
 
 export interface SubBrokerFilter {
@@ -114,6 +121,7 @@ export interface TradovateOrderListResponse {
   external: boolean;
   admin: boolean;
   symbol: string;
+  price: number;
   accountDisplayName: string;
 }
 
@@ -180,4 +188,9 @@ export interface ExitPostion {
   orderQty: number;
   orderType: string;
   isAutomated: boolean;
+}
+
+export interface SubBrokerForCreate {
+  id: string;
+  qty: number;
 }
