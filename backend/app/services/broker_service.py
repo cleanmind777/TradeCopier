@@ -280,7 +280,7 @@ async def get_orders(db: Session, user_id: UUID):
                         if db_sub_broker_account
                         else None
                     ),
-                    price=order_version['price'],
+                    price = order_version.get('price', 0),
                     contractId=order["contractId"],
                     timestamp=order["timestamp"],
                     action=order["action"],

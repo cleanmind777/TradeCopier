@@ -269,8 +269,10 @@ async def get_order_version_depends(
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
+            print("Data: ", data)
         except ValueError:
             # Log error or handle malformed JSON
+            print("@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             data = None
     else:
         # Log error or handle non-200 statuses and empty responses gracefully
