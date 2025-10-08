@@ -1,4 +1,4 @@
-import React, { useState, useEffect, act } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -24,8 +24,15 @@ import {
   getOrders,
   getAccounts,
   exitPostion,
-  exitAllPostions
+  exitAllPostions,
 } from "../api/brokerApi";
+
+type SortDirection = "asc" | "desc";
+
+interface SortConfig {
+  key: string;
+  direction: SortDirection;
+}
 
 const DashboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<
@@ -34,7 +41,6 @@ const DashboardPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Mock data - replace with real API calls
   const [positions, setPositions] = useState<TradovatePositionListResponse[]>(
     []
   );
@@ -42,37 +48,118 @@ const DashboardPage: React.FC = () => {
   const [orders, setOrders] = useState<TradovateOrderListResponse[]>([]);
 
   const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
+
+  const [positionsSort, setPositionsSort] = useState<SortConfig | null>(null);
+  const [ordersSort, setOrdersSort] = useState<SortConfig | null>(null);
+  const [accountsSort, setAccountsSort] = useState<SortConfig | null>(null);
+
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
+
   const fetchPositions = async () => {
     const positionData = await getPositions(user_id);
     if (positionData != null) {
       setPositions(positionData);
     }
   };
+
+  const fetchOrders = async () => {
+    const orderData = await getOrders(user_id);
+    if (orderData != null) {
+      setOrders(orderData);
+    }
+  };
+
+  const fetchAccounts = async () => {
+    const accountData = await getAccounts(user_id);
+    if (accountData != null) {
+      setAccounts(accountData);
+    }
+  };
+
   useEffect(() => {
     fetchPositions();
   }, [user_id]);
-  useEffect(() => {}, [positions]);
+
   useEffect(() => {
-    const fetchOrders = async () => {
-      const orderData = await getOrders(user_id);
-      if (orderData != null) {
-        setOrders(orderData);
-      }
-    };
     fetchOrders();
   }, [user_id]);
 
   useEffect(() => {
-    const fetchAccounts = async () => {
-      const accountData = await getAccounts(user_id);
-      if (accountData != null) {
-        setAccounts(accountData);
-      }
-    };
     fetchAccounts();
   }, [user_id]);
+
+  // General sorting utility for array of objects
+  const sortData = <T,>(
+    data: T[],
+    key: string,
+    direction: SortDirection
+  ): T[] => {
+    return [...data].sort((a: any, b: any) => {
+      const aValue = a[key];
+      const bValue = b[key];
+
+      if (aValue == null) return 1;
+      if (bValue == null) return -1;
+
+      if (typeof aValue === "number" && typeof bValue === "number") {
+        return direction === "asc" ? aValue - bValue : bValue - aValue;
+      }
+
+      if (aValue instanceof Date && bValue instanceof Date) {
+        return direction === "asc"
+          ? aValue.getTime() - bValue.getTime()
+          : bValue.getTime() - aValue.getTime();
+      }
+
+      const aStr = aValue.toString().toLowerCase();
+      const bStr = bValue.toString().toLowerCase();
+
+      if (aStr < bStr) return direction === "asc" ? -1 : 1;
+      if (aStr > bStr) return direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  };
+
+  // Handle sorting toggles for each tab
+  const handleSortPositions = (key: string) => {
+    let direction: SortDirection = "asc";
+    if (
+      positionsSort &&
+      positionsSort.key === key &&
+      positionsSort.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setPositionsSort({ key, direction });
+    setPositions((prev) => sortData(prev, key, direction));
+  };
+
+  const handleSortOrders = (key: string) => {
+    let direction: SortDirection = "asc";
+    if (
+      ordersSort &&
+      ordersSort.key === key &&
+      ordersSort.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setOrdersSort({ key, direction });
+    setOrders((prev) => sortData(prev, key, direction));
+  };
+
+  const handleSortAccounts = (key: string) => {
+    let direction: SortDirection = "asc";
+    if (
+      accountsSort &&
+      accountsSort.key === key &&
+      accountsSort.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setAccountsSort({ key, direction });
+    setAccounts((prev) => sortData(prev, key, direction));
+  };
 
   const handleExitPosition = async (
     accountId: number,
@@ -82,7 +169,6 @@ const DashboardPage: React.FC = () => {
     try {
       setIsLoading(true);
       setError(null);
-      // TODO: Replace with actual API call
       let action = "Buy";
       if (netPos > 0) {
         action = "Sell";
@@ -92,12 +178,12 @@ const DashboardPage: React.FC = () => {
         accountId: accountId,
         action: action,
         symbol: symbol,
-        orderQty: Math.abs(netPos), // absolute value of netPos
+        orderQty: Math.abs(netPos),
         orderType: "Market",
         isAutomated: true,
       };
-      exitPostion(exitPostionData);
-      fetchPositions();
+      await exitPostion(exitPostionData);
+      await fetchPositions();
     } catch (err) {
       setError("Failed to exit position");
       console.error(err);
@@ -106,46 +192,14 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // const handleFlattenAccount = async (accountId: number) => {
-  //   try {
-  //     setIsLoading(true);
-  //     setError(null);
-  //     // TODO: Replace with actual API call
-  //     console.log("Flattening account:", accountId);
-  //     await new Promise((resolve) => setTimeout(resolve, 500));
-  //     setPositions((prev) => prev.filter((p) => p.accountId !== accountId));
-  //   } catch (err) {
-  //     setError("Failed to flatten account");
-  //     console.error(err);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
-  // const handleExitAll = async (accountId: number) => {
-  //   try {
-  //     setIsLoading(true);
-  //     setError(null);
-  //     // TODO: Replace with actual API call
-  //     console.log("Exiting all positions for account:", accountId);
-  //     await new Promise((resolve) => setTimeout(resolve, 500));
-  //     setPositions((prev) => prev.filter((p) => p.accountId !== accountId));
-  //   } catch (err) {
-  //     setError("Failed to exit all positions");
-  //     console.error(err);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
   const handleFlattenAll = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      let exitPostions: ExitPostion[] = []
-      
+      let exitPostions: ExitPostion[] = [];
+
       positions.forEach((position) => {
-        let action = "Buy"
+        let action = "Buy";
         if (position.netPos > 0) action = "Sell";
         const exitPostion = {
           accountId: position.accountId,
@@ -153,19 +207,28 @@ const DashboardPage: React.FC = () => {
           symbol: position.symbol,
           orderQty: Math.abs(position.netPos),
           orderType: "Market",
-          isAutomated: true
-        }
-        exitPostions.push(exitPostion)
+          isAutomated: true,
+        };
+        exitPostions.push(exitPostion);
       });
-      exitAllPostions(exitPostions)
-      fetchPositions()
-      
+      await exitAllPostions(exitPostions);
+      await fetchPositions();
     } catch (err) {
       setError("Failed to flatten all positions and orders");
       console.error(err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Helper for rendering sort arrows
+  const renderSortArrow = (sortConfig: SortConfig | null, key: string) => {
+    if (!sortConfig || sortConfig.key !== key) return null;
+    return sortConfig.direction === "asc" ? (
+      <span aria-label="sorted ascending"> ▲</span>
+    ) : (
+      <span aria-label="sorted descending"> ▼</span>
+    );
   };
 
   return (
@@ -266,26 +329,47 @@ const DashboardPage: React.FC = () => {
                     <Table>
                       <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead className="font-semibold">
-                            Account
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortPositions("accountNickname")}
+                          >
+                            Account{renderSortArrow(positionsSort, "accountNickname")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Display Name
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortPositions("accountDisplayName")}
+                          >
+                            Display Name{renderSortArrow(positionsSort, "accountDisplayName")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Symbol
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortPositions("symbol")}
+                          >
+                            Symbol{renderSortArrow(positionsSort, "symbol")}
                           </TableHead>
-                          <TableHead className="font-semibold text-right">
-                            Net Position
+                          <TableHead
+                            className="font-semibold text-right cursor-pointer"
+                            onClick={() => handleSortPositions("netPos")}
+                          >
+                            Net Position{renderSortArrow(positionsSort, "netPos")}
                           </TableHead>
-                          <TableHead className="font-semibold text-right">
-                            Net Price
+                          <TableHead
+                            className="font-semibold text-right cursor-pointer"
+                            onClick={() => handleSortPositions("netPrice")}
+                          >
+                            Net Price{renderSortArrow(positionsSort, "netPrice")}
                           </TableHead>
-                          <TableHead className="font-semibold text-right">
-                            Bought
+                          <TableHead
+                            className="font-semibold text-right cursor-pointer"
+                            onClick={() => handleSortPositions("bought")}
+                          >
+                            Bought{renderSortArrow(positionsSort, "bought")}
                           </TableHead>
-                          <TableHead className="font-semibold text-right">
-                            Sold
+                          <TableHead
+                            className="font-semibold text-right cursor-pointer"
+                            onClick={() => handleSortPositions("sold")}
+                          >
+                            Sold{renderSortArrow(positionsSort, "sold")}
                           </TableHead>
                           <TableHead className="font-semibold text-right">
                             Actions
@@ -305,18 +389,12 @@ const DashboardPage: React.FC = () => {
                               {position.accountDisplayName}
                             </TableCell>
                             <TableCell>{position.symbol}</TableCell>
-                            <TableCell className="text-right">
-                              {position.netPos}
-                            </TableCell>
+                            <TableCell className="text-right">{position.netPos}</TableCell>
                             <TableCell className="text-right">
                               ${position.netPrice.toFixed(2)}
                             </TableCell>
-                            <TableCell className="text-right">
-                              {position.bought}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {position.sold}
-                            </TableCell>
+                            <TableCell className="text-right">{position.bought}</TableCell>
+                            <TableCell className="text-right">{position.sold}</TableCell>
                             <TableCell className="text-right">
                               <Button
                                 variant="outline"
@@ -363,26 +441,47 @@ const DashboardPage: React.FC = () => {
                     <Table>
                       <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead className="font-semibold">
-                            Account
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortOrders("accountNickname")}
+                          >
+                            Account{renderSortArrow(ordersSort, "accountNickname")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Display Name
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortOrders("accountDisplayName")}
+                          >
+                            Display Name{renderSortArrow(ordersSort, "accountDisplayName")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Symbol
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortOrders("symbol")}
+                          >
+                            Symbol{renderSortArrow(ordersSort, "symbol")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Action
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortOrders("action")}
+                          >
+                            Action{renderSortArrow(ordersSort, "action")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Status
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortOrders("ordStatus")}
+                          >
+                            Status{renderSortArrow(ordersSort, "ordStatus")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Timestamp
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortOrders("timestamp")}
+                          >
+                            Timestamp{renderSortArrow(ordersSort, "timestamp")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Price
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortOrders("price")}
+                          >
+                            Price{renderSortArrow(ordersSort, "price")}
                           </TableHead>
                         </TableRow>
                       </TableHeader>
@@ -414,11 +513,9 @@ const DashboardPage: React.FC = () => {
                               </span>
                             </TableCell>
                             <TableCell>
-                              {order.timestamp.toLocaleString()}
+                              {new Date(order.timestamp).toLocaleString()}
                             </TableCell>
-                            <TableCell>
-                              {order.price}
-                            </TableCell>
+                            <TableCell>{order.price}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -433,9 +530,7 @@ const DashboardPage: React.FC = () => {
           {!isLoading && activeTab === "accounts" && (
             <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
-                <h3 className="text-xl font-semibold text-slate-900">
-                  Accounts
-                </h3>
+                <h3 className="text-xl font-semibold text-slate-900">Accounts</h3>
                 <p className="text-sm text-slate-500">
                   Performance and account management
                 </p>
@@ -450,24 +545,36 @@ const DashboardPage: React.FC = () => {
                     <Table>
                       <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead className="font-semibold">
-                            Account
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortAccounts("accountNickname")}
+                          >
+                            Account{renderSortArrow(accountsSort, "accountNickname")}
                           </TableHead>
-                          <TableHead className="font-semibold">
-                            Display Name
+                          <TableHead
+                            className="font-semibold cursor-pointer"
+                            onClick={() => handleSortAccounts("accountDisplayName")}
+                          >
+                            Display Name{renderSortArrow(accountsSort, "accountDisplayName")}
                           </TableHead>
-                          <TableHead className="font-semibold text-right">
-                            Amount
+                          <TableHead
+                            className="font-semibold text-right cursor-pointer"
+                            onClick={() => handleSortAccounts("amount")}
+                          >
+                            Amount{renderSortArrow(accountsSort, "amount")}
                           </TableHead>
-                          <TableHead className="font-semibold text-right">
-                            Realized P&L
+                          <TableHead
+                            className="font-semibold text-right cursor-pointer"
+                            onClick={() => handleSortAccounts("realizedPnL")}
+                          >
+                            Realized P&L{renderSortArrow(accountsSort, "realizedPnL")}
                           </TableHead>
-                          <TableHead className="font-semibold text-right">
-                            Week P&L
+                          <TableHead
+                            className="font-semibold text-right cursor-pointer"
+                            onClick={() => handleSortAccounts("weekRealizedPnL")}
+                          >
+                            Week P&L{renderSortArrow(accountsSort, "weekRealizedPnL")}
                           </TableHead>
-                          {/* <TableHead className="font-semibold text-right">
-                            Actions
-                          </TableHead> */}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -484,9 +591,7 @@ const DashboardPage: React.FC = () => {
                             </TableCell>
                             <TableCell
                               className={`text-right font-medium ${
-                                account.amount >= 0
-                                  ? "text-green-600"
-                                  : "text-red-600"
+                                account.amount >= 0 ? "text-green-600" : "text-red-600"
                               }`}
                             >
                               ${account.amount.toFixed(2)}
@@ -509,30 +614,6 @@ const DashboardPage: React.FC = () => {
                             >
                               ${account.weekRealizedPnL.toFixed(2)}
                             </TableCell>
-                            {/* <TableCell className="text-right">
-                              <div className="flex justify-end space-x-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() =>
-                                    handleFlattenAccount(account.id)
-                                  }
-                                  disabled={isLoading}
-                                  className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                >
-                                  Flatten
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors"
-                                  onClick={() => handleExitAll(account.id)}
-                                  disabled={isLoading}
-                                >
-                                  Exit All
-                                </Button>
-                              </div>
-                            </TableCell> */}
                           </TableRow>
                         ))}
                       </TableBody>
