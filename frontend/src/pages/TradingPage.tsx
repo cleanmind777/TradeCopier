@@ -17,7 +17,7 @@ import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
 import TradingViewWidget from "../components/trading/TradingViewWidget";
 
-const GroupPage: React.FC = () => {
+const TradingPage: React.FC = () => {
   return (
     <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
       <Sidebar />
@@ -34,4 +34,4 @@ const GroupPage: React.FC = () => {
   );
 };
 
-export default GroupPage;
+export default TradingPage;
