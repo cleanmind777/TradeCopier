@@ -382,7 +382,7 @@ const DashboardPage: React.FC = () => {
                             Timestamp
                           </TableHead>
                           <TableHead className="font-semibold">
-                            External
+                            Price
                           </TableHead>
                         </TableRow>
                       </TableHeader>
@@ -417,7 +417,7 @@ const DashboardPage: React.FC = () => {
                               {order.timestamp.toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              {order.external ? "Yes" : "No"}
+                              {order.price}
                             </TableCell>
                           </TableRow>
                         ))}

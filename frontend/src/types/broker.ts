@@ -121,6 +121,7 @@ export interface TradovateOrderListResponse {
   external: boolean;
   admin: boolean;
   symbol: string;
+  price: number;
   accountDisplayName: string;
 }
 

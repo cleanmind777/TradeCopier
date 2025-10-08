@@ -18,6 +18,7 @@ class TradovateOrderListResponse(BaseModel):
 
 class TradovateOrderForFrontend(TradovateOrderListResponse):
     symbol: str
+    price: float
     accountNickname: str
     accountDisplayName: str
 

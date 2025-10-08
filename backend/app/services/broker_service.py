@@ -46,7 +46,8 @@ from app.utils.tradovate import (
     get_contract_maturity_item,
     get_product_item,
     get_cash_balances,
-    place_order
+    place_order,
+    get_order_version_depends
 )
 from app.db.repositories.broker_repository import (
     user_add_broker,
@@ -268,6 +269,9 @@ async def get_orders(db: Session, user_id: UUID):
                 contract_item = await get_contract_item(
                     order["contractId"], db_broker_account.access_token, is_demo=True
                 )
+                order_version = await get_order_version_depends(
+                    order['id'], db_broker_account.access_token, is_demo=True
+                )
                 o = TradovateOrderForFrontend(
                     id=order["id"],
                     accountId=order["accountId"],
@@ -276,6 +280,7 @@ async def get_orders(db: Session, user_id: UUID):
                         if db_sub_broker_account
                         else None
                     ),
+                    price=order_version['price'],
                     contractId=order["contractId"],
                     timestamp=order["timestamp"],
                     action=order["action"],
