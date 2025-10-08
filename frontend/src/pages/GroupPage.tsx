@@ -12,7 +12,7 @@ import {
   TableBody,
   TableCell,
 } from "../components/ui/Table";
-import { Trash2 } from "lucide-react";
+import { Trash2, ArrowUpDown } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
 import {
@@ -23,6 +23,11 @@ import {
 import { getSubBrokers, getSubBrokersForGroup } from "../api/brokerApi";
 import { GroupCreate, GroupInfo } from "../types/group";
 import { createGroup, editGroup, deleteGroup, getGroup } from "../api/groupApi";
+
+type SortConfig = {
+  key: string;
+  direction: 'asc' | 'desc';
+};
 
 const GroupPage: React.FC = () => {
   const [groups, setGroups] = useState<GroupInfo[]>([]);
@@ -40,6 +45,10 @@ const GroupPage: React.FC = () => {
     [key: string]: number;
   }>({});
   const [allSelected, setAllSelected] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: '',
+    direction: 'asc',
+  });
 
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
@@ -56,6 +65,17 @@ const GroupPage: React.FC = () => {
   const getGroups = async () => {
     const groups = await getGroup(user_id);
     setGroups(groups);
+  };
+
+  const sortData = (data: any[], key: string) => {
+    const direction = sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    setSortConfig({ key, direction });
+
+    return [...data].sort((a, b) => {
+      if (a[key] < b[key]) return direction === 'asc' ? -1 : 1;
+      if (a[key] > b[key]) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
   };
 
   useEffect(() => {
@@ -190,7 +210,6 @@ const GroupPage: React.FC = () => {
             </Button>
           </div>
 
-          {/* Groups Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {groups.map((group) => (
               <Card
@@ -252,7 +271,6 @@ const GroupPage: React.FC = () => {
             ))}
           </div>
 
-          {/* Group Details Modal */}
           <Modal
             isOpen={isDetailsModalOpen}
             onClose={() => setIsDetailsModalOpen(false)}
@@ -293,22 +311,30 @@ const GroupPage: React.FC = () => {
                   <Table className="border rounded-lg">
                     <TableHeader className="bg-gray-50">
                       <TableRow>
-                        <TableHead className="bg-gray-50">Nickname</TableHead>
-                        <TableHead className="bg-gray-50">
-                          Account Name
+                        <TableHead className="bg-gray-50 cursor-pointer" onClick={() => sortData(selectedGroup.sub_brokers, 'nickname')}>
+                          <div className="flex items-center">
+                            Nickname
+                            <ArrowUpDown className="ml-1 h-4 w-4" />
+                          </div>
                         </TableHead>
-                        <TableHead className="bg-gray-50">Quantity</TableHead>
+                        <TableHead className="bg-gray-50 cursor-pointer" onClick={() => sortData(selectedGroup.sub_brokers, 'sub_account_name')}>
+                          <div className="flex items-center">
+                            Account Name
+                            <ArrowUpDown className="ml-1 h-4 w-4" />
+                          </div>
+                        </TableHead>
+                        <TableHead className="bg-gray-50 cursor-pointer" onClick={() => sortData(selectedGroup.sub_brokers, 'qty')}>
+                          <div className="flex items-center">
+                            Quantity
+                            <ArrowUpDown className="ml-1 h-4 w-4" />
+                          </div>
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {selectedGroup.sub_brokers.map((sub_broker) => (
-                        <TableRow
-                          key={sub_broker.id}
-                          className="hover:bg-gray-50"
-                        >
-                          <TableCell className="font-medium">
-                            {sub_broker.nickname}
-                          </TableCell>
+                      {sortData(selectedGroup.sub_brokers, sortConfig.key).map((sub_broker) => (
+                        <TableRow key={sub_broker.id} className="hover:bg-gray-50">
+                          <TableCell className="font-medium">{sub_broker.nickname}</TableCell>
                           <TableCell>{sub_broker.sub_account_name}</TableCell>
                           <TableCell>{sub_broker.qty || 1}</TableCell>
                         </TableRow>
@@ -320,7 +346,6 @@ const GroupPage: React.FC = () => {
             )}
           </Modal>
 
-          {/* Create Group Modal */}
           <Modal
             isOpen={isCreateModalOpen}
             onClose={() => setIsCreateModalOpen(false)}
@@ -440,7 +465,6 @@ const GroupPage: React.FC = () => {
             </div>
           </Modal>
 
-          {/* Edit Group Modal */}
           <Modal
             isOpen={isEditModalOpen}
             onClose={() => setIsEditModalOpen(false)}
