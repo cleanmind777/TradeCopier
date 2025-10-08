@@ -12,6 +12,7 @@
   "dependencies": {
     "@react-oauth/google": "^0.12.2",
     "@types/node": "^24.3.0",
+    "@uploadcare/react-widget": "^3.0.0",
     "axios": "^1.11.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.344.0",
