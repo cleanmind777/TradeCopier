@@ -49,7 +49,7 @@ class UserData(BaseModel):
     id: UUID
     name: str
     email: str
-    avatar: str
+    avatar: Optional[str] = None
     admin_role: bool
     created_at: datetime
     is_verified: bool
