@@ -128,7 +128,7 @@ const SubBrokerPage: React.FC = () => {
     };
 
     const handleSavePassword = async () => {
-        if (passwordData.password) {
+        if (!passwordData.password) {
             alert("Plz set password");
             return;
         }
