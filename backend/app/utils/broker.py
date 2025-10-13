@@ -41,7 +41,7 @@ def get_access_token_for_websocket(username: str, password: str):
         json=payload,
     )
     if response.status_code == 200:
-        data = response.data
+        data = response.json()
         return {"access_token": data['accessToken'], "md_access_token": data['mdAccessToken']}
     else:
         return None
