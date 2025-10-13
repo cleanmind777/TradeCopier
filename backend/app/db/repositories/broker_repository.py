@@ -176,11 +176,11 @@ async def user_refresh_websocket_token(db: AsyncSession, id: int, new_tokens: To
     if db_broker_account is None:
         # handle None case
         return
-
-    db_broker_account.websocket_access_token = new_tokens.access_token
-    db_broker_account.websocket_md_access_token = new_tokens.md_access_token
-    await db.commit()
-    await db.refresh(db_broker_account)
+    if new_tokens:
+        db_broker_account.websocket_access_token = new_tokens.access_token
+        db_broker_account.websocket_md_access_token = new_tokens.md_access_token
+        await db.commit()
+        await db.refresh(db_broker_account)
     return db_broker_account
 
 def user_change_broker(db: Session, broker_change: BrokerChange):
