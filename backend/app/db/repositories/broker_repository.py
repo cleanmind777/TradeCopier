@@ -198,6 +198,7 @@ def user_change_broker(db: Session, broker_change: BrokerChange):
     if broker_change.username and broker_change.password:
         data = get_access_token_for_websocket(broker_change.username, broker_change.password)
         if data:
+            print(data)
             db_broker_account.websocket_access_token = data['access_token']
             db_broker_account.websocket_md_access_token = data['md_access_token']
     db.commit()
