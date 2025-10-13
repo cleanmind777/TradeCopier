@@ -130,3 +130,7 @@ class WebSocketCredintial(BaseModel):
     id: UUID
     username: str
     password: str
+
+class Tokens(BaseModel):
+    access_token: str
+    md_access_token: str

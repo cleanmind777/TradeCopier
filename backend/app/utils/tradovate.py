@@ -9,7 +9,7 @@ from app.schemas.tradovate import (
     TradovateProductItemResponse,
 )
 
-from app.schemas.broker import ExitPosition
+from app.schemas.broker import ExitPosition, Tokens
 
 CLIENT_ID = settings.CID
 REDIRECT_URI = settings.TRADOVATE_REDIRECT_URL
@@ -57,7 +57,7 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
     return data
 
 
-def get_renew_token(access_token: str):
+def get_renew_token(access_token: str) -> Tokens | None:
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{TRADO_DEMO_URL}/auth/renewaccesstoken"
     response = requests.get(url, headers=headers)
@@ -71,7 +71,11 @@ def get_renew_token(access_token: str):
     else:
         # Log error or handle non-200 statuses and empty responses gracefully
         return None
-    return data["accessToken"]
+    tokens = Tokens(
+        access_token=data["accessToken"],
+        md_access_token=data['mdAccessToken']
+    )
+    return tokens
 
 
 def get_position_list_of_live_account(access_token: str):

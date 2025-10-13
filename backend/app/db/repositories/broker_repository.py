@@ -14,6 +14,7 @@ from app.schemas.broker import (
     SubBrokerChange,
     SummarySubBrokers,
     WebSocketCredintial,
+    Tokens
 )
 from app.utils.broker import get_access_token_for_websocket
 import json
@@ -152,7 +153,7 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
     return db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
 
 
-async def user_refresh_token(db: AsyncSession, id: int, new_token: str):
+async def user_refresh_token(db: AsyncSession, id: int, new_tokens: Tokens):
     stmt = select(BrokerAccount).where(BrokerAccount.id == id)
     result = await db.execute(stmt)
     db_broker_account = result.scalars().first()  # or .one_or_none()
@@ -161,11 +162,26 @@ async def user_refresh_token(db: AsyncSession, id: int, new_token: str):
         # handle None case
         return
 
-    db_broker_account.access_token = new_token
+    db_broker_account.access_token = new_tokens.access_token
+    db_broker_account.md_access_token = new_tokens.md_access_token
     await db.commit()
     await db.refresh(db_broker_account)
     return db_broker_account
 
+async def user_refresh_websocket_token(db: AsyncSession, id: int, new_tokens: Tokens):
+    stmt = select(BrokerAccount).where(BrokerAccount.id == id)
+    result = await db.execute(stmt)
+    db_broker_account = result.scalars().first()  # or .one_or_none()
+
+    if db_broker_account is None:
+        # handle None case
+        return
+
+    db_broker_account.websocket_access_token = new_tokens.access_token
+    db_broker_account.websocket_md_access_token = new_tokens.md_access_token
+    await db.commit()
+    await db.refresh(db_broker_account)
+    return db_broker_account
 
 def user_change_broker(db: Session, broker_change: BrokerChange):
     db_broker_account = (

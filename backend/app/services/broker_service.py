@@ -57,6 +57,7 @@ from app.db.repositories.broker_repository import (
     user_add_sub_broker,
     user_get_sub_brokers,
     user_refresh_token,
+    user_refresh_websocket_token,
     user_change_broker,
     user_change_sub_brokers,
     user_get_summary_sub_broker,
@@ -186,8 +187,10 @@ async def refresh_new_token(db: Session):
     db_broker_accounts = result.scalars().all()
     if len(db_broker_accounts) != 0 and db_broker_accounts:
         for broker in db_broker_accounts:
-            new_token = get_renew_token(broker.access_token)
-            await user_refresh_token(db, broker.id, new_token)
+            new_tokens = get_renew_token(broker.access_token)
+            await user_refresh_token(db, broker.id, new_tokens)
+            new_websocket_tokens = get_renew_token(broker.websocket_access_token)
+            await user_refresh_websocket_token(db, broker.id, new_websocket_tokens)
 
 
 def change_broker(db: Session, broker_change: BrokerChange):
