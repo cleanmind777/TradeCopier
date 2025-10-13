@@ -97,7 +97,7 @@ const TradingPage: React.FC = () => {
         wsConnection.close();
       }
     };
-  }, [wsConnection]);
+  }, []);
 
   return (
     <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">

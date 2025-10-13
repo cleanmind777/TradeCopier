@@ -136,4 +136,4 @@ class Tokens(BaseModel):
     md_access_token: str
 
 class WebSocketTokens(Tokens):
-    id: str
+    id: UUID
