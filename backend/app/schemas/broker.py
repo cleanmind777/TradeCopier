@@ -134,3 +134,6 @@ class WebSocketCredintial(BaseModel):
 class Tokens(BaseModel):
     access_token: str
     md_access_token: str
+
+class WebSocketTokens(Tokens):
+    id: str

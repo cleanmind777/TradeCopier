@@ -20,6 +20,7 @@ from app.schemas.broker import (
     SubBrokerSummaryForGet,
     ExitPosition,
     WebSocketCredintial,
+    WebSocketTokens
 )
 from app.schemas.tradovate import (
     TradovatePositionListForFrontend,
@@ -61,7 +62,7 @@ from app.db.repositories.broker_repository import (
     user_change_broker,
     user_change_sub_brokers,
     user_get_summary_sub_broker,
-    user_get_credintial_for_websocket,
+    user_get_tokens_for_websocket,
 )
 
 
@@ -377,7 +378,7 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
     return place_order(access_token, db_sub_broker.is_demo, exit_position_data)
 
 
-def get_credintial_for_websocket(
+def get_token_for_websocket(
     db: Session, user_id: UUID
-) -> WebSocketCredintial | None:
-    return user_get_credintial_for_websocket(db, user_id)
+) -> WebSocketTokens | None:
+    return user_get_tokens_for_websocket(db, user_id)

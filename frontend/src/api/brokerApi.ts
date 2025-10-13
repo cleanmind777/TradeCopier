@@ -16,7 +16,8 @@ import {
   TradovateAccountsResponse,
   SubBrokerSummary,
   SubBrokerSummaryForGet,
-  ExitPostion
+  ExitPostion,
+  Tokens
 } from "../types/broker";
 
 const API_BASE =
@@ -252,6 +253,27 @@ export const exitAllPostions = async (
       alert(error.response?.data.detail);
     } else {
       console.error("Unexpected exit position error:", error);
+    }
+    return null;
+  }
+};
+
+export const getWebSocketToken = async (
+  user_id: string
+): Promise<Tokens | null> => {
+  try {
+    const params = { user_id };
+    const response = await axios.get(
+      `${API_BASE}/broker/websockettoken`,
+      { params }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get Tokens:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Get Tokens error:", error);
     }
     return null;
   }

@@ -203,3 +203,9 @@ export interface SetPassword {
   username: string;
   password: string;
 }
+
+export interface Tokens {
+  id: string;
+  access_token: string;
+  md_access_token: string;
+}

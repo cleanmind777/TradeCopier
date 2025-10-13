@@ -14,7 +14,8 @@ from app.schemas.broker import (
     SubBrokerChange,
     SummarySubBrokers,
     WebSocketCredintial,
-    Tokens
+    Tokens,
+    WebSocketTokens
 )
 from app.utils.broker import get_access_token_for_websocket
 import json
@@ -253,13 +254,18 @@ def user_get_summary_sub_broker(
     return summary_sub_broker
 
 
-def user_get_credintial_for_websocket(
+def user_get_tokens_for_websocket(
     db: Session, user_id: UUID
-) -> WebSocketCredintial | None:
+) -> WebSocketTokens | None:
     broker_accounts = (
         db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
     )
     for broker in broker_accounts:
-        if broker.username and broker.password:
-            return broker
+        if broker.websocket_access_token:
+            websocket_token = WebSocketTokens(
+                id=broker.id,
+                access_token=broker.websocket_access_token,
+                md_access_token=broker.websocket_md_access_token
+            )
+            return websocket_token
     return None

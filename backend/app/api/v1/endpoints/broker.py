@@ -10,6 +10,7 @@ from app.schemas.broker import (
     BrokerChange,
     ExitPosition,
     WebSocketCredintial,
+    WebSocketTokens
 )
 from app.services.broker_service import (
     add_broker,
@@ -20,7 +21,7 @@ from app.services.broker_service import (
     get_orders,
     get_accounts,
     exit_position,
-    get_credintial_for_websocket,
+    get_token_for_websocket,
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -106,9 +107,9 @@ async def get_Accounts(user_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/credintial-for-websocket",
-    response_model=WebSocketCredintial | None,
+    "/websockettoken",
+    response_model=WebSocketTokens | None,
     status_code=status.HTTP_201_CREATED,
 )
-def get_Credintial_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
-    return get_credintial_for_websocket(db, user_id)
+def get_Tokens_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
+    return get_token_for_websocket(db, user_id)

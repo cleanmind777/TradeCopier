@@ -16,21 +16,28 @@ import { Trash2 } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
 import TradingViewWidget from "../components/trading/TradingViewWidget";
+import { Tokens } from "../types/broker";
+import { getWebSocketToken } from "../api/brokerApi";
 
 const TradingPage: React.FC = () => {
-const [marketData, setMarketData] = useState<{
-  bid: number | null;
-  ask: number | null;
-  last: number | null;
-  timestamp: string;
-} | null>(null);
+  const [marketData, setMarketData] = useState<{
+    bid: number | null;
+    ask: number | null;
+    last: number | null;
+    timestamp: string;
+  } | null>(null);
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
-
+  const user = localStorage.getItem("user");
+  const user_id = user ? JSON.parse(user).id : null;
   useEffect(() => {
     const connectWebSocket = async () => {
+      const token = await getWebSocketToken(user_id);
+      let accessToken = "";
       // Replace with your actual access token retrieval logic
-      const accessToken = "your_access_token_here";
-      
+      if (token != null) {
+        accessToken = token.access_token;
+      }
+
       const ws = new WebSocket("wss://md-demo.tradovateapi.com/v1/websocket");
 
       ws.onopen = () => {
@@ -39,16 +46,16 @@ const [marketData, setMarketData] = useState<{
         ws.send(authMsg);
       };
 
-  ws.onmessage = (message: MessageEvent) => {
-    const data = message.data as string;
-    if (data.length === 0) return;
+      ws.onmessage = (message: MessageEvent) => {
+        const data = message.data as string;
+        if (data.length === 0) return;
 
-    const frameType = data[0];
-        if (frameType === 'a') {
+        const frameType = data[0];
+        if (frameType === "a") {
           try {
             const parsedData = JSON.parse(data.substring(1));
             parsedData.forEach((item: any) => {
-              if (item.e === 'md' && item.d && item.d.quotes) {
+              if (item.e === "md" && item.d && item.d.quotes) {
                 const quote = item.d.quotes[0];
                 const entries = quote.entries || {};
                 const bidData = entries.Bid || {};
@@ -59,7 +66,7 @@ const [marketData, setMarketData] = useState<{
                   bid: bidData.price || null,
                   ask: askData.price || null,
                   last: tradeData.price || null,
-                  timestamp: quote.timestamp || 'N/A'
+                  timestamp: quote.timestamp || "N/A",
                 };
 
                 setMarketData(marketDataUpdate);
@@ -108,15 +115,21 @@ const [marketData, setMarketData] = useState<{
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <h3 className="text-sm font-medium text-gray-500">Bid</h3>
-                    <p className="text-lg font-semibold">${marketData.bid || 'N/A'}</p>
+                    <p className="text-lg font-semibold">
+                      ${marketData.bid || "N/A"}
+                    </p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500">Ask</h3>
-                    <p className="text-lg font-semibold">${marketData.ask || 'N/A'}</p>
+                    <p className="text-lg font-semibold">
+                      ${marketData.ask || "N/A"}
+                    </p>
                   </div>
                   <div>
                     <h3 className="text-sm font-medium text-gray-500">Last</h3>
-                    <p className="text-lg font-semibold">${marketData.last || 'N/A'}</p>
+                    <p className="text-lg font-semibold">
+                      ${marketData.last || "N/A"}
+                    </p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-500 mt-2">
