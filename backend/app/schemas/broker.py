@@ -94,6 +94,8 @@ class BrokerChange(BaseModel):
     id: UUID
     nickname: Optional[str] = None
     status: Optional[bool] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class SubBrokerChange(BaseModel):

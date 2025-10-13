@@ -6,7 +6,8 @@ import Footer from '../components/layout/Footer';
 import Sidebar from '../components/layout/Sidebar';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { SubBrokerFilter, SubBrokerInfo, BrokerInfo, BrokerFilter, SubBrokerChange } from '../types/broker';
+import Input from '../components/ui/Input';
+import { SubBrokerFilter, SubBrokerInfo, BrokerInfo, BrokerFilter, SubBrokerChange, SetPassword } from '../types/broker';
 import { getSubBrokers, getBrokers, changeBrokerAccount, changeSubBrokerAccount } from '../api/brokerApi';
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000/api/v1';
@@ -28,6 +29,13 @@ const SubBrokerPage: React.FC = () => {
     // Editing states for sub-broker nicknames
     const [editingNicknameIds, setEditingNicknameIds] = useState<string[]>([]);
     const [editedNicknames, setEditedNicknames] = useState<Record<string, string>>({});
+
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [passwordData, setPasswordData] = useState<SetPassword>({
+        id: '',
+        username: '',
+        password: ''
+    });
 
     const user = localStorage.getItem('user');
     const user_id = user ? JSON.parse(user).id : null;
@@ -119,6 +127,32 @@ const SubBrokerPage: React.FC = () => {
         }
     };
 
+    const handleSavePassword = async () => {
+        if (passwordData.password) {
+            alert("Plz set password");
+            return;
+        }
+        try {
+            if (brokerAccount) {
+                await changeBrokerAccount({
+                    id: brokerAccount.id,
+                    username: passwordData.username,
+                    password: passwordData.password
+                });
+                setIsPasswordModalOpen(false);
+                setPasswordData({
+                    id: "",
+                    username: '',
+                    password: '',
+                });
+                alert("Password updated successfully");
+            }
+        } catch (error) {
+            console.error('Failed to update password', error);
+            alert("Failed to update password");
+        }
+    };
+
     // Reload data on mount
     useEffect(() => {
         getBrokerAccount();
@@ -160,19 +194,26 @@ const SubBrokerPage: React.FC = () => {
                         ) : (
                             <>
                                 <h1 className="text-xl font-semibold mb-0 flex-grow text-slate-900">{brokerAccount?.nickname}</h1>
-                                <Button
-                                    size="sm"
-                                    onClick={() => {
-                                        setEditedBrokerNickname(brokerAccount?.nickname || '');
-                                        setIsEditingBrokerNickname(true);
-                                    }}
-                                    className="bg-green-500 hover:bg-green-600 text-white"
-                                >
-                                    Edit
-                                </Button>
-                            </>
-                        )}
-                    </div>
+                            <Button
+                                size="sm"
+                                onClick={() => {
+                                    setEditedBrokerNickname(brokerAccount?.nickname || '');
+                                    setIsEditingBrokerNickname(true);
+                                }}
+                                className="bg-green-500 hover:bg-green-600 text-white"
+                            >
+                                Edit
+                            </Button>
+                            <Button
+                                size="sm"
+                                onClick={() => setIsPasswordModalOpen(true)}
+                                className="bg-blue-500 hover:bg-blue-600 text-white"
+                            >
+                                Set Password
+                            </Button>
+                        </>
+                    )}
+                </div>
 
                     {/* Connected Accounts */}
                     <div className="bg-white p-4 rounded-lg shadow-sm">
@@ -373,6 +414,42 @@ const SubBrokerPage: React.FC = () => {
                             </div>
                         </div>
                     </Modal>
+
+                    <Modal
+                    isOpen={isPasswordModalOpen}
+                    onClose={() => setIsPasswordModalOpen(false)}
+                    title="Set Password"
+                >
+                    <div className="space-y-4">
+                        <Input
+                            label="Username"
+                            type="text"
+                            value={passwordData.username}
+                            onChange={(e) => setPasswordData(prev => ({ ...prev, username: e.target.value }))}
+                        />
+                        <Input
+                            label="Password"
+                            type="password"
+                            value={passwordData.password}
+                            onChange={(e) => setPasswordData(prev => ({ ...prev, password: e.target.value }))}
+                        />
+                        <div className="flex justify-end space-x-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsPasswordModalOpen(false)}
+                                className="border-slate-300 hover:bg-slate-100"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleSavePassword}
+                                className="bg-blue-500 hover:bg-blue-600 text-white"
+                            >
+                                Save
+                            </Button>
+                        </div>
+                    </div>
+                </Modal>
                 </main>
                 <Footer />
             </div>

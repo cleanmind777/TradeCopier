@@ -81,6 +81,8 @@ export interface BrokerChange {
   id: string;
   nickname?: string;
   status?: boolean;
+  username?: string;
+  password?: string;
 }
 
 export interface SubBrokerChange {
@@ -193,4 +195,10 @@ export interface ExitPostion {
 export interface SubBrokerForCreate {
   id: string;
   qty: number;
+}
+
+export interface SetPassword {
+  id: string;
+  username: string;
+  password: string;
 }

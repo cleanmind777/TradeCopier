@@ -171,6 +171,10 @@ def user_change_broker(db: Session, broker_change: BrokerChange):
         db_broker_account.nickname = broker_change.nickname
     if broker_change.status:
         db_broker_account.status = broker_change.status
+    if broker_change.username:
+        db_broker_account.username = broker_change.username
+    if broker_change.password:
+        db_broker_account.password = broker_change.password
     db.commit()
     db.refresh(db_broker_account)
     return db_broker_account
