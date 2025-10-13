@@ -39,7 +39,7 @@ const TradingPage: React.FC = () => {
         console.log(accessToken);
       }
 
-      const ws = new WebSocket("wss://md-demo.tradovateapi.com/v1/websocket");
+      const ws = new WebSocket("wss://md.tradovateapi.com/v1/websocket");
 
       ws.onopen = () => {
         console.log("WebSocket connection opened");
