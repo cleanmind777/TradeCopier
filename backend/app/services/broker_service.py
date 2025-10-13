@@ -235,6 +235,7 @@ async def get_positions(db: Session, user_id: UUID):
                 p = TradovatePositionListForFrontend(
                     id=position["id"],
                     accountId=position["accountId"],
+                    contractId=position["contractId"],
                     accountNickname=(
                         db_sub_broker_account.nickname
                         if db_sub_broker_account
