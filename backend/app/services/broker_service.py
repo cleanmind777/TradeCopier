@@ -19,6 +19,7 @@ from app.schemas.broker import (
     SubBrokerSumary,
     SubBrokerSummaryForGet,
     ExitPosition,
+    WebSocketCredintial,
 )
 from app.schemas.tradovate import (
     TradovatePositionListForFrontend,
@@ -47,7 +48,7 @@ from app.utils.tradovate import (
     get_product_item,
     get_cash_balances,
     place_order,
-    get_order_version_depends
+    get_order_version_depends,
 )
 from app.db.repositories.broker_repository import (
     user_add_broker,
@@ -59,6 +60,7 @@ from app.db.repositories.broker_repository import (
     user_change_broker,
     user_change_sub_brokers,
     user_get_summary_sub_broker,
+    user_get_credintial_for_websocket,
 )
 
 
@@ -242,7 +244,7 @@ async def get_positions(db: Session, user_id: UUID):
                     boughtValue=position["boughtValue"],
                     sold=position["sold"],
                     soldValue=position["soldValue"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name
+                    accountDisplayName=db_sub_broker_account.sub_account_name,
                 )
 
                 positions_for_frontend.append(p)
@@ -274,10 +276,10 @@ async def get_orders(db: Session, user_id: UUID):
                     order["contractId"], db_broker_account.access_token, is_demo=True
                 )
                 order_version = await get_order_version_depends(
-                    order['id'], db_broker_account.access_token, is_demo=True
+                    order["id"], db_broker_account.access_token, is_demo=True
                 )
                 if order_version is not None:
-                    price = order_version.get('price', 0)
+                    price = order_version.get("price", 0)
                 else:
                     price = 0
                 o = TradovateOrderForFrontend(
@@ -288,7 +290,7 @@ async def get_orders(db: Session, user_id: UUID):
                         if db_sub_broker_account
                         else None
                     ),
-                    price = price,
+                    price=price,
                     contractId=order["contractId"],
                     timestamp=order["timestamp"],
                     action=order["action"],
@@ -298,7 +300,7 @@ async def get_orders(db: Session, user_id: UUID):
                     external=order["external"],
                     admin=order["admin"],
                     symbol=contract_item["name"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name
+                    accountDisplayName=db_sub_broker_account.sub_account_name,
                 )
                 order_for_frontend.append(o)
     return order_for_frontend
@@ -341,7 +343,7 @@ async def get_accounts(db: Session, user_id: UUID):
                     weekRealizedPnL=account["weekRealizedPnL"],
                     archived=account["archived"],
                     amountSOD=account["amountSOD"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name
+                    accountDisplayName=db_sub_broker_account.sub_account_name,
                 )
                 accounts_for_dashboard.append(a)
     return accounts_for_dashboard
@@ -369,3 +371,9 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
     )
     access_token = db_broker.access_token
     return place_order(access_token, db_sub_broker.is_demo, exit_position_data)
+
+
+def get_credintial_for_websocket(
+    db: Session, user_id: UUID
+) -> WebSocketCredintial | None:
+    return user_get_credintial_for_websocket(db, user_id)

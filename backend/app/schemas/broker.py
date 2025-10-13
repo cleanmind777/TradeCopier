@@ -125,3 +125,8 @@ class ExitPosition(BaseModel):
     orderQty: int
     orderType: str
     isAutomated: bool
+
+class WebSocketCredintial(BaseModel):
+    id: UUID
+    username: str
+    password: str

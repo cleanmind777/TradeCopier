@@ -45,6 +45,7 @@ class TradovatePositionListResponse(BaseModel):
 class TradovatePositionListForFrontend(BaseModel):
     id: int
     accountId: int
+    contractId: int
     accountNickname: str
     accountDisplayName: str
     symbol: str

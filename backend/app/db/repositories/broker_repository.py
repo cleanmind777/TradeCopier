@@ -13,6 +13,7 @@ from app.schemas.broker import (
     SubBrokerFilter,
     SubBrokerChange,
     SummarySubBrokers,
+    WebSocketCredintial,
 )
 import json
 import secrets
@@ -139,7 +140,9 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
         db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
     )
     user_id = db_broker_account.user_id
-    query = db.query(SubBrokerAccount).filter(SubBrokerAccount.broker_account_id == broker_id)
+    query = db.query(SubBrokerAccount).filter(
+        SubBrokerAccount.broker_account_id == broker_id
+    )
     query.delete(synchronize_session=False)
     db.commit()
     query = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id)
@@ -225,3 +228,15 @@ def user_get_summary_sub_broker(
         enable=len(enable_sub_broker_accounts),
     )
     return summary_sub_broker
+
+
+def user_get_credintial_for_websocket(
+    db: Session, user_id: UUID
+) -> WebSocketCredintial | None:
+    broker_accounts = (
+        db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
+    )
+    for broker in broker_accounts:
+        if broker.username and broker.password:
+            return broker
+    return None

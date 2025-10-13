@@ -29,6 +29,8 @@ class BrokerAccount(Base):
     user_broker_id = Column(String, nullable=True)
     access_token = Column(String, nullable=True)
     md_access_token = Column(String, nullable=True)
+    websocket_access_token = Column(String, nullable=True)
+    websocket_md_access_token = Column(String, nullable=True)
     expire_in = Column(String, nullable=True)
 
     user = relationship("User", back_populates="broker_accounts")

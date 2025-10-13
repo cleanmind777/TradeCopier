@@ -18,6 +18,80 @@ import Input from "../components/ui/Input";
 import TradingViewWidget from "../components/trading/TradingViewWidget";
 
 const TradingPage: React.FC = () => {
+const [marketData, setMarketData] = useState<{
+  bid: number | null;
+  ask: number | null;
+  last: number | null;
+  timestamp: string;
+} | null>(null);
+  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+
+  useEffect(() => {
+    const connectWebSocket = async () => {
+      // Replace with your actual access token retrieval logic
+      const accessToken = "your_access_token_here";
+      
+      const ws = new WebSocket("wss://md-demo.tradovateapi.com/v1/websocket");
+
+      ws.onopen = () => {
+        console.log("WebSocket connection opened");
+        const authMsg = `authorize\n1\n\n${accessToken}`;
+        ws.send(authMsg);
+      };
+
+  ws.onmessage = (message: MessageEvent) => {
+    const data = message.data as string;
+    if (data.length === 0) return;
+
+    const frameType = data[0];
+        if (frameType === 'a') {
+          try {
+            const parsedData = JSON.parse(data.substring(1));
+            parsedData.forEach((item: any) => {
+              if (item.e === 'md' && item.d && item.d.quotes) {
+                const quote = item.d.quotes[0];
+                const entries = quote.entries || {};
+                const bidData = entries.Bid || {};
+                const askData = entries.Offer || {};
+                const tradeData = entries.Trade || {};
+
+                const marketDataUpdate = {
+                  bid: bidData.price || null,
+                  ask: askData.price || null,
+                  last: tradeData.price || null,
+                  timestamp: quote.timestamp || 'N/A'
+                };
+
+                setMarketData(marketDataUpdate);
+              }
+            });
+          } catch (error) {
+            console.error("Error parsing WebSocket message:", error);
+          }
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+
+      ws.onclose = () => {
+        console.log("WebSocket connection closed");
+        setWsConnection(null);
+      };
+
+      setWsConnection(ws);
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (wsConnection) {
+        wsConnection.close();
+      }
+    };
+  }, [wsConnection]);
+
   return (
     <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
       <Sidebar />
@@ -27,6 +101,30 @@ const TradingPage: React.FC = () => {
           <div>
             <TradingViewWidget symbol={"NQZ2025"} />
           </div>
+          {marketData && (
+            <Card>
+              <CardHeader>Market Data</CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500">Bid</h3>
+                    <p className="text-lg font-semibold">${marketData.bid || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500">Ask</h3>
+                    <p className="text-lg font-semibold">${marketData.ask || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-500">Last</h3>
+                    <p className="text-lg font-semibold">${marketData.last || 'N/A'}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500 mt-2">
+                  Last update: {marketData.timestamp}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </main>
         <Footer />
       </div>

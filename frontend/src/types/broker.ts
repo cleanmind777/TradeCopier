@@ -99,6 +99,7 @@ export interface TradeDate {
 export interface TradovatePositionListResponse {
   id: number;
   accountId: number;
+  contractId: number;
   accountNickname: string;
   symbol: string;
   netPos: number;

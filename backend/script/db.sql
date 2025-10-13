@@ -25,6 +25,8 @@ CREATE TABLE broker_accounts (
     user_broker_id VARCHAR,
     access_token VARCHAR,
     md_access_token VARCHAR,
+    websocket_access_token VARCHAR,
+    websocket_md_access_token VARCHAR,
     expire_in VARCHAR
 );
 
