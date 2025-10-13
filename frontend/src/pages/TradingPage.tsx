@@ -36,6 +36,7 @@ const TradingPage: React.FC = () => {
       // Replace with your actual access token retrieval logic
       if (token != null) {
         accessToken = token.access_token;
+        console.log(accessToken);
       }
 
       const ws = new WebSocket("wss://md-demo.tradovateapi.com/v1/websocket");
