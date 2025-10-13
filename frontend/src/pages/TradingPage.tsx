@@ -44,18 +44,6 @@ const TradingPage: React.FC = () => {
       reconnectWebSocket();
     }
   };
-  const subscribeToQuotes1 = () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    
-    try {
-      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol: 3267312 })}`;
-      wsRef.current.send(subscribeMsg);
-    } catch (error) {
-      console.error("Subscription error:", error);
-      reconnectWebSocket();
-    }
-  };
-
   const handleWebSocketMessage = (message: MessageEvent) => {
     const data = message.data as string;
     if (data.length === 0) return;
@@ -69,7 +57,6 @@ const TradingPage: React.FC = () => {
             if (item.i === 1 && item.s === 200) {
               setConnectionStatus("Connected");
               subscribeToQuotes();
-              subscribeToQuotes1();
 
             }
           } else if (item.e === 'md') {
