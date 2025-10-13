@@ -209,8 +209,10 @@ async def get_positions(db: Session, user_id: UUID):
         live_positions = get_position_list_of_live_account(
             db_broker_account.access_token
         )
-        positions_status.extend(demo_positions)
-        positions_status.extend(live_positions)
+        if demo_positions:
+            positions_status.extend(demo_positions)
+        if live_positions:
+            positions_status.extend(live_positions)
     if positions_status != []:
         for position in positions_status:
             print("Position: ", position)
@@ -256,8 +258,10 @@ async def get_orders(db: Session, user_id: UUID):
     for db_broker_account in db_broker_accounts:
         demo_orders = get_order_list_of_demo_account(db_broker_account.access_token)
         live_orders = get_order_list_of_live_account(db_broker_account.access_token)
-        order_status.extend(demo_orders)
-        order_status.extend(live_orders)
+        if demo_orders:
+            order_status.extend(demo_orders)
+        if live_orders:
+            order_status.extend(live_orders)
     if order_status != []:
         for order in order_status:
             db_sub_broker_account = (
@@ -309,8 +313,10 @@ async def get_accounts(db: Session, user_id: UUID):
     for db_broker_account in db_broker_accounts:
         demo_accounts = get_cash_balances(db_broker_account.access_token, True)
         live_accounts = get_cash_balances(db_broker_account.access_token, False)
-        accounts_status.extend(demo_accounts)
-        accounts_status.extend(live_accounts)
+        if demo_accounts:
+            accounts_status.extend(demo_accounts)
+        if live_accounts:
+            accounts_status.extend(live_accounts)
     print("Accounts: ", accounts_status)
     if accounts_status != []:
         for account in accounts_status:

@@ -17,11 +17,14 @@ CREATE TABLE broker_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id),
     nickname VARCHAR NOT NULL,
+    username VARCHAR,
+    password VARCHAR,
     type VARCHAR NOT NULL,
     last_sync TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     status BOOLEAN DEFAULT FALSE,
     user_broker_id VARCHAR,
     access_token VARCHAR,
+    md_access_token VARCHAR,
     expire_in VARCHAR
 );
 
