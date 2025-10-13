@@ -36,7 +36,7 @@ const TradingPage: React.FC = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     
     try {
-      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol: "NQZ2025" })}`;
+      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol: "3267313" })}`;
       wsRef.current.send(subscribeMsg);
     } catch (error) {
       console.error("Subscription error:", error);
