@@ -29,7 +29,6 @@ const TradingPage: React.FC = () => {
       reconnectWebSocket();
     }
     
-    // Schedule next check
     heartbeatTimerRef.current = setTimeout(sendHeartbeatIfNeeded, 2500);
   };
 
@@ -37,13 +36,14 @@ const TradingPage: React.FC = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     
     try {
-      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol: 3267313 })}`;
+      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol: "NQZ2025" })}`;
       wsRef.current.send(subscribeMsg);
     } catch (error) {
       console.error("Subscription error:", error);
       reconnectWebSocket();
     }
   };
+
   const handleWebSocketMessage = (message: MessageEvent) => {
     const data = message.data as string;
     if (data.length === 0) return;
@@ -57,7 +57,6 @@ const TradingPage: React.FC = () => {
             if (item.i === 1 && item.s === 200) {
               setConnectionStatus("Connected");
               subscribeToQuotes();
-
             }
           } else if (item.e === 'md') {
             if (item.d && item.d.quotes) {
@@ -86,24 +85,37 @@ const TradingPage: React.FC = () => {
     }
   };
 
+  const handleBeforeUnload = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.close(1000, "Browser closing");
+    }
+  };
+
   const reconnectWebSocket = () => {
     cleanupWebSocket();
     initializeWebSocket();
   };
 
   const cleanupWebSocket = () => {
+    // Remove beforeunload listener first
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+
     if (wsRef.current) {
-      wsRef.current.onopen = null;
-      wsRef.current.onmessage = null;
-      wsRef.current.onerror = null;
-      wsRef.current.onclose = null;
-      
-      if (wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close();
+      try {
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.close(1000, "Component unmounting");
+        }
+        wsRef.current.onopen = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onerror = null;
+        wsRef.current.onclose = null;
+      } catch (error) {
+        console.error("Cleanup error:", error);
+      } finally {
+        wsRef.current = null;
       }
-      wsRef.current = null;
     }
-    
+
     if (heartbeatTimerRef.current) {
       clearTimeout(heartbeatTimerRef.current);
       heartbeatTimerRef.current = null;
@@ -123,6 +135,9 @@ const TradingPage: React.FC = () => {
 
       const ws = new WebSocket("wss://md.tradovateapi.com/v1/websocket");
       wsRef.current = ws;
+
+      // Add beforeunload listener for browser/tab close
+      window.addEventListener('beforeunload', handleBeforeUnload);
 
       ws.onopen = () => {
         try {
@@ -145,7 +160,9 @@ const TradingPage: React.FC = () => {
 
       ws.onclose = () => {
         setConnectionStatus("Disconnected");
-        reconnectWebSocket();
+        if (wsRef.current === ws) {
+          reconnectWebSocket();
+        }
       };
 
     } catch (error) {
