@@ -1,22 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
-import Button from "../components/ui/Button";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "../components/ui/Table";
-import { Trash2 } from "lucide-react";
-import Modal from "../components/ui/Modal";
-import Input from "../components/ui/Input";
 import TradingViewWidget from "../components/trading/TradingViewWidget";
-import { Tokens } from "../types/broker";
 import { getWebSocketToken } from "../api/brokerApi";
 
 const TradingPage: React.FC = () => {
@@ -26,25 +13,36 @@ const TradingPage: React.FC = () => {
     last: number | null;
     timestamp: string;
   } | null>(null);
-  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
-  const [heartbeatTimer, setHeartbeatTimer] = useState<NodeJS.Timeout | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>("Disconnected");
+  const wsRef = useRef<WebSocket | null>(null);
+  const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
 
-  const sendHeartbeatIfNeeded = (ws: WebSocket) => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send('[]');
+  const sendHeartbeatIfNeeded = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    
+    try {
+      wsRef.current.send('[]');
+    } catch (error) {
+      console.error("Heartbeat send error:", error);
+      reconnectWebSocket();
     }
+    
     // Schedule next check
-    const timer = setTimeout(() => sendHeartbeatIfNeeded(ws), 2500);
-    setHeartbeatTimer(timer);
+    heartbeatTimerRef.current = setTimeout(sendHeartbeatIfNeeded, 2500);
   };
 
-  const subscribeToQuotes = (ws: WebSocket) => {
-    // MNQ Dec 2025 contract ID (replace with the correct symbol for your needs)
-    const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol: "NQZ2025" })}`;
-    ws.send(subscribeMsg);
+  const subscribeToQuotes = () => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    
+    try {
+      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol: "NQZ2025" })}`;
+      wsRef.current.send(subscribeMsg);
+    } catch (error) {
+      console.error("Subscription error:", error);
+      reconnectWebSocket();
+    }
   };
 
   const handleWebSocketMessage = (message: MessageEvent) => {
@@ -57,13 +55,11 @@ const TradingPage: React.FC = () => {
         const parsedData = JSON.parse(data.substring(1));
         parsedData.forEach((item: any) => {
           if (item.s !== undefined && item.i !== undefined) {
-            // Handle response messages
             if (item.i === 1 && item.s === 200) {
               setConnectionStatus("Connected");
-              subscribeToQuotes(wsConnection!);
+              subscribeToQuotes();
             }
           } else if (item.e === 'md') {
-            // Handle market data
             if (item.d && item.d.quotes) {
               const quote = item.d.quotes[0];
               const entries = quote.entries || {};
@@ -71,14 +67,12 @@ const TradingPage: React.FC = () => {
               const askData = entries.Offer || {};
               const tradeData = entries.Trade || {};
 
-              const marketDataUpdate = {
+              setMarketData({
                 bid: bidData.price || null,
                 ask: askData.price || null,
                 last: tradeData.price || null,
                 timestamp: quote.timestamp || "N/A",
-              };
-
-              setMarketData(marketDataUpdate);
+              });
             }
           }
         });
@@ -86,65 +80,86 @@ const TradingPage: React.FC = () => {
         console.error("Error parsing WebSocket message:", error);
       }
     } else if (frameType === 'h') {
-      // Handle heartbeat
-      wsConnection?.send('[]');
-    } else if (frameType === 'o') {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send('[]');
+      }
+    }
+  };
+
+  const reconnectWebSocket = () => {
+    cleanupWebSocket();
+    initializeWebSocket();
+  };
+
+  const cleanupWebSocket = () => {
+    if (wsRef.current) {
+      wsRef.current.onopen = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.onerror = null;
+      wsRef.current.onclose = null;
+      
+      if (wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
+      }
+      wsRef.current = null;
+    }
+    
+    if (heartbeatTimerRef.current) {
+      clearTimeout(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
+    
+    setConnectionStatus("Disconnected");
+  };
+
+  const initializeWebSocket = async () => {
+    try {
       setConnectionStatus("Connecting...");
-    } else if (frameType === 'c') {
-      setConnectionStatus("Disconnected");
+      const token = await getWebSocketToken(user_id);
+      if (!token?.access_token) {
+        setConnectionStatus("Failed (No Token)");
+        return;
+      }
+
+      const ws = new WebSocket("wss://md.tradovateapi.com/v1/websocket");
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        try {
+          const authMsg = `authorize\n1\n\n${token.access_token}`;
+          ws.send(authMsg);
+          heartbeatTimerRef.current = setTimeout(sendHeartbeatIfNeeded, 2500);
+        } catch (error) {
+          console.error("WebSocket open error:", error);
+          reconnectWebSocket();
+        }
+      };
+
+      ws.onmessage = handleWebSocketMessage;
+
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        setConnectionStatus("Error");
+        reconnectWebSocket();
+      };
+
+      ws.onclose = () => {
+        setConnectionStatus("Disconnected");
+        reconnectWebSocket();
+      };
+
+    } catch (error) {
+      console.error("Connection error:", error);
+      setConnectionStatus("Failed");
+      reconnectWebSocket();
     }
   };
 
   useEffect(() => {
-    const connectWebSocket = async () => {
-      try {
-        setConnectionStatus("Connecting...");
-        const token = await getWebSocketToken(user_id);
-        if (!token) {
-          setConnectionStatus("Failed (No Token)");
-          return;
-        }
-
-        const ws = new WebSocket("wss://md.tradovateapi.com/v1/websocket");
-
-        ws.onopen = () => {
-          const authMsg = `authorize\n1\n\n${token.access_token}`;
-          ws.send(authMsg);
-          // Start heartbeat
-          const timer = setTimeout(() => sendHeartbeatIfNeeded(ws), 2500);
-          setHeartbeatTimer(timer);
-          setWsConnection(ws);
-        };
-
-        ws.onmessage = handleWebSocketMessage;
-
-        ws.onerror = (error) => {
-          console.error("WebSocket error:", error);
-          setConnectionStatus("Error");
-        };
-
-        ws.onclose = () => {
-          setConnectionStatus("Disconnected");
-          if (heartbeatTimer) {
-            clearTimeout(heartbeatTimer);
-          }
-          setWsConnection(null);
-        };
-      } catch (error) {
-        console.error("Connection error:", error);
-        setConnectionStatus("Failed");
-      }
-    };
-
-    connectWebSocket();
+    initializeWebSocket();
 
     return () => {
-      if (wsConnection) {
-        wsConnection.close();
-      }
-      if (heartbeatTimer) {
-        clearTimeout(heartbeatTimer);
-      }
+      cleanupWebSocket();
     };
   }, [user_id]);
 
