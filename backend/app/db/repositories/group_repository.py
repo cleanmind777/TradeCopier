@@ -36,9 +36,8 @@ def user_get_group(db: Session, user_id: UUID) -> list[GroupInfo]:
                 .first()
             )
             if db_sub_broker is None:
-                # Handle the case where no broker info was found for the user
-                # You can raise an exception, return a default value, or handle it appropriately
-                raise ValueError(f"No broker found for user {user_id}")
+                # Skip missing sub-broker (might have been deleted)
+                continue
             else:
                 response_broker["id"] = db_sub_broker.id
                 response_broker["nickname"] = db_sub_broker.nickname
