@@ -85,13 +85,45 @@ const TradingPage: React.FC = () => {
               console.log('Received market data:', newMarketData);
               setMarketData(newMarketData);
 
-              // Update chart with the last price
-              if (newMarketData.last && candleSeriesRef.current) {
+              // Use last price if available, otherwise use mid-price (bid+ask)/2, or fallback to bid or ask
+              let price = newMarketData.last;
+              if (!price && newMarketData.bid && newMarketData.ask) {
+                price = (newMarketData.bid + newMarketData.ask) / 2;
+                console.log('Using mid-price:', price);
+              } else if (!price && newMarketData.bid) {
+                price = newMarketData.bid;
+                console.log('Using bid price:', price);
+              } else if (!price && newMarketData.ask) {
+                price = newMarketData.ask;
+                console.log('Using ask price:', price);
+              }
+
+              // Update chart with available price
+              if (price && candleSeriesRef.current) {
                 const currentTime = Math.floor(Date.now() / 1000);
-                const price = newMarketData.last;
 
                 // Initialize or update current candle
                 if (!currentCandleRef.current) {
+                  // Create initial historical candles for better visualization
+                  const initialCandles = [];
+                  for (let i = 10; i > 0; i--) {
+                    initialCandles.push({
+                      time: currentTime - i,
+                      open: price,
+                      high: price,
+                      low: price,
+                      close: price,
+                    });
+                  }
+                  
+                  // Set initial candles
+                  try {
+                    candleSeriesRef.current.setData(initialCandles);
+                    console.log('Set initial candles:', initialCandles.length);
+                  } catch (error) {
+                    console.error('Error setting initial data:', error);
+                  }
+
                   currentCandleRef.current = {
                     time: currentTime,
                     open: price,
@@ -113,8 +145,8 @@ const TradingPage: React.FC = () => {
                   setCandleCount(prev => prev + 1);
                   console.log('Chart updated with candle:', currentCandleRef.current);
                   
-                  // Auto-scale to fit content
-                  if (chartRef.current) {
+                  // Auto-scale only on first few updates
+                  if (candleCount < 5 && chartRef.current) {
                     chartRef.current.timeScale().fitContent();
                   }
                 } catch (error) {
@@ -387,7 +419,12 @@ const TradingPage: React.FC = () => {
               />
               {candleCount === 0 && marketData && (
                 <div className="text-center text-gray-500 mt-4">
-                  Waiting for trade data... (Bid: ${marketData.bid}, Ask: ${marketData.ask})
+                  Connecting to market data... (Bid: ${marketData.bid}, Ask: ${marketData.ask}, Last: ${marketData.last || 'N/A'})
+                </div>
+              )}
+              {candleCount === 0 && !marketData && (
+                <div className="text-center text-gray-500 mt-4">
+                  Waiting for WebSocket connection...
                 </div>
               )}
             </CardContent>
