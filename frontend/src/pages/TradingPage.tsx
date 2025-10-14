@@ -24,9 +24,8 @@ const TradingPage: React.FC = () => {
   // Lightweight Charts refs
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null); // Using any to avoid complex type issues
-  const candleSeriesRef = useRef<any>(null); // Using any to avoid complex type issues
-  const currentCandleRef = useRef<any>(null); // Store current candle data
-  const candleIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lineSeriesRef = useRef<any>(null); // Using any to avoid complex type issues
+  const lastUpdateTimeRef = useRef<number>(0); // Track last update time
 
   const sendHeartbeatIfNeeded = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -98,59 +97,34 @@ const TradingPage: React.FC = () => {
                 console.log('Using ask price:', price);
               }
 
-              // Update chart with available price
-              if (price && candleSeriesRef.current) {
+              // Update line chart with available price
+              if (price && lineSeriesRef.current) {
                 const currentTime = Math.floor(Date.now() / 1000);
 
-                // Initialize or update current candle
-                if (!currentCandleRef.current) {
-                  // Create initial historical candles for better visualization
-                  const initialCandles = [];
-                  for (let i = 10; i > 0; i--) {
-                    initialCandles.push({
-                      time: currentTime - i,
-                      open: price,
-                      high: price,
-                      low: price,
-                      close: price,
-                    });
-                  }
-                  
-                  // Set initial candles
-                  try {
-                    candleSeriesRef.current.setData(initialCandles);
-                    console.log('Set initial candles:', initialCandles.length);
-                  } catch (error) {
-                    console.error('Error setting initial data:', error);
-                  }
+                // Only update if at least 1 second has passed since last update
+                // This prevents too many data points and keeps the chart smooth
+                if (currentTime > lastUpdateTimeRef.current) {
+                  lastUpdateTimeRef.current = currentTime;
 
-                  currentCandleRef.current = {
+                  // Create data point for line chart
+                  const dataPoint = {
                     time: currentTime,
-                    open: price,
-                    high: price,
-                    low: price,
-                    close: price,
+                    value: price,
                   };
-                  console.log('Created first candle:', currentCandleRef.current);
-                } else {
-                  // Update current candle
-                  currentCandleRef.current.high = Math.max(currentCandleRef.current.high, price);
-                  currentCandleRef.current.low = Math.min(currentCandleRef.current.low, price);
-                  currentCandleRef.current.close = price;
-                }
 
-                // Update the chart with current candle (always update)
-                try {
-                  candleSeriesRef.current.update(currentCandleRef.current);
-                  setCandleCount(prev => prev + 1);
-                  console.log('Chart updated with candle:', currentCandleRef.current);
-                  
-                  // Auto-scale only on first few updates
-                  if (candleCount < 5 && chartRef.current) {
-                    chartRef.current.timeScale().fitContent();
+                  // Update the chart
+                  try {
+                    lineSeriesRef.current.update(dataPoint);
+                    setCandleCount(prev => prev + 1);
+                    console.log('Chart updated with price:', dataPoint);
+                    
+                    // Auto-scale only on first few updates
+                    if (candleCount < 5 && chartRef.current) {
+                      chartRef.current.timeScale().fitContent();
+                    }
+                  } catch (error) {
+                    console.error('Error updating chart:', error);
                   }
-                } catch (error) {
-                  console.error('Error updating chart:', error);
                 }
               }
             }
@@ -200,11 +174,6 @@ const TradingPage: React.FC = () => {
     if (heartbeatTimerRef.current) {
       clearTimeout(heartbeatTimerRef.current);
       heartbeatTimerRef.current = null;
-    }
-
-    if (candleIntervalRef.current) {
-      clearInterval(candleIntervalRef.current);
-      candleIntervalRef.current = null;
     }
     
     setConnectionStatus("Disconnected");
@@ -308,52 +277,27 @@ const TradingPage: React.FC = () => {
     // Use setTimeout to ensure chart is fully rendered before adding series
     const timeoutId = setTimeout(() => {
       try {
-        console.log('Initializing candlestick series...');
-        const candleSeries = (chart as any).addCandlestickSeries({
-          upColor: '#26a69a',
-          downColor: '#ef5350',
-          borderVisible: false,
-          wickUpColor: '#26a69a',
-          wickDownColor: '#ef5350',
+        console.log('Initializing line series...');
+        const lineSeries = (chart as any).addLineSeries({
+          color: '#2962FF',
+          lineWidth: 2,
           priceFormat: {
             type: 'price',
             precision: 2,
             minMove: 0.01,
           },
+          crosshairMarkerVisible: true,
+          crosshairMarkerRadius: 6,
+          lastValueVisible: true,
+          priceLineVisible: true,
         });
 
         chartRef.current = chart;
-        candleSeriesRef.current = candleSeries;
-        console.log('Candlestick series created successfully');
-
-        // Create new candle every second
-        candleIntervalRef.current = setInterval(() => {
-          if (currentCandleRef.current && candleSeriesRef.current) {
-            const newTime = Math.floor(Date.now() / 1000);
-            const lastPrice = currentCandleRef.current.close;
-            
-            console.log('Creating new 1-second candle at time:', newTime);
-            
-            // Start a new candle with the last close price
-            currentCandleRef.current = {
-              time: newTime,
-              open: lastPrice,
-              high: lastPrice,
-              low: lastPrice,
-              close: lastPrice,
-            };
-            
-            // Update chart with new candle
-            try {
-              candleSeriesRef.current.update(currentCandleRef.current);
-            } catch (error) {
-              console.error('Error updating new candle:', error);
-            }
-          }
-        }, 1000); // Create new candle every 1 second
+        lineSeriesRef.current = lineSeries;
+        console.log('Line series created successfully');
 
       } catch (error) {
-        console.error('Error adding candlestick series:', error);
+        console.error('Error adding line series:', error);
       }
     }, 0);
 
@@ -370,16 +314,11 @@ const TradingPage: React.FC = () => {
 
     return () => {
       clearTimeout(timeoutId);
-      if (candleIntervalRef.current) {
-        clearInterval(candleIntervalRef.current);
-        candleIntervalRef.current = null;
-      }
       window.removeEventListener('resize', handleResize);
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
-        candleSeriesRef.current = null;
-        currentCandleRef.current = null;
+        lineSeriesRef.current = null;
       }
     };
   }, []);
@@ -405,7 +344,7 @@ const TradingPage: React.FC = () => {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <span>Real-Time Price Chart (1-Second Candles)</span>
+                <span>Real-Time Price Line Chart</span>
                 <span className="text-sm font-normal text-gray-600">
                   Updates: {candleCount}
                 </span>
