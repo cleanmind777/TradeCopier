@@ -9,16 +9,22 @@ class GroupCreate(BaseModel):
     user_id: UUID
     name: str
     sub_brokers: list[SubBrokersWithQty]
+    sl: float
+    tp: float
 
 class GroupEdit(BaseModel):
     id: UUID
     name: str
     sub_brokers: list[SubBrokersWithQty]
+    sl: float
+    tp: float
 
 class GroupInfo(BaseModel):
     id: UUID
     name: str
     sub_brokers: list[SubBrokerSumary]
+    sl: float
+    tp: float
 
 class GroupNameChange(BaseModel):
     group_id: UUID

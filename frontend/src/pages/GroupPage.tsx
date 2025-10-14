@@ -16,11 +16,9 @@ import { Trash2 } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
 import {
-  SubBrokerForCreate,
   SubBrokerSummaryForGet,
-  SubBrokerSummary,
 } from "../types/broker";
-import { getSubBrokers, getSubBrokersForGroup } from "../api/brokerApi";
+import { getSubBrokersForGroup } from "../api/brokerApi";
 import { GroupCreate, GroupInfo } from "../types/group";
 import { createGroup, editGroup, deleteGroup, getGroup } from "../api/groupApi";
 
@@ -31,6 +29,8 @@ const GroupPage: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [newGroupSL, setNewGroupSL] = useState<number>(0);
+  const [newGroupTP, setNewGroupTP] = useState<number>(0);
   const [editGroupData, setEditGroupData] = useState<GroupInfo | null>(null);
   const [availableBrokers, setAvailableBrokers] = useState<
     SubBrokerSummaryForGet[]
@@ -69,6 +69,8 @@ const GroupPage: React.FC = () => {
     const newGroup: GroupCreate = {
       user_id: user_id,
       name: newGroupName,
+      sl: newGroupSL,
+      tp: newGroupTP,
       sub_brokers: selectedBrokers.map((brokerId) => ({
         id: brokerId,
         qty: brokerQuantities[brokerId] || 1,
@@ -80,6 +82,8 @@ const GroupPage: React.FC = () => {
     setIsEditModalOpen(false);
     setIsDetailsModalOpen(false);
     setNewGroupName("");
+    setNewGroupSL(0);
+    setNewGroupTP(0);
     setSelectedBrokers([]);
     setBrokerQuantities({});
   };
@@ -179,9 +183,6 @@ const GroupPage: React.FC = () => {
     });
   };
 
-  // Helper function to determine if all brokers are selected (for edit modal)
-  const allBrokersSelected = editGroupData?.sub_brokers.length === availableBrokers.length;
-
   return (
     <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
       <Sidebar />
@@ -221,39 +222,51 @@ const GroupPage: React.FC = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm text-gray-500">Total Quantity</p>
-                      <p className="text-lg font-medium">
-                        {group.sub_brokers.reduce(
-                          (sum, broker) => sum + (broker.qty || 1),
-                          0
-                        )}
-                      </p>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm text-gray-500">Total Quantity</p>
+                        <p className="text-lg font-medium">
+                          {group.sub_brokers.reduce(
+                            (sum, broker) => sum + (broker.qty || 1),
+                            0
+                          )}
+                        </p>
+                      </div>
+                      <div className="space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClick(group);
+                          }}
+                          className="text-blue-600 hover:bg-blue-50"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteGroup(group.id);
+                          }}
+                          className="text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </div>
-                    <div className="space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditClick(group);
-                        }}
-                        className="text-blue-600 hover:bg-blue-50"
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteGroup(group.id);
-                        }}
-                        className="text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </Button>
+                    <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                      <div>
+                        <p className="text-xs text-gray-500">Stop Loss (SL)</p>
+                        <p className="text-base font-semibold text-red-600">${group.sl || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Take Profit (TP)</p>
+                        <p className="text-base font-semibold text-green-600">${group.tp || 0}</p>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -270,7 +283,7 @@ const GroupPage: React.FC = () => {
             {selectedGroup && (
               <div className="space-y-6">
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-center justify-between">
+                  <div className="grid grid-cols-3 gap-4 mb-4">
                     <div>
                       <p className="text-sm text-gray-500">Total Quantity</p>
                       <p className="text-lg font-semibold">
@@ -280,18 +293,26 @@ const GroupPage: React.FC = () => {
                         )}
                       </p>
                     </div>
-                    <div className="flex space-x-2">
-                      <Button onClick={() => handleEditClick(selectedGroup)}>
-                        Edit Group
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => handleDeleteGroup(selectedGroup.id)}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </Button>
+                    <div>
+                      <p className="text-sm text-gray-500">Stop Loss (SL)</p>
+                      <p className="text-lg font-semibold text-red-600">${selectedGroup.sl || 0}</p>
                     </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Take Profit (TP)</p>
+                      <p className="text-lg font-semibold text-green-600">${selectedGroup.tp || 0}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button onClick={() => handleEditClick(selectedGroup)}>
+                      Edit Group
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => handleDeleteGroup(selectedGroup.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </Button>
                   </div>
                 </div>
 
@@ -344,6 +365,31 @@ const GroupPage: React.FC = () => {
                   onChange={(e) => setNewGroupName(e.target.value)}
                   placeholder="Enter group name"
                   className="w-full"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  type="number"
+                  label="Stop Loss (SL)"
+                  value={newGroupSL}
+                  onChange={(e) => setNewGroupSL(parseFloat(e.target.value) || 0)}
+                  placeholder="Enter stop loss"
+                  className="w-full"
+                  min="0"
+                  step="0.01"
+                  required
+                />
+                <Input
+                  type="number"
+                  label="Take Profit (TP)"
+                  value={newGroupTP}
+                  onChange={(e) => setNewGroupTP(parseFloat(e.target.value) || 0)}
+                  placeholder="Enter take profit"
+                  className="w-full"
+                  min="0"
+                  step="0.01"
                   required
                 />
               </div>
@@ -480,6 +526,41 @@ const GroupPage: React.FC = () => {
                     }
                     placeholder="Enter group name"
                     className="w-full"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    type="number"
+                    label="Stop Loss (SL)"
+                    value={editGroupData.sl}
+                    onChange={(e) =>
+                      setEditGroupData({
+                        ...editGroupData,
+                        sl: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    placeholder="Enter stop loss"
+                    className="w-full"
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                  <Input
+                    type="number"
+                    label="Take Profit (TP)"
+                    value={editGroupData.tp}
+                    onChange={(e) =>
+                      setEditGroupData({
+                        ...editGroupData,
+                        tp: parseFloat(e.target.value) || 0,
+                      })
+                    }
+                    placeholder="Enter take profit"
+                    className="w-full"
+                    min="0"
+                    step="0.01"
                     required
                   />
                 </div>
