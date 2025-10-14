@@ -5,6 +5,7 @@ import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import TradingViewWidget from "../components/trading/TradingViewWidget";
 import { getWebSocketToken } from "../api/brokerApi";
+import { createChart, ColorType } from "lightweight-charts";
 
 const TradingPage: React.FC = () => {
   const [marketData, setMarketData] = useState<{
@@ -18,6 +19,12 @@ const TradingPage: React.FC = () => {
   const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
+
+  // Lightweight Charts refs
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<any>(null); // Using any to avoid complex type issues
+  const lineSeriesRef = useRef<any>(null); // Using any to avoid complex type issues
+  const priceDataRef = useRef<any[]>([]);
 
   const sendHeartbeatIfNeeded = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -66,12 +73,34 @@ const TradingPage: React.FC = () => {
               const askData = entries.Offer || {};
               const tradeData = entries.Trade || {};
 
-              setMarketData({
+              const newMarketData = {
                 bid: bidData.price || null,
                 ask: askData.price || null,
                 last: tradeData.price || null,
                 timestamp: quote.timestamp || "N/A",
-              });
+              };
+
+              setMarketData(newMarketData);
+
+              // Update lightweight chart with the last price
+              if (newMarketData.last && lineSeriesRef.current) {
+                const time = Math.floor(Date.now() / 1000) as any; // Cast to any to handle Time type
+                const newDataPoint = {
+                  time: time,
+                  value: newMarketData.last,
+                };
+                
+                // Add to our data store
+                priceDataRef.current = [...priceDataRef.current, newDataPoint];
+                
+                // Keep only last 100 data points for performance
+                if (priceDataRef.current.length > 100) {
+                  priceDataRef.current = priceDataRef.current.slice(-100);
+                }
+
+                // Update the chart
+                lineSeriesRef.current.update(newDataPoint);
+              }
             }
           }
         });
@@ -180,6 +209,70 @@ const TradingPage: React.FC = () => {
     };
   }, [user_id]);
 
+  // Initialize lightweight chart
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: '#ffffff' },
+        textColor: '#333',
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: 400,
+      grid: {
+        vertLines: {
+          color: '#e1e4e8',
+        },
+        horzLines: {
+          color: '#e1e4e8',
+        },
+      },
+      crosshair: {
+        mode: 1, // Normal crosshair mode
+      },
+      rightPriceScale: {
+        borderColor: '#d1d4dc',
+      },
+      timeScale: {
+        borderColor: '#d1d4dc',
+        timeVisible: true,
+        secondsVisible: true,
+      },
+    });
+
+    const lineSeries = (chart as any).addSeries({
+      lineWidth: 2,
+      color: '#2962FF',
+      priceFormat: {
+        type: 'price',
+        precision: 2,
+        minMove: 0.01,
+      },
+    });
+
+    chartRef.current = chart;
+    lineSeriesRef.current = lineSeries;
+
+    // Handle resize
+    const handleResize = () => {
+      if (chartContainerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+        });
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (chartRef.current) {
+        chartRef.current.remove();
+      }
+    };
+  }, []);
+
   return (
     <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
       <Sidebar />
@@ -196,6 +289,19 @@ const TradingPage: React.FC = () => {
               Status: {connectionStatus}
             </div>
           </div>
+
+          {/* Real-time Price Chart using Lightweight Charts */}
+          <Card>
+            <CardHeader>Real-Time Price Chart</CardHeader>
+            <CardContent>
+              <div 
+                ref={chartContainerRef} 
+                className="w-full"
+                style={{ height: '400px' }}
+              />
+            </CardContent>
+          </Card>
+
           <div>
             <TradingViewWidget symbol={"NQZ2025"} />
           </div>
