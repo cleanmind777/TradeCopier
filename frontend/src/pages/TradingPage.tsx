@@ -15,6 +15,7 @@ const TradingPage: React.FC = () => {
     timestamp: string;
   } | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>("Disconnected");
+  const [candleCount, setCandleCount] = useState<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
   const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
   const user = localStorage.getItem("user");
@@ -109,6 +110,7 @@ const TradingPage: React.FC = () => {
                 // Update the chart with current candle (always update)
                 try {
                   candleSeriesRef.current.update(currentCandleRef.current);
+                  setCandleCount(prev => prev + 1);
                   console.log('Chart updated with candle:', currentCandleRef.current);
                   
                   // Auto-scale to fit content
@@ -245,7 +247,7 @@ const TradingPage: React.FC = () => {
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#ffffff' },
+        background: { type: ColorType.Solid, color: '#000000' },
         textColor: '#333',
       },
       width: containerWidth,
@@ -369,13 +371,25 @@ const TradingPage: React.FC = () => {
 
           {/* Real-time Price Chart using Lightweight Charts */}
           <Card>
-            <CardHeader>Real-Time Price Chart (1-Second Candles)</CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <span>Real-Time Price Chart (1-Second Candles)</span>
+                <span className="text-sm font-normal text-gray-600">
+                  Updates: {candleCount}
+                </span>
+              </div>
+            </CardHeader>
             <CardContent>
               <div 
                 ref={chartContainerRef} 
                 className="w-full"
                 style={{ height: '500px' }}
               />
+              {candleCount === 0 && marketData && (
+                <div className="text-center text-gray-500 mt-4">
+                  Waiting for trade data... (Bid: ${marketData.bid}, Ask: ${marketData.ask})
+                </div>
+              )}
             </CardContent>
           </Card>
 
