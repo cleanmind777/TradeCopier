@@ -3,7 +3,7 @@ import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
-import TradingViewWidget from "../components/trading/TradingViewWidget";
+// import TradingViewWidget from "../components/trading/TradingViewWidget";
 import { getWebSocketToken } from "../api/brokerApi";
 import { createChart, ColorType } from "lightweight-charts";
 
@@ -23,8 +23,9 @@ const TradingPage: React.FC = () => {
   // Lightweight Charts refs
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null); // Using any to avoid complex type issues
-  const lineSeriesRef = useRef<any>(null); // Using any to avoid complex type issues
-  const priceDataRef = useRef<any[]>([]);
+  const candleSeriesRef = useRef<any>(null); // Using any to avoid complex type issues
+  const currentCandleRef = useRef<any>(null); // Store current candle data
+  const candleIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const sendHeartbeatIfNeeded = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -82,24 +83,33 @@ const TradingPage: React.FC = () => {
 
               setMarketData(newMarketData);
 
-              // Update lightweight chart with the last price
-              if (newMarketData.last && lineSeriesRef.current) {
-                const time = Math.floor(Date.now() / 1000) as any; // Cast to any to handle Time type
-                const newDataPoint = {
-                  time: time,
-                  value: newMarketData.last,
-                };
-                
-                // Add to our data store
-                priceDataRef.current = [...priceDataRef.current, newDataPoint];
-                
-                // Keep only last 100 data points for performance
-                if (priceDataRef.current.length > 100) {
-                  priceDataRef.current = priceDataRef.current.slice(-100);
-                }
+              // Update chart with the last price
+              if (newMarketData.last && candleSeriesRef.current) {
+                const currentTime = Math.floor(Date.now() / 1000);
+                const price = newMarketData.last;
 
-                // Update the chart
-                lineSeriesRef.current.update(newDataPoint);
+                // Initialize or update current candle
+                if (!currentCandleRef.current) {
+                  currentCandleRef.current = {
+                    time: currentTime,
+                    open: price,
+                    high: price,
+                    low: price,
+                    close: price,
+                  };
+                } else {
+                  // Update current candle
+                  currentCandleRef.current.high = Math.max(currentCandleRef.current.high, price);
+                  currentCandleRef.current.low = Math.min(currentCandleRef.current.low, price);
+                  currentCandleRef.current.close = price;
+                  
+                  // Update the chart with current candle
+                  try {
+                    candleSeriesRef.current.update(currentCandleRef.current);
+                  } catch (error) {
+                    console.error('Error updating chart:', error);
+                  }
+                }
               }
             }
           }
@@ -148,6 +158,11 @@ const TradingPage: React.FC = () => {
     if (heartbeatTimerRef.current) {
       clearTimeout(heartbeatTimerRef.current);
       heartbeatTimerRef.current = null;
+    }
+
+    if (candleIntervalRef.current) {
+      clearInterval(candleIntervalRef.current);
+      candleIntervalRef.current = null;
     }
     
     setConnectionStatus("Disconnected");
@@ -226,7 +241,7 @@ const TradingPage: React.FC = () => {
         textColor: '#333',
       },
       width: containerWidth,
-      height: 400,
+      height: 500,
       grid: {
         vertLines: {
           color: '#e1e4e8',
@@ -251,9 +266,12 @@ const TradingPage: React.FC = () => {
     // Use setTimeout to ensure chart is fully rendered before adding series
     const timeoutId = setTimeout(() => {
       try {
-        const lineSeries = (chart as any).addSeries({
-          color: '#2962FF',
-          lineWidth: 2,
+        const candleSeries = (chart as any).addCandlestickSeries({
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          borderVisible: false,
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350',
           priceFormat: {
             type: 'price',
             precision: 2,
@@ -262,9 +280,27 @@ const TradingPage: React.FC = () => {
         });
 
         chartRef.current = chart;
-        lineSeriesRef.current = lineSeries;
+        candleSeriesRef.current = candleSeries;
+
+        // Create new candle every second
+        candleIntervalRef.current = setInterval(() => {
+          if (currentCandleRef.current && candleSeriesRef.current) {
+            const newTime = Math.floor(Date.now() / 1000);
+            const lastPrice = currentCandleRef.current.close;
+            
+            // Start a new candle with the last close price
+            currentCandleRef.current = {
+              time: newTime,
+              open: lastPrice,
+              high: lastPrice,
+              low: lastPrice,
+              close: lastPrice,
+            };
+          }
+        }, 1000); // Create new candle every 1 second
+
       } catch (error) {
-        console.error('Error adding line series:', error);
+        console.error('Error adding candlestick series:', error);
       }
     }, 0);
 
@@ -281,11 +317,16 @@ const TradingPage: React.FC = () => {
 
     return () => {
       clearTimeout(timeoutId);
+      if (candleIntervalRef.current) {
+        clearInterval(candleIntervalRef.current);
+        candleIntervalRef.current = null;
+      }
       window.removeEventListener('resize', handleResize);
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
-        lineSeriesRef.current = null;
+        candleSeriesRef.current = null;
+        currentCandleRef.current = null;
       }
     };
   }, []);
@@ -309,19 +350,19 @@ const TradingPage: React.FC = () => {
 
           {/* Real-time Price Chart using Lightweight Charts */}
           <Card>
-            <CardHeader>Real-Time Price Chart</CardHeader>
+            <CardHeader>Real-Time Price Chart (1-Second Candles)</CardHeader>
             <CardContent>
               <div 
                 ref={chartContainerRef} 
                 className="w-full"
-                style={{ height: '400px' }}
+                style={{ height: '500px' }}
               />
             </CardContent>
           </Card>
 
-          <div>
+          {/* <div>
             <TradingViewWidget symbol={"NQZ2025"} />
-          </div>
+          </div> */}
           {marketData && (
             <Card>
               <CardHeader>Market Data</CardHeader>
