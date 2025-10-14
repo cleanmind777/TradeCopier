@@ -81,6 +81,7 @@ const TradingPage: React.FC = () => {
                 timestamp: quote.timestamp || "N/A",
               };
 
+              console.log('Received market data:', newMarketData);
               setMarketData(newMarketData);
 
               // Update chart with the last price
@@ -97,18 +98,25 @@ const TradingPage: React.FC = () => {
                     low: price,
                     close: price,
                   };
+                  console.log('Created first candle:', currentCandleRef.current);
                 } else {
                   // Update current candle
                   currentCandleRef.current.high = Math.max(currentCandleRef.current.high, price);
                   currentCandleRef.current.low = Math.min(currentCandleRef.current.low, price);
                   currentCandleRef.current.close = price;
+                }
+
+                // Update the chart with current candle (always update)
+                try {
+                  candleSeriesRef.current.update(currentCandleRef.current);
+                  console.log('Chart updated with candle:', currentCandleRef.current);
                   
-                  // Update the chart with current candle
-                  try {
-                    candleSeriesRef.current.update(currentCandleRef.current);
-                  } catch (error) {
-                    console.error('Error updating chart:', error);
+                  // Auto-scale to fit content
+                  if (chartRef.current) {
+                    chartRef.current.timeScale().fitContent();
                   }
+                } catch (error) {
+                  console.error('Error updating chart:', error);
                 }
               }
             }
@@ -266,6 +274,7 @@ const TradingPage: React.FC = () => {
     // Use setTimeout to ensure chart is fully rendered before adding series
     const timeoutId = setTimeout(() => {
       try {
+        console.log('Initializing candlestick series...');
         const candleSeries = (chart as any).addCandlestickSeries({
           upColor: '#26a69a',
           downColor: '#ef5350',
@@ -281,12 +290,15 @@ const TradingPage: React.FC = () => {
 
         chartRef.current = chart;
         candleSeriesRef.current = candleSeries;
+        console.log('Candlestick series created successfully');
 
         // Create new candle every second
         candleIntervalRef.current = setInterval(() => {
           if (currentCandleRef.current && candleSeriesRef.current) {
             const newTime = Math.floor(Date.now() / 1000);
             const lastPrice = currentCandleRef.current.close;
+            
+            console.log('Creating new 1-second candle at time:', newTime);
             
             // Start a new candle with the last close price
             currentCandleRef.current = {
@@ -296,6 +308,13 @@ const TradingPage: React.FC = () => {
               low: lastPrice,
               close: lastPrice,
             };
+            
+            // Update chart with new candle
+            try {
+              candleSeriesRef.current.update(currentCandleRef.current);
+            } catch (error) {
+              console.error('Error updating new candle:', error);
+            }
           }
         }, 1000); // Create new candle every 1 second
 
