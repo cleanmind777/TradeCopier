@@ -213,12 +213,19 @@ const TradingPage: React.FC = () => {
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
+    // Ensure container has dimensions before creating chart
+    const containerWidth = chartContainerRef.current.clientWidth;
+    if (containerWidth === 0) {
+      console.warn('Chart container has no width, delaying initialization');
+      return;
+    }
+
     const chart = createChart(chartContainerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: '#ffffff' },
         textColor: '#333',
       },
-      width: chartContainerRef.current.clientWidth,
+      width: containerWidth,
       height: 400,
       grid: {
         vertLines: {
@@ -241,18 +248,25 @@ const TradingPage: React.FC = () => {
       },
     });
 
-    const lineSeries = (chart as any).addSeries({
-      lineWidth: 2,
-      color: '#2962FF',
-      priceFormat: {
-        type: 'price',
-        precision: 2,
-        minMove: 0.01,
-      },
-    });
+    // Use setTimeout to ensure chart is fully rendered before adding series
+    const timeoutId = setTimeout(() => {
+      try {
+        const lineSeries = (chart as any).addSeries({
+          color: '#2962FF',
+          lineWidth: 2,
+          priceFormat: {
+            type: 'price',
+            precision: 2,
+            minMove: 0.01,
+          },
+        });
 
-    chartRef.current = chart;
-    lineSeriesRef.current = lineSeries;
+        chartRef.current = chart;
+        lineSeriesRef.current = lineSeries;
+      } catch (error) {
+        console.error('Error adding line series:', error);
+      }
+    }, 0);
 
     // Handle resize
     const handleResize = () => {
@@ -266,9 +280,12 @@ const TradingPage: React.FC = () => {
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(timeoutId);
       window.removeEventListener('resize', handleResize);
       if (chartRef.current) {
         chartRef.current.remove();
+        chartRef.current = null;
+        lineSeriesRef.current = null;
       }
     };
   }, []);
