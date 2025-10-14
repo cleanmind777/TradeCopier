@@ -45,7 +45,9 @@ def user_get_group(db: Session, user_id: UUID) -> list[GroupInfo]:
                 response_broker['qty'] = sub_broker.qty
                 response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers, sl=group.sl, tp=group.tp
+            id=group.id, name=group.name, sub_brokers=response_brokers, 
+            sl=group.sl if group.sl is not None else 0.0, 
+            tp=group.tp if group.tp is not None else 0.0
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -85,7 +87,9 @@ def user_create_group(db: Session, group_create: GroupCreate) -> list[GroupInfo]
             response_broker["qty"] = sub_broker.qty
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers, sl=group.sl, tp=group.tp
+            id=group.id, name=group.name, sub_brokers=response_brokers, 
+            sl=group.sl if group.sl is not None else 0.0, 
+            tp=group.tp if group.tp is not None else 0.0
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -140,7 +144,9 @@ def user_edit_group(db: Session, group_edit: GroupEdit):
             response_broker['qty'] = sub_broker.qty
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers, sl=group.sl, tp=group.tp
+            id=group.id, name=group.name, sub_brokers=response_brokers, 
+            sl=group.sl if group.sl is not None else 0.0, 
+            tp=group.tp if group.tp is not None else 0.0
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -216,7 +222,9 @@ def user_del_group(db: Session, group_id: UUID):
             response_broker['qty'] = sub_broker.qty
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers, sl=group.sl, tp=group.tp
+            id=group.id, name=group.name, sub_brokers=response_brokers, 
+            sl=group.sl if group.sl is not None else 0.0, 
+            tp=group.tp if group.tp is not None else 0.0
         )
         groups_summary.append(group_summary)
     return groups_summary

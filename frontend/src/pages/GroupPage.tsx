@@ -69,8 +69,8 @@ const GroupPage: React.FC = () => {
     const newGroup: GroupCreate = {
       user_id: user_id,
       name: newGroupName,
-      sl: newGroupSL,
-      tp: newGroupTP,
+      sl: newGroupSL || 0,
+      tp: newGroupTP || 0,
       sub_brokers: selectedBrokers.map((brokerId) => ({
         id: brokerId,
         qty: brokerQuantities[brokerId] || 1,
@@ -93,6 +93,8 @@ const GroupPage: React.FC = () => {
 
     const groupEditData = {
       ...editGroupData,
+      sl: editGroupData.sl || 0,
+      tp: editGroupData.tp || 0,
       sub_brokers: editGroupData.sub_brokers.map((broker) => ({
         id: broker.id,
         qty: broker.qty,
@@ -534,7 +536,7 @@ const GroupPage: React.FC = () => {
                   <Input
                     type="number"
                     label="Stop Loss (SL)"
-                    value={editGroupData.sl}
+                    value={editGroupData.sl ?? 0}
                     onChange={(e) =>
                       setEditGroupData({
                         ...editGroupData,
@@ -550,7 +552,7 @@ const GroupPage: React.FC = () => {
                   <Input
                     type="number"
                     label="Take Profit (TP)"
-                    value={editGroupData.tp}
+                    value={editGroupData.tp ?? 0}
                     onChange={(e) =>
                       setEditGroupData({
                         ...editGroupData,
