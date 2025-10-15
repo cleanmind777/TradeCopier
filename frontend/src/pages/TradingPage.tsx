@@ -3,9 +3,14 @@ import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
+import Button from "../components/ui/Button";
+import Input from "../components/ui/Input";
+import Label from "../components/ui/Label";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
 import { getWebSocketToken } from "../api/brokerApi";
+import { getGroup } from "../api/groupApi";
 import { createChart, ColorType } from "lightweight-charts";
+import { GroupInfo } from "../types/group";
 
 const TradingPage: React.FC = () => {
   const [marketData, setMarketData] = useState<{
@@ -16,6 +21,16 @@ const TradingPage: React.FC = () => {
   } | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>("Disconnected");
   const [candleCount, setCandleCount] = useState<number>(0);
+  
+  // Trading state
+  const [groups, setGroups] = useState<GroupInfo[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
+  const [orderQuantity, setOrderQuantity] = useState<string>("1");
+  const [orderType, setOrderType] = useState<"market" | "limit">("market");
+  const [limitPrice, setLimitPrice] = useState<string>("");
+  const [isOrdering, setIsOrdering] = useState<boolean>(false);
+  const [orderHistory, setOrderHistory] = useState<any[]>([]);
+  
   const wsRef = useRef<WebSocket | null>(null);
   const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
   const user = localStorage.getItem("user");
@@ -26,6 +41,95 @@ const TradingPage: React.FC = () => {
   const chartRef = useRef<any>(null); // Using any to avoid complex type issues
   const lineSeriesRef = useRef<any>(null); // Using any to avoid complex type issues
   const lastUpdateTimeRef = useRef<number>(0); // Track last update time
+
+  // Load user groups
+  const loadGroups = async () => {
+    if (!user_id) return;
+    try {
+      const userGroups = await getGroup(user_id);
+      setGroups(userGroups);
+      if (userGroups.length > 0) {
+        setSelectedGroup(userGroups[0]);
+      }
+    } catch (error) {
+      console.error("Error loading groups:", error);
+    }
+  };
+
+  // Execute buy/sell order directly via WebSocket
+  const executeOrder = async (action: "Buy" | "Sell") => {
+    if (!selectedGroup || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      alert("Please select a group and ensure WebSocket is connected");
+      return;
+    }
+
+    if (!orderQuantity || parseInt(orderQuantity) <= 0) {
+      alert("Please enter a valid quantity");
+      return;
+    }
+
+    if (orderType === "limit" && (!limitPrice || parseFloat(limitPrice) <= 0)) {
+      alert("Please enter a valid limit price");
+      return;
+    }
+
+    setIsOrdering(true);
+
+    try {
+      // Prepare order data for each sub-broker in the group
+      const orders = selectedGroup.sub_brokers.map((subBroker) => {
+        const orderData = {
+          accountId: parseInt(subBroker.id), // Using the sub-broker ID as account ID
+          action: action,
+          symbol: "3267313", // Using the same symbol as in market data
+          orderQty: parseInt(orderQuantity) * subBroker.qty,
+          orderType: orderType === "market" ? "Market" : "Limit",
+          isAutomated: false,
+          ...(orderType === "limit" && { price: parseFloat(limitPrice) })
+        };
+        return orderData;
+      });
+
+      // Send orders via WebSocket using Tradovate's startOrderStrategy
+      // Format: command\nid\n\n{json_data}
+      const orderMessage = `order/startOrderStrategy\n${Date.now()}\n\n${JSON.stringify({
+        orders: orders,
+        sl: selectedGroup.sl || 0,
+        tp: selectedGroup.tp || 0
+      })}`;
+
+      console.log("Sending order via WebSocket:", orderMessage);
+      wsRef.current.send(orderMessage);
+
+      // Add to order history
+      const orderRecord = {
+        id: Date.now(),
+        action,
+        quantity: orderQuantity,
+        orderType,
+        limitPrice: orderType === "limit" ? limitPrice : null,
+        groupName: selectedGroup.name,
+        subBrokers: selectedGroup.sub_brokers.length,
+        timestamp: new Date().toISOString(),
+        status: "Pending"
+      };
+
+      setOrderHistory(prev => [orderRecord, ...prev]);
+
+      // Reset form
+      setOrderQuantity("1");
+      setLimitPrice("");
+      setOrderType("market");
+
+      alert(`Order submitted for ${action} ${orderQuantity} contracts across ${selectedGroup.sub_brokers.length} sub-brokers`);
+
+    } catch (error) {
+      console.error("Error executing order:", error);
+      alert("Error executing order. Please try again.");
+    } finally {
+      setIsOrdering(false);
+    }
+  };
 
   const sendHeartbeatIfNeeded = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -128,6 +232,17 @@ const TradingPage: React.FC = () => {
                 }
               }
             }
+          } else if (item.e === 'order') {
+            // Handle order responses
+            console.log('Order response received:', item);
+            if (item.d && item.d.orderId) {
+              // Update order history with response
+              setOrderHistory(prev => prev.map(order => 
+                order.id === item.d.orderId 
+                  ? { ...order, status: item.d.status || 'Executed' }
+                  : order
+              ));
+            }
           }
         });
       } catch (error) {
@@ -229,6 +344,7 @@ const TradingPage: React.FC = () => {
 
   useEffect(() => {
     initializeWebSocket();
+    loadGroups();
 
     return () => {
       cleanupWebSocket();
@@ -399,6 +515,169 @@ const TradingPage: React.FC = () => {
                 <p className="text-sm text-gray-500 mt-2">
                   Last update: {marketData.timestamp}
                 </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Trading Interface */}
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-bold">Trading Interface</h2>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Group Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="group-select">Select Group</Label>
+                <select
+                  id="group-select"
+                  value={selectedGroup?.id || ""}
+                  onChange={(e) => {
+                    const group = groups.find(g => g.id === e.target.value);
+                    setSelectedGroup(group || null);
+                  }}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={groups.length === 0}
+                >
+                  <option value="">{groups.length === 0 ? "No groups available" : "Select a group"}</option>
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name} ({group.sub_brokers.length} sub-brokers) - SL: {group.sl || 0}, TP: {group.tp || 0}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedGroup && (
+                <>
+                  {/* Group Info */}
+                  <div className="bg-gray-50 p-4 rounded-md">
+                    <h3 className="font-semibold mb-2">Group Details</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-500">Name:</span> {selectedGroup.name}
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Sub-brokers:</span> {selectedGroup.sub_brokers.length}
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Stop Loss:</span> {selectedGroup.sl || 0}
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Take Profit:</span> {selectedGroup.tp || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order Form */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Quantity */}
+                      <div className="space-y-2">
+                        <Label htmlFor="quantity">Quantity</Label>
+                        <Input
+                          id="quantity"
+                          type="number"
+                          value={orderQuantity}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOrderQuantity(e.target.value)}
+                          min="1"
+                          placeholder="Enter quantity"
+                        />
+                      </div>
+
+                      {/* Order Type */}
+                      <div className="space-y-2">
+                        <Label htmlFor="order-type">Order Type</Label>
+                        <select
+                          id="order-type"
+                          value={orderType}
+                          onChange={(e) => setOrderType(e.target.value as "market" | "limit")}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="market">Market Order</option>
+                          <option value="limit">Limit Order</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Limit Price */}
+                    {orderType === "limit" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="limit-price">Limit Price</Label>
+                        <Input
+                          id="limit-price"
+                          type="number"
+                          step="0.01"
+                          value={limitPrice}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLimitPrice(e.target.value)}
+                          placeholder="Enter limit price"
+                        />
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-4">
+                      <Button
+                        onClick={() => executeOrder("Buy")}
+                        disabled={isOrdering || !selectedGroup}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {isOrdering ? "Executing..." : "BUY"}
+                      </Button>
+                      <Button
+                        onClick={() => executeOrder("Sell")}
+                        disabled={isOrdering || !selectedGroup}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        {isOrdering ? "Executing..." : "SELL"}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Order History */}
+          {orderHistory.length > 0 && (
+            <Card>
+              <CardHeader>
+                <h2 className="text-xl font-bold">Order History</h2>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {orderHistory.slice(0, 10).map((order) => (
+                    <div
+                      key={order.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
+                    >
+                      <div className="flex items-center gap-4">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          order.action === "Buy" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                        }`}>
+                          {order.action}
+                        </span>
+                        <span className="font-medium">{order.quantity} contracts</span>
+                        <span className="text-sm text-gray-500">{order.orderType}</span>
+                        {order.limitPrice && (
+                          <span className="text-sm text-gray-500">@ ${order.limitPrice}</span>
+                        )}
+                        <span className="text-sm text-gray-500">Group: {order.groupName}</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          order.status === "Pending" ? "bg-yellow-100 text-yellow-800" :
+                          order.status === "Executed" ? "bg-green-100 text-green-800" :
+                          "bg-red-100 text-red-800"
+                        }`}>
+                          {order.status}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(order.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           )}
