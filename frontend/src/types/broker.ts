@@ -56,6 +56,7 @@ export interface SubBrokerSummary {
   nickname: string;
   sub_account_name: string;
   qty: number;
+  sub_account_id: string;
 }
 
 export interface SubBrokerSummaryForGet {

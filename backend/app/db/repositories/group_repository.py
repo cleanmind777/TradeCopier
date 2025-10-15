@@ -43,9 +43,10 @@ def user_get_group(db: Session, user_id: UUID) -> list[GroupInfo]:
                 response_broker["nickname"] = db_sub_broker.nickname
                 response_broker["sub_account_name"] = db_sub_broker.sub_account_name
                 response_broker['qty'] = sub_broker.qty
+                response_broker["sub_account_id"] = db_sub_broker.sub_account_id
                 response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers, 
+            id=group.id, name=group.name, sub_brokers=response_brokers,
             sl=group.sl if group.sl is not None else 0.0, 
             tp=group.tp if group.tp is not None else 0.0
         )
@@ -85,6 +86,7 @@ def user_create_group(db: Session, group_create: GroupCreate) -> list[GroupInfo]
             response_broker["nickname"] = db_sub_broker.nickname
             response_broker["sub_account_name"] = db_sub_broker.sub_account_name
             response_broker["qty"] = sub_broker.qty
+            response_broker["sub_account_id"] = db_sub_broker.sub_account_id
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
             id=group.id, name=group.name, sub_brokers=response_brokers, 
@@ -142,6 +144,7 @@ def user_edit_group(db: Session, group_edit: GroupEdit):
             response_broker["nickname"] = db_sub_broker.nickname
             response_broker["sub_account_name"] = db_sub_broker.sub_account_name
             response_broker['qty'] = sub_broker.qty
+            response_broker["sub_account_id"] = db_sub_broker.sub_account_id
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
             id=group.id, name=group.name, sub_brokers=response_brokers, 
@@ -220,6 +223,7 @@ def user_del_group(db: Session, group_id: UUID):
             response_broker["nickname"] = db_sub_broker.nickname
             response_broker["sub_account_name"] = db_sub_broker.sub_account_name
             response_broker['qty'] = sub_broker.qty
+            response_broker["sub_account_id"] = db_sub_broker.sub_account_id
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
             id=group.id, name=group.name, sub_brokers=response_brokers, 

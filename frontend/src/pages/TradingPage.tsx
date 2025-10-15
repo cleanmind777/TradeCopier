@@ -79,7 +79,7 @@ const TradingPage: React.FC = () => {
       // Prepare order data for each sub-broker in the group
       const orders = selectedGroup.sub_brokers.map((subBroker) => {
         const orderData = {
-          accountId: parseInt(subBroker.id), // Using the sub-broker ID as account ID
+          accountId: parseInt(subBroker.sub_account_id), // Using the sub-broker ID as account ID
           action: action,
           symbol: "3267313", // Using the same symbol as in market data
           orderQty: parseInt(orderQuantity) * subBroker.qty,
