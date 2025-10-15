@@ -205,9 +205,9 @@ const TradingPage: React.FC = () => {
               if (price && lineSeriesRef.current) {
                 const currentTime = Math.floor(Date.now() / 1000);
 
-                // Only update if at least 1 second has passed since last update
+                // Only update if at least 2 seconds have passed since last update
                 // This prevents too many data points and keeps the chart smooth
-                if (currentTime > lastUpdateTimeRef.current) {
+                if (currentTime >= lastUpdateTimeRef.current + 2) {
                   lastUpdateTimeRef.current = currentTime;
 
                   // Create data point for line chart
