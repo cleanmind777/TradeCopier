@@ -32,12 +32,9 @@ const TradingPage: React.FC = () => {
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
   
   // SL/TP state
-  const [slType, setSlType] = useState<"none" | "default" | "custom">("none");
-  const [tpType, setTpType] = useState<"none" | "default" | "custom">("none");
+  const [slTpOption, setSlTpOption] = useState<"none" | "default1" | "default2" | "custom">("none");
   const [customSL, setCustomSL] = useState<string>("");
   const [customTP, setCustomTP] = useState<string>("");
-  const [defaultSL, setDefaultSL] = useState<string>("10");
-  const [defaultTP, setDefaultTP] = useState<string>("20");
   
   const wsRef = useRef<WebSocket | null>(null);
   const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -82,11 +79,11 @@ const TradingPage: React.FC = () => {
     }
 
     // Validate SL/TP if custom values are selected
-    if (slType === "custom" && (!customSL || parseFloat(customSL) <= 0)) {
+    if (slTpOption === "custom" && (!customSL || parseFloat(customSL) <= 0)) {
       alert("Please enter a valid stop loss value");
       return;
     }
-    if (tpType === "custom" && (!customTP || parseFloat(customTP) <= 0)) {
+    if (slTpOption === "custom" && (!customTP || parseFloat(customTP) <= 0)) {
       alert("Please enter a valid take profit value");
       return;
     }
@@ -109,8 +106,27 @@ const TradingPage: React.FC = () => {
       });
 
       // Calculate SL/TP values
-      const slValue = slType === "none" ? 0 : slType === "default" ? parseFloat(defaultSL) : parseFloat(customSL);
-      const tpValue = tpType === "none" ? 0 : tpType === "default" ? parseFloat(defaultTP) : parseFloat(customTP);
+      let slValue = 0;
+      let tpValue = 0;
+      
+      switch (slTpOption) {
+        case "none":
+          slValue = 0;
+          tpValue = 0;
+          break;
+        case "default1":
+          slValue = 10;
+          tpValue = 10;
+          break;
+        case "default2":
+          slValue = 20;
+          tpValue = 20;
+          break;
+        case "custom":
+          slValue = parseFloat(customSL);
+          tpValue = parseFloat(customTP);
+          break;
+      }
 
       // Send orders via WebSocket using Tradovate's startOrderStrategy
       // Format: command\nid\n\n{json_data}
@@ -633,89 +649,38 @@ const TradingPage: React.FC = () => {
                     )}
 
                     {/* SL/TP Configuration */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Stop Loss */}
+                    <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="sl-type">Stop Loss (SL)</Label>
+                        <Label htmlFor="sl-tp-option">Stop Loss / Take Profit</Label>
                         <select
-                          id="sl-type"
-                          value={slType}
-                          onChange={(e) => {
-                            const newSlType = e.target.value as "none" | "default" | "custom";
-                            setSlType(newSlType);
-                            // If setting to default, also set TP to default
-                            if (newSlType === "default") {
-                              setTpType("default");
-                            }
-                          }}
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                          id="sl-tp-option"
+                          value={slTpOption}
+                          onChange={(e) => setSlTpOption(e.target.value as "none" | "default1" | "default2" | "custom")}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="none">None</option>
-                          <option value="default">Default (SL: {defaultSL}, TP: {defaultTP})</option>
+                          <option value="default1">Default1 (SL: 10, TP: 10)</option>
+                          <option value="default2">Default2 (SL: 20, TP: 20)</option>
                           <option value="custom">Custom</option>
                         </select>
-                        {slType === "custom" && (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={customSL}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSL(e.target.value)}
-                            placeholder="Enter SL value"
-                            min="0"
-                          />
-                        )}
-                        {slType === "default" && (
-                          <div className="space-y-2">
-                            <div>
-                              <Label htmlFor="default-sl">Default Stop Loss</Label>
-                              <Input
-                                id="default-sl"
-                                type="number"
-                                step="0.01"
-                                value={defaultSL}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDefaultSL(e.target.value)}
-                                placeholder="Default SL"
-                                min="0"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="default-tp">Default Take Profit</Label>
-                              <Input
-                                id="default-tp"
-                                type="number"
-                                step="0.01"
-                                value={defaultTP}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDefaultTP(e.target.value)}
-                                placeholder="Default TP"
-                                min="0"
-                              />
-                            </div>
-                          </div>
-                        )}
                       </div>
 
-                      {/* Take Profit */}
-                      <div className="space-y-2">
-                        <Label htmlFor="tp-type">Take Profit (TP)</Label>
-                        <select
-                          id="tp-type"
-                          value={tpType}
-                          onChange={(e) => {
-                            const newTpType = e.target.value as "none" | "default" | "custom";
-                            setTpType(newTpType);
-                            // If setting to default, also set SL to default
-                            if (newTpType === "default") {
-                              setSlType("default");
-                            }
-                          }}
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-                        >
-                          <option value="none">None</option>
-                          <option value="default">Default (SL: {defaultSL}, TP: {defaultTP})</option>
-                          <option value="custom">Custom</option>
-                        </select>
-                        {tpType === "custom" && (
-                          <div className="mt-2">
+                      {/* Custom SL/TP Input Fields */}
+                      {slTpOption === "custom" && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="custom-sl">Custom Stop Loss</Label>
+                            <Input
+                              id="custom-sl"
+                              type="number"
+                              step="0.01"
+                              value={customSL}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSL(e.target.value)}
+                              placeholder="Enter SL value"
+                              min="0"
+                            />
+                          </div>
+                          <div className="space-y-2">
                             <Label htmlFor="custom-tp">Custom Take Profit</Label>
                             <Input
                               id="custom-tp"
@@ -727,8 +692,8 @@ const TradingPage: React.FC = () => {
                               min="0"
                             />
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Action Buttons */}
