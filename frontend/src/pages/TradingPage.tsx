@@ -640,11 +640,18 @@ const TradingPage: React.FC = () => {
                         <select
                           id="sl-type"
                           value={slType}
-                          onChange={(e) => setSlType(e.target.value as "none" | "default" | "custom")}
+                          onChange={(e) => {
+                            const newSlType = e.target.value as "none" | "default" | "custom";
+                            setSlType(newSlType);
+                            // If setting to default, also set TP to default
+                            if (newSlType === "default") {
+                              setTpType("default");
+                            }
+                          }}
                           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
                         >
                           <option value="none">None</option>
-                          <option value="default">Default ({defaultSL})</option>
+                          <option value="default">Default (SL: {defaultSL}, TP: {defaultTP})</option>
                           <option value="custom">Custom</option>
                         </select>
                         {slType === "custom" && (
@@ -658,15 +665,31 @@ const TradingPage: React.FC = () => {
                           />
                         )}
                         {slType === "default" && (
-                          <div className="flex gap-2">
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={defaultSL}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDefaultSL(e.target.value)}
-                              placeholder="Default SL"
-                              min="0"
-                            />
+                          <div className="space-y-2">
+                            <div>
+                              <Label htmlFor="default-sl">Default Stop Loss</Label>
+                              <Input
+                                id="default-sl"
+                                type="number"
+                                step="0.01"
+                                value={defaultSL}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDefaultSL(e.target.value)}
+                                placeholder="Default SL"
+                                min="0"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="default-tp">Default Take Profit</Label>
+                              <Input
+                                id="default-tp"
+                                type="number"
+                                step="0.01"
+                                value={defaultTP}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDefaultTP(e.target.value)}
+                                placeholder="Default TP"
+                                min="0"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -677,31 +700,30 @@ const TradingPage: React.FC = () => {
                         <select
                           id="tp-type"
                           value={tpType}
-                          onChange={(e) => setTpType(e.target.value as "none" | "default" | "custom")}
+                          onChange={(e) => {
+                            const newTpType = e.target.value as "none" | "default" | "custom";
+                            setTpType(newTpType);
+                            // If setting to default, also set SL to default
+                            if (newTpType === "default") {
+                              setSlType("default");
+                            }
+                          }}
                           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
                         >
                           <option value="none">None</option>
-                          <option value="default">Default ({defaultTP})</option>
+                          <option value="default">Default (SL: {defaultSL}, TP: {defaultTP})</option>
                           <option value="custom">Custom</option>
                         </select>
                         {tpType === "custom" && (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={customTP}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTP(e.target.value)}
-                            placeholder="Enter TP value"
-                            min="0"
-                          />
-                        )}
-                        {tpType === "default" && (
-                          <div className="flex gap-2">
+                          <div className="mt-2">
+                            <Label htmlFor="custom-tp">Custom Take Profit</Label>
                             <Input
+                              id="custom-tp"
                               type="number"
                               step="0.01"
-                              value={defaultTP}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDefaultTP(e.target.value)}
-                              placeholder="Default TP"
+                              value={customTP}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTP(e.target.value)}
+                              placeholder="Enter TP value"
                               min="0"
                             />
                           </div>
