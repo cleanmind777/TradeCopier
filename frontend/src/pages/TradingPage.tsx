@@ -31,6 +31,14 @@ const TradingPage: React.FC = () => {
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
   
+  // SL/TP state
+  const [slType, setSlType] = useState<"none" | "default" | "custom">("none");
+  const [tpType, setTpType] = useState<"none" | "default" | "custom">("none");
+  const [customSL, setCustomSL] = useState<string>("");
+  const [customTP, setCustomTP] = useState<string>("");
+  const [defaultSL, setDefaultSL] = useState<string>("10");
+  const [defaultTP, setDefaultTP] = useState<string>("20");
+  
   const wsRef = useRef<WebSocket | null>(null);
   const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
   const user = localStorage.getItem("user");
@@ -73,6 +81,16 @@ const TradingPage: React.FC = () => {
       return;
     }
 
+    // Validate SL/TP if custom values are selected
+    if (slType === "custom" && (!customSL || parseFloat(customSL) <= 0)) {
+      alert("Please enter a valid stop loss value");
+      return;
+    }
+    if (tpType === "custom" && (!customTP || parseFloat(customTP) <= 0)) {
+      alert("Please enter a valid take profit value");
+      return;
+    }
+
     setIsOrdering(true);
 
     try {
@@ -90,12 +108,16 @@ const TradingPage: React.FC = () => {
         return orderData;
       });
 
+      // Calculate SL/TP values
+      const slValue = slType === "none" ? 0 : slType === "default" ? parseFloat(defaultSL) : parseFloat(customSL);
+      const tpValue = tpType === "none" ? 0 : tpType === "default" ? parseFloat(defaultTP) : parseFloat(customTP);
+
       // Send orders via WebSocket using Tradovate's startOrderStrategy
       // Format: command\nid\n\n{json_data}
       const orderMessage = `order/startOrderStrategy\n${Date.now()}\n\n${JSON.stringify({
         orders: orders,
-        sl: selectedGroup.sl || 0,
-        tp: selectedGroup.tp || 0
+        sl: slValue,
+        tp: tpValue
       })}`;
 
       console.log("Sending order via WebSocket:", orderMessage);
@@ -111,7 +133,9 @@ const TradingPage: React.FC = () => {
         groupName: selectedGroup.name,
         subBrokers: selectedGroup.sub_brokers.length,
         timestamp: new Date().toISOString(),
-        status: "Pending"
+        status: "Pending",
+        sl: slValue,
+        tp: tpValue
       };
 
       setOrderHistory(prev => [orderRecord, ...prev]);
@@ -541,7 +565,7 @@ const TradingPage: React.FC = () => {
                   <option value="">{groups.length === 0 ? "No groups available" : "Select a group"}</option>
                   {groups.map((group) => (
                     <option key={group.id} value={group.id}>
-                      {group.name} ({group.sub_brokers.length} sub-brokers) - SL: {group.sl || 0}, TP: {group.tp || 0}
+                      {group.name} ({group.sub_brokers.length} sub-brokers)
                     </option>
                   ))}
                 </select>
@@ -558,12 +582,6 @@ const TradingPage: React.FC = () => {
                       </div>
                       <div>
                         <span className="text-gray-500">Sub-brokers:</span> {selectedGroup.sub_brokers.length}
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Stop Loss:</span> {selectedGroup.sl || 0}
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Take Profit:</span> {selectedGroup.tp || 0}
                       </div>
                     </div>
                   </div>
@@ -614,6 +632,83 @@ const TradingPage: React.FC = () => {
                       </div>
                     )}
 
+                    {/* SL/TP Configuration */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Stop Loss */}
+                      <div className="space-y-2">
+                        <Label htmlFor="sl-type">Stop Loss (SL)</Label>
+                        <select
+                          id="sl-type"
+                          value={slType}
+                          onChange={(e) => setSlType(e.target.value as "none" | "default" | "custom")}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                        >
+                          <option value="none">None</option>
+                          <option value="default">Default ({defaultSL})</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                        {slType === "custom" && (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={customSL}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSL(e.target.value)}
+                            placeholder="Enter SL value"
+                            min="0"
+                          />
+                        )}
+                        {slType === "default" && (
+                          <div className="flex gap-2">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={defaultSL}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDefaultSL(e.target.value)}
+                              placeholder="Default SL"
+                              min="0"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Take Profit */}
+                      <div className="space-y-2">
+                        <Label htmlFor="tp-type">Take Profit (TP)</Label>
+                        <select
+                          id="tp-type"
+                          value={tpType}
+                          onChange={(e) => setTpType(e.target.value as "none" | "default" | "custom")}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                        >
+                          <option value="none">None</option>
+                          <option value="default">Default ({defaultTP})</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                        {tpType === "custom" && (
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={customTP}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTP(e.target.value)}
+                            placeholder="Enter TP value"
+                            min="0"
+                          />
+                        )}
+                        {tpType === "default" && (
+                          <div className="flex gap-2">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={defaultTP}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDefaultTP(e.target.value)}
+                              placeholder="Default TP"
+                              min="0"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Action Buttons */}
                     <div className="flex gap-4">
                       <Button
@@ -660,6 +755,12 @@ const TradingPage: React.FC = () => {
                         <span className="text-sm text-gray-500">{order.orderType}</span>
                         {order.limitPrice && (
                           <span className="text-sm text-gray-500">@ ${order.limitPrice}</span>
+                        )}
+                        {order.sl > 0 && (
+                          <span className="text-sm text-red-500">SL: ${order.sl}</span>
+                        )}
+                        {order.tp > 0 && (
+                          <span className="text-sm text-green-500">TP: ${order.tp}</span>
                         )}
                         <span className="text-sm text-gray-500">Group: {order.groupName}</span>
                       </div>

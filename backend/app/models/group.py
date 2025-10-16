@@ -24,8 +24,6 @@ class Group(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
-    sl = Column(Float, nullable=True)
-    tp = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
 
     user = relationship("User", back_populates="groups")

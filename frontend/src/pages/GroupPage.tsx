@@ -29,8 +29,6 @@ const GroupPage: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
-  const [newGroupSL, setNewGroupSL] = useState<number>(0);
-  const [newGroupTP, setNewGroupTP] = useState<number>(0);
   const [editGroupData, setEditGroupData] = useState<GroupInfo | null>(null);
   const [availableBrokers, setAvailableBrokers] = useState<
     SubBrokerSummaryForGet[]
@@ -69,8 +67,6 @@ const GroupPage: React.FC = () => {
     const newGroup: GroupCreate = {
       user_id: user_id,
       name: newGroupName,
-      sl: newGroupSL || 0,
-      tp: newGroupTP || 0,
       sub_brokers: selectedBrokers.map((brokerId) => ({
         id: brokerId,
         qty: brokerQuantities[brokerId] || 1,
@@ -82,8 +78,6 @@ const GroupPage: React.FC = () => {
     setIsEditModalOpen(false);
     setIsDetailsModalOpen(false);
     setNewGroupName("");
-    setNewGroupSL(0);
-    setNewGroupTP(0);
     setSelectedBrokers([]);
     setBrokerQuantities({});
   };
@@ -93,8 +87,6 @@ const GroupPage: React.FC = () => {
 
     const groupEditData = {
       ...editGroupData,
-      sl: editGroupData.sl || 0,
-      tp: editGroupData.tp || 0,
       sub_brokers: editGroupData.sub_brokers.map((broker) => ({
         id: broker.id,
         qty: broker.qty,
@@ -151,6 +143,7 @@ const GroupPage: React.FC = () => {
             nickname: broker.nickname,
             sub_account_name: broker.sub_account_name,
             qty: 1,
+            sub_account_id: broker.id, // Use broker.id as sub_account_id
           })),
         } : null
       );
@@ -178,6 +171,7 @@ const GroupPage: React.FC = () => {
               nickname: broker.nickname,
               sub_account_name: broker.sub_account_name,
               qty: 1,
+              sub_account_id: broker.id, // Use broker.id as sub_account_id
             },
           ],
         };
@@ -260,16 +254,6 @@ const GroupPage: React.FC = () => {
                         </Button>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                      <div>
-                        <p className="text-xs text-gray-500">Stop Loss (SL)</p>
-                        <p className="text-base font-semibold text-red-600">${group.sl || 0}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Take Profit (TP)</p>
-                        <p className="text-base font-semibold text-green-600">${group.tp || 0}</p>
-                      </div>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -294,14 +278,6 @@ const GroupPage: React.FC = () => {
                           0
                         )}
                       </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Stop Loss (SL)</p>
-                      <p className="text-lg font-semibold text-red-600">${selectedGroup.sl || 0}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Take Profit (TP)</p>
-                      <p className="text-lg font-semibold text-green-600">${selectedGroup.tp || 0}</p>
                     </div>
                   </div>
                   <div className="flex justify-end space-x-2">
@@ -367,31 +343,6 @@ const GroupPage: React.FC = () => {
                   onChange={(e) => setNewGroupName(e.target.value)}
                   placeholder="Enter group name"
                   className="w-full"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  type="number"
-                  label="Stop Loss (SL)"
-                  value={newGroupSL}
-                  onChange={(e) => setNewGroupSL(parseFloat(e.target.value) || 0)}
-                  placeholder="Enter stop loss"
-                  className="w-full"
-                  min="0"
-                  step="0.01"
-                  required
-                />
-                <Input
-                  type="number"
-                  label="Take Profit (TP)"
-                  value={newGroupTP}
-                  onChange={(e) => setNewGroupTP(parseFloat(e.target.value) || 0)}
-                  placeholder="Enter take profit"
-                  className="w-full"
-                  min="0"
-                  step="0.01"
                   required
                 />
               </div>
@@ -528,41 +479,6 @@ const GroupPage: React.FC = () => {
                     }
                     placeholder="Enter group name"
                     className="w-full"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    type="number"
-                    label="Stop Loss (SL)"
-                    value={editGroupData.sl ?? 0}
-                    onChange={(e) =>
-                      setEditGroupData({
-                        ...editGroupData,
-                        sl: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    placeholder="Enter stop loss"
-                    className="w-full"
-                    min="0"
-                    step="0.01"
-                    required
-                  />
-                  <Input
-                    type="number"
-                    label="Take Profit (TP)"
-                    value={editGroupData.tp ?? 0}
-                    onChange={(e) =>
-                      setEditGroupData({
-                        ...editGroupData,
-                        tp: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    placeholder="Enter take profit"
-                    className="w-full"
-                    min="0"
-                    step="0.01"
                     required
                   />
                 </div>

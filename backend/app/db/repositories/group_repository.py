@@ -46,9 +46,7 @@ def user_get_group(db: Session, user_id: UUID) -> list[GroupInfo]:
                 response_broker["sub_account_id"] = db_sub_broker.sub_account_id
                 response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers,
-            sl=group.sl if group.sl is not None else 0.0, 
-            tp=group.tp if group.tp is not None else 0.0
+            id=group.id, name=group.name, sub_brokers=response_brokers
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -57,9 +55,7 @@ def user_get_group(db: Session, user_id: UUID) -> list[GroupInfo]:
 def user_create_group(db: Session, group_create: GroupCreate) -> list[GroupInfo]:
     db_group = Group(
         user_id=group_create.user_id,
-        name=group_create.name,
-        sl=group_create.sl,
-        tp=group_create.tp
+        name=group_create.name
     )
     db.add(db_group)
     db.commit()
@@ -89,9 +85,7 @@ def user_create_group(db: Session, group_create: GroupCreate) -> list[GroupInfo]
             response_broker["sub_account_id"] = db_sub_broker.sub_account_id
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers, 
-            sl=group.sl if group.sl is not None else 0.0, 
-            tp=group.tp if group.tp is not None else 0.0
+            id=group.id, name=group.name, sub_brokers=response_brokers
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -101,8 +95,6 @@ def user_edit_group(db: Session, group_edit: GroupEdit):
     db_group = db.query(Group).filter(Group.id == group_edit.id).first()
     user_id = db_group.user_id
     db_group.name = group_edit.name
-    db_group.sl = group_edit.sl
-    db_group.tp = group_edit.tp
     db.commit()
     db.refresh(db_group)
     sub_brokers = (
@@ -147,9 +139,7 @@ def user_edit_group(db: Session, group_edit: GroupEdit):
             response_broker["sub_account_id"] = db_sub_broker.sub_account_id
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers, 
-            sl=group.sl if group.sl is not None else 0.0, 
-            tp=group.tp if group.tp is not None else 0.0
+            id=group.id, name=group.name, sub_brokers=response_brokers
         )
         groups_summary.append(group_summary)
     return groups_summary
@@ -226,9 +216,7 @@ def user_del_group(db: Session, group_id: UUID):
             response_broker["sub_account_id"] = db_sub_broker.sub_account_id
             response_brokers.append(response_broker)
         group_summary = GroupInfo(
-            id=group.id, name=group.name, sub_brokers=response_brokers, 
-            sl=group.sl if group.sl is not None else 0.0, 
-            tp=group.tp if group.tp is not None else 0.0
+            id=group.id, name=group.name, sub_brokers=response_brokers
         )
         groups_summary.append(group_summary)
     return groups_summary
