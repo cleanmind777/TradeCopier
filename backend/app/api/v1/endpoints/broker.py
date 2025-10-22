@@ -12,6 +12,12 @@ from app.schemas.broker import (
     WebSocketCredintial,
     WebSocketTokens
 )
+from app.schemas.order import (
+    MarketOrder,
+    SLTP,
+    LimitOrder,
+    LimitOrderWithSLTP
+)
 from app.services.broker_service import (
     add_broker,
     get_brokers,
@@ -22,6 +28,9 @@ from app.services.broker_service import (
     get_accounts,
     exit_position,
     get_token_for_websocket,
+    execute_market_order,
+    execute_limit_order,
+    execute_limit_order_with_sltp
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -113,3 +122,24 @@ async def get_Accounts(user_id: UUID, db: Session = Depends(get_db)):
 )
 def get_Tokens_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
     return get_token_for_websocket(db, user_id)
+
+@router.post(
+    "/execute-order/market",
+    status_code=status.HTTP_201_CREATED,
+)
+async def execute_Market_order(order: MarketOrder, db: Session = Depends(get_db)):
+    return await execute_market_order(db, order)
+
+@router.post(
+    "/execute-order/limit",
+    status_code=status.HTTP_201_CREATED,
+)
+async def execute_Limit_order(order: LimitOrder, db: Session = Depends(get_db)):
+    return await execute_limit_order(db, order)
+
+@router.post(
+    "/execute-order/limitwithsltp",
+    status_code=status.HTTP_201_CREATED,
+)
+async def execute_Limit_order_with_sltp(order: LimitOrderWithSLTP, db: Session = Depends(get_db)):
+    return await execute_limit_order_with_sltp(db, order)

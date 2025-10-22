@@ -120,3 +120,29 @@ class TradovateAccountsForFrontend(BaseModel):
     amountSOD: float
     accountNickname: str
     accountDisplayName: str
+
+class TradovateMarketOrder(BaseModel):
+    accountId: int
+    accountSpec: str
+    symbol: str
+    orderQty: int
+    orderType: str
+    action: str
+    isAutomated: bool
+
+class TradovateLimitOrder(TradovateMarketOrder):
+    price: float
+
+class TradovateLimitBracket(BaseModel):
+    action: str
+    orderType: str
+    price: float
+
+class TradovateStopBracket(BaseModel):
+    action: str
+    orderType: str
+    stopPrice: float
+
+class TradovateLimitOrderWithSLTP(TradovateLimitOrder):
+    bracket1: TradovateLimitBracket
+    bracket2: TradovateStopBracket
