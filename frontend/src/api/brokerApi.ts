@@ -17,7 +17,10 @@ import {
   SubBrokerSummary,
   SubBrokerSummaryForGet,
   ExitPostion,
-  Tokens
+  Tokens,
+  MarketOrder,
+  LimitOrder,
+  LimitOrderWithSLTP,
 } from "../types/broker";
 
 const API_BASE =
@@ -56,9 +59,7 @@ export const getBrokers = async (
     return null;
   }
 };
-export const delBroker = async (
-  id: string
-): Promise<BrokerInfo[] | null> => {
+export const delBroker = async (id: string): Promise<BrokerInfo[] | null> => {
   try {
     const response = await axios.delete(`${API_BASE}/broker/delete`, {
       params: { id },
@@ -139,10 +140,9 @@ export const getPositions = async (
 ): Promise<TradovatePositionListResponse[] | null> => {
   try {
     const params = { user_id };
-    const response = await axios.get(
-      `${API_BASE}/broker/positions`,
-      { params }
-    );
+    const response = await axios.get(`${API_BASE}/broker/positions`, {
+      params,
+    });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -160,10 +160,7 @@ export const getOrders = async (
 ): Promise<TradovateOrderListResponse[] | null> => {
   try {
     const params = { user_id };
-    const response = await axios.get(
-      `${API_BASE}/broker/orders`,
-      { params }
-    );
+    const response = await axios.get(`${API_BASE}/broker/orders`, { params });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -181,10 +178,7 @@ export const getAccounts = async (
 ): Promise<TradovateAccountsResponse[] | null> => {
   try {
     const params = { user_id };
-    const response = await axios.get(
-      `${API_BASE}/broker/accounts`,
-      { params }
-    );
+    const response = await axios.get(`${API_BASE}/broker/accounts`, { params });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -202,10 +196,9 @@ export const getSubBrokersForGroup = async (
 ): Promise<SubBrokerSummaryForGet[] | null> => {
   try {
     const params = { user_id };
-    const response = await axios.get(
-      `${API_BASE}/subbroker/get-for-group`,
-      { params }
-    );
+    const response = await axios.get(`${API_BASE}/subbroker/get-for-group`, {
+      params,
+    });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -218,9 +211,7 @@ export const getSubBrokersForGroup = async (
   }
 };
 
-export const exitPostion = async (
-  exitPostionData: ExitPostion
-) => {
+export const exitPostion = async (exitPostionData: ExitPostion) => {
   try {
     const response = await axios.post(
       `${API_BASE}/broker/position/exit`,
@@ -238,9 +229,7 @@ export const exitPostion = async (
   }
 };
 
-export const exitAllPostions = async (
-  exitPostionData: ExitPostion[]
-) => {
+export const exitAllPostions = async (exitPostionData: ExitPostion[]) => {
   try {
     const response = await axios.post(
       `${API_BASE}/broker/position/exitall`,
@@ -263,10 +252,9 @@ export const getWebSocketToken = async (
 ): Promise<Tokens | null> => {
   try {
     const params = { user_id };
-    const response = await axios.get(
-      `${API_BASE}/broker/websockettoken`,
-      { params }
-    );
+    const response = await axios.get(`${API_BASE}/broker/websockettoken`, {
+      params,
+    });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -274,6 +262,51 @@ export const getWebSocketToken = async (
       alert(error.response?.data?.detail ?? "Unknown error");
     } else {
       console.error("Unexpected Get Tokens error:", error);
+    }
+    return null;
+  }
+};
+
+export const executeMarketOrder = async (order: MarketOrder) => {
+  try {
+    const response = await axios.post(`${API_BASE}/broker/execute-order/market`, order);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Execute Market Order:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Execute Market Order error:", error);
+    }
+    return null;
+  }
+};
+
+export const executeLimitOrder = async (order: LimitOrder) => {
+  try {
+    const response = await axios.post(`${API_BASE}/broker/execute-order/limit`, order);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Execute Limit Order:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Execute Limit Order error:", error);
+    }
+    return null;
+  }
+};
+
+export const executeLimitOrderWithSLTP = async (order: LimitOrderWithSLTP) => {
+  try {
+    const response = await axios.post(`${API_BASE}/broker/execute-order/limitwithsltp`, order);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Execute Limit(SLTP) Order:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Execute Limit(SLTP) Order error:", error);
     }
     return null;
   }

@@ -210,3 +210,35 @@ export interface Tokens {
   access_token: string;
   md_access_token: string;
 }
+
+export interface MarketOrder {
+  group_id: string;
+  user_id: string;
+  symbol: string;
+  quantity: number;
+  action: string;
+}
+
+export interface LimitOrder {
+  group_id: string;
+  user_id: string;
+  symbol: string;
+  quantity: number;
+  action: string;
+  price: number;
+}
+
+export interface SLTP {
+  sl: number;
+  tp: number;
+}
+
+export interface LimitOrderWithSLTP {
+  group_id: string;
+  user_id: string;
+  symbol: string;
+  quantity: number;
+  action: string;
+  price: number;
+  sltp: SLTP;
+}

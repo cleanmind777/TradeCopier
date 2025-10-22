@@ -7,10 +7,21 @@ import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import Label from "../components/ui/Label";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
-import { getWebSocketToken } from "../api/brokerApi";
+import {
+  getWebSocketToken,
+  executeLimitOrder,
+  executeLimitOrderWithSLTP,
+  executeMarketOrder,
+} from "../api/brokerApi";
 import { getGroup } from "../api/groupApi";
 import { createChart, ColorType } from "lightweight-charts";
 import { GroupInfo } from "../types/group";
+import {
+  MarketOrder,
+  LimitOrder,
+  LimitOrderWithSLTP,
+  SLTP,
+} from "../types/broker";
 
 const TradingPage: React.FC = () => {
   const [marketData, setMarketData] = useState<{
@@ -100,20 +111,18 @@ const TradingPage: React.FC = () => {
 
     try {
       // Prepare order data for each sub-broker in the group
-      const orders = selectedGroup.sub_brokers.map((subBroker) => {
-        const orderData = {
-          accountId: parseInt(subBroker.sub_account_id), // Using the sub-broker ID as account ID
-          action: action,
-          symbol: "3267313", // Using the same symbol as in market data
-          orderQty: parseInt(orderQuantity) * subBroker.qty,
-          orderType: orderType === "market" ? "Market" : "Limit",
-          isAutomated: false,
-          ...(orderType === "limit" && { price: parseFloat(limitPrice) }),
-        };
-        return orderData;
-      });
-
-      // Calculate SL/TP values
+      // const orders = selectedGroup.sub_brokers.map((subBroker) => {
+      //   const orderData = {
+      //     accountId: parseInt(subBroker.sub_account_id), // Using the sub-broker ID as account ID
+      //     action: action,
+      //     symbol: "3267313", // Using the same symbol as in market data
+      //     orderQty: parseInt(orderQuantity) * subBroker.qty,
+      //     orderType: orderType === "market" ? "Market" : "Limit",
+      //     isAutomated: false,
+      //     ...(orderType === "limit" && { price: parseFloat(limitPrice) }),
+      //   };
+      //   return orderData;
+      // });
       let slValue = 0;
       let tpValue = 0;
 
@@ -135,19 +144,61 @@ const TradingPage: React.FC = () => {
           tpValue = parseFloat(customTP);
           break;
       }
+      if (orderType === "market") {
+        const order: MarketOrder = {
+          group_id: selectedGroup.id,
+          user_id: user_id,
+          symbol: symbol,
+          quantity: parseInt(orderQuantity),
+          action: action,
+        };
+        const response = await executeMarketOrder(order);
+        console.log("Market Order: ", response);
+      }
+      if (orderType === "limit") {
+        if (slValue == 0 && tpValue == 0) {
+          const order: LimitOrder = {
+            group_id: selectedGroup.id,
+            user_id: user_id,
+            symbol: symbol,
+            quantity: parseInt(orderQuantity),
+            action: action,
+            price: parseFloat(limitPrice),
+          };
+          const response = await executeLimitOrder(order);
+          console.log("Limit Order: ", response);
+        }
+        else {
+          const order: LimitOrderWithSLTP = {
+            group_id: selectedGroup.id,
+            user_id: user_id,
+            symbol: symbol,
+            quantity: parseInt(orderQuantity),
+            action: action,
+            price: parseFloat(limitPrice),
+            sltp: {
+              sl: slValue,
+              tp: tpValue
+            }
+          };
+          const response = await executeLimitOrderWithSLTP(order);
+          console.log("Limit Order: ", response);
+        }
+      }
+      // Calculate SL/TP values
 
       // Send orders via WebSocket using Tradovate's startOrderStrategy
       // Format: command\nid\n\n{json_data}
-      const orderMessage = `order/startOrderStrategy\n${Date.now()}\n\n${JSON.stringify(
-        {
-          orders: orders,
-          sl: slValue,
-          tp: tpValue,
-        }
-      )}`;
+      // const orderMessage = `order/startOrderStrategy\n${Date.now()}\n\n${JSON.stringify(
+      //   {
+      //     orders: orders,
+      //     sl: slValue,
+      //     tp: tpValue,
+      //   }
+      // )}`;
 
-      console.log("Sending order via WebSocket:", orderMessage);
-      wsRef.current.send(orderMessage);
+      // console.log("Sending order via WebSocket:", orderMessage);
+      // wsRef.current.send(orderMessage);
 
       // Add to order history
       const orderRecord = {
