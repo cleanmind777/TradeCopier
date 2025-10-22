@@ -302,6 +302,7 @@ async def tradovate_execute_market_order(
         url = f"{TRADO_DEMO_URL}/order/placeOrder"
     else:
         url = f"{TRADO_LIVE_URL}/order/placeOrder"
+    print("Market Order: ", order)
     response = requests.post(url, headers=headers, json=order)
     if response.status_code == 200 and response.content:
         try:
