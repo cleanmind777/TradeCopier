@@ -122,7 +122,7 @@ class TradovateAccountsForFrontend(BaseModel):
     accountDisplayName: str
 
 class TradovateMarketOrder(BaseModel):
-    accountId: str
+    accountId: int
     accountSpec: str
     symbol: str
     orderQty: int

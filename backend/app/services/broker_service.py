@@ -404,7 +404,7 @@ async def execute_market_order(db: Session, order: MarketOrder):
             db.query(SubBrokerAccount).filter(SubBrokerAccount.id == subbroker.sub_broker_id).first()
         )
         tradovate_order = TradovateMarketOrder(
-            accountId=str(db_subroker_account.sub_account_id),
+            accountId=int(db_subroker_account.sub_account_id),
             accountSpec=db_subroker_account.sub_account_name,
             symbol=order.symbol,
             orderQty=int(order.quantity * subbroker.qty),
