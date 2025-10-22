@@ -435,7 +435,7 @@ async def execute_limit_order(db: Session, order: LimitOrder):
             symbol=order.symbol,
             orderQty=int(order.quantity * subbroker.qty),
             price=order.price,
-            orderType='Market',
+            orderType='Limit',
             action=order.action,
             isAutomated=True
         )
