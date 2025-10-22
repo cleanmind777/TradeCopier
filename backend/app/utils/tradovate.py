@@ -331,6 +331,7 @@ async def tradovate_execute_limit_order(
         url = f"{TRADO_DEMO_URL}/order/placeOrder"
     else:
         url = f"{TRADO_LIVE_URL}/order/placeOrder"
+    print("Limit Order: ", order)
     if hasattr(order, 'dict'):
         order_dict = order.dict()
     else:
@@ -346,6 +347,7 @@ async def tradovate_execute_limit_order(
     else:
         # Log error or handle non-200 statuses and empty responses gracefully
         data = None
+    print(response.status_code)
     return data
 
 async def tradovate_execute_limit_order_with_sltp(
@@ -358,6 +360,7 @@ async def tradovate_execute_limit_order_with_sltp(
         url = f"{TRADO_DEMO_URL}/order/placeoso"
     else:
         url = f"{TRADO_LIVE_URL}/order/placeoso"
+    print("Limit Order with SLTP: ", order)
     if hasattr(order, 'dict'):
         order_dict = order.dict()
     else:
@@ -373,4 +376,5 @@ async def tradovate_execute_limit_order_with_sltp(
     else:
         # Log error or handle non-200 statuses and empty responses gracefully
         data = None
+    print(response.status_code)
     return data
