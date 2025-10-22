@@ -19,9 +19,10 @@ const TradingPage: React.FC = () => {
     last: number | null;
     timestamp: string;
   } | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<string>("Disconnected");
+  const [connectionStatus, setConnectionStatus] =
+    useState<string>("Disconnected");
   const [candleCount, setCandleCount] = useState<number>(0);
-  
+
   // Trading state
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
@@ -30,12 +31,14 @@ const TradingPage: React.FC = () => {
   const [limitPrice, setLimitPrice] = useState<string>("");
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
-  
+
   // SL/TP state
-  const [slTpOption, setSlTpOption] = useState<"none" | "default1" | "default2" | "custom">("none");
+  const [slTpOption, setSlTpOption] = useState<
+    "none" | "default1" | "default2" | "custom"
+  >("none");
   const [customSL, setCustomSL] = useState<string>("");
   const [customTP, setCustomTP] = useState<string>("");
-  
+
   const wsRef = useRef<WebSocket | null>(null);
   const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
   const user = localStorage.getItem("user");
@@ -63,7 +66,11 @@ const TradingPage: React.FC = () => {
 
   // Execute buy/sell order directly via WebSocket
   const executeOrder = async (action: "Buy" | "Sell") => {
-    if (!selectedGroup || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    if (
+      !selectedGroup ||
+      !wsRef.current ||
+      wsRef.current.readyState !== WebSocket.OPEN
+    ) {
       alert("Please select a group and ensure WebSocket is connected");
       return;
     }
@@ -100,7 +107,7 @@ const TradingPage: React.FC = () => {
           orderQty: parseInt(orderQuantity) * subBroker.qty,
           orderType: orderType === "market" ? "Market" : "Limit",
           isAutomated: false,
-          ...(orderType === "limit" && { price: parseFloat(limitPrice) })
+          ...(orderType === "limit" && { price: parseFloat(limitPrice) }),
         };
         return orderData;
       });
@@ -108,7 +115,7 @@ const TradingPage: React.FC = () => {
       // Calculate SL/TP values
       let slValue = 0;
       let tpValue = 0;
-      
+
       switch (slTpOption) {
         case "none":
           slValue = 0;
@@ -130,11 +137,13 @@ const TradingPage: React.FC = () => {
 
       // Send orders via WebSocket using Tradovate's startOrderStrategy
       // Format: command\nid\n\n{json_data}
-      const orderMessage = `order/startOrderStrategy\n${Date.now()}\n\n${JSON.stringify({
-        orders: orders,
-        sl: slValue,
-        tp: tpValue
-      })}`;
+      const orderMessage = `order/startOrderStrategy\n${Date.now()}\n\n${JSON.stringify(
+        {
+          orders: orders,
+          sl: slValue,
+          tp: tpValue,
+        }
+      )}`;
 
       console.log("Sending order via WebSocket:", orderMessage);
       wsRef.current.send(orderMessage);
@@ -151,18 +160,19 @@ const TradingPage: React.FC = () => {
         timestamp: new Date().toISOString(),
         status: "Pending",
         sl: slValue,
-        tp: tpValue
+        tp: tpValue,
       };
 
-      setOrderHistory(prev => [orderRecord, ...prev]);
+      setOrderHistory((prev) => [orderRecord, ...prev]);
 
       // Reset form
       setOrderQuantity("1");
       setLimitPrice("");
       setOrderType("market");
 
-      alert(`Order submitted for ${action} ${orderQuantity} contracts across ${selectedGroup.sub_brokers.length} sub-brokers`);
-
+      alert(
+        `Order submitted for ${action} ${orderQuantity} contracts across ${selectedGroup.sub_brokers.length} sub-brokers`
+      );
     } catch (error) {
       console.error("Error executing order:", error);
       alert("Error executing order. Please try again.");
@@ -173,22 +183,24 @@ const TradingPage: React.FC = () => {
 
   const sendHeartbeatIfNeeded = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    
+
     try {
-      wsRef.current.send('[]');
+      wsRef.current.send("[]");
     } catch (error) {
       console.error("Heartbeat send error:", error);
       reconnectWebSocket();
     }
-    
+
     heartbeatTimerRef.current = setTimeout(sendHeartbeatIfNeeded, 2500);
   };
 
   const subscribeToQuotes = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    
+
     try {
-      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol: "3267313" })}`;
+      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({
+        symbol: "3267313",
+      })}`;
       wsRef.current.send(subscribeMsg);
     } catch (error) {
       console.error("Subscription error:", error);
@@ -201,7 +213,7 @@ const TradingPage: React.FC = () => {
     if (data.length === 0) return;
 
     const frameType = data[0];
-    if (frameType === 'a') {
+    if (frameType === "a") {
       try {
         const parsedData = JSON.parse(data.substring(1));
         parsedData.forEach((item: any) => {
@@ -210,7 +222,7 @@ const TradingPage: React.FC = () => {
               setConnectionStatus("Connected");
               subscribeToQuotes();
             }
-          } else if (item.e === 'md') {
+          } else if (item.e === "md") {
             if (item.d && item.d.quotes) {
               const quote = item.d.quotes[0];
               const entries = quote.entries || {};
@@ -225,20 +237,20 @@ const TradingPage: React.FC = () => {
                 timestamp: quote.timestamp || "N/A",
               };
 
-              console.log('Received market data:', newMarketData);
+              console.log("Received market data:", newMarketData);
               setMarketData(newMarketData);
 
               // Use last price if available, otherwise use mid-price (bid+ask)/2, or fallback to bid or ask
               let price = newMarketData.last;
               if (!price && newMarketData.bid && newMarketData.ask) {
                 price = (newMarketData.bid + newMarketData.ask) / 2;
-                console.log('Using mid-price:', price);
+                console.log("Using mid-price:", price);
               } else if (!price && newMarketData.bid) {
                 price = newMarketData.bid;
-                console.log('Using bid price:', price);
+                console.log("Using bid price:", price);
               } else if (!price && newMarketData.ask) {
                 price = newMarketData.ask;
-                console.log('Using ask price:', price);
+                console.log("Using ask price:", price);
               }
 
               // Update line chart with available price
@@ -259,38 +271,40 @@ const TradingPage: React.FC = () => {
                   // Update the chart
                   try {
                     lineSeriesRef.current.update(dataPoint);
-                    setCandleCount(prev => prev + 1);
-                    console.log('Chart updated with price:', dataPoint);
-                    
+                    setCandleCount((prev) => prev + 1);
+                    console.log("Chart updated with price:", dataPoint);
+
                     // Auto-scale only on first few updates
                     if (candleCount < 5 && chartRef.current) {
                       chartRef.current.timeScale().fitContent();
                     }
                   } catch (error) {
-                    console.error('Error updating chart:', error);
+                    console.error("Error updating chart:", error);
                   }
                 }
               }
             }
-          } else if (item.e === 'order') {
+          } else if (item.e === "order") {
             // Handle order responses
-            console.log('Order response received:', item);
+            console.log("Order response received:", item);
             if (item.d && item.d.orderId) {
               // Update order history with response
-              setOrderHistory(prev => prev.map(order => 
-                order.id === item.d.orderId 
-                  ? { ...order, status: item.d.status || 'Executed' }
-                  : order
-              ));
+              setOrderHistory((prev) =>
+                prev.map((order) =>
+                  order.id === item.d.orderId
+                    ? { ...order, status: item.d.status || "Executed" }
+                    : order
+                )
+              );
             }
           }
         });
       } catch (error) {
         console.error("Error parsing WebSocket message:", error);
       }
-    } else if (frameType === 'h') {
+    } else if (frameType === "h") {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send('[]');
+        wsRef.current.send("[]");
       }
     }
   };
@@ -308,7 +322,7 @@ const TradingPage: React.FC = () => {
 
   const cleanupWebSocket = () => {
     // Remove beforeunload listener first
-    window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.removeEventListener("beforeunload", handleBeforeUnload);
 
     if (wsRef.current) {
       try {
@@ -330,7 +344,7 @@ const TradingPage: React.FC = () => {
       clearTimeout(heartbeatTimerRef.current);
       heartbeatTimerRef.current = null;
     }
-    
+
     setConnectionStatus("Disconnected");
   };
 
@@ -347,7 +361,7 @@ const TradingPage: React.FC = () => {
       wsRef.current = ws;
 
       // Add beforeunload listener for browser/tab close
-      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.addEventListener("beforeunload", handleBeforeUnload);
 
       ws.onopen = () => {
         try {
@@ -374,7 +388,6 @@ const TradingPage: React.FC = () => {
           reconnectWebSocket();
         }
       };
-
     } catch (error) {
       console.error("Connection error:", error);
       setConnectionStatus("Failed");
@@ -398,33 +411,33 @@ const TradingPage: React.FC = () => {
     // Ensure container has dimensions before creating chart
     const containerWidth = chartContainerRef.current.clientWidth;
     if (containerWidth === 0) {
-      console.warn('Chart container has no width, delaying initialization');
+      console.warn("Chart container has no width, delaying initialization");
       return;
     }
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#000000' },
-        textColor: '#333',
+        background: { type: ColorType.Solid, color: "#000000" },
+        textColor: "#333",
       },
       width: containerWidth,
       height: 500,
       grid: {
         vertLines: {
-          color: '#e1e4e8',
+          color: "#e1e4e8",
         },
         horzLines: {
-          color: '#e1e4e8',
+          color: "#e1e4e8",
         },
       },
       crosshair: {
         mode: 1, // Normal crosshair mode
       },
       rightPriceScale: {
-        borderColor: '#d1d4dc',
+        borderColor: "#d1d4dc",
       },
       timeScale: {
-        borderColor: '#d1d4dc',
+        borderColor: "#d1d4dc",
         timeVisible: true,
         secondsVisible: true,
       },
@@ -433,12 +446,12 @@ const TradingPage: React.FC = () => {
     // Use setTimeout to ensure chart is fully rendered before adding series
     const timeoutId = setTimeout(() => {
       try {
-        console.log('Initializing line series...');
+        console.log("Initializing line series...");
         const lineSeries = (chart as any).addLineSeries({
-          color: '#2962FF',
+          color: "#2962FF",
           lineWidth: 2,
           priceFormat: {
-            type: 'price',
+            type: "price",
             precision: 2,
             minMove: 0.01,
           },
@@ -450,10 +463,9 @@ const TradingPage: React.FC = () => {
 
         chartRef.current = chart;
         lineSeriesRef.current = lineSeries;
-        console.log('Line series created successfully');
-
+        console.log("Line series created successfully");
       } catch (error) {
-        console.error('Error adding line series:', error);
+        console.error("Error adding line series:", error);
       }
     }, 0);
 
@@ -466,11 +478,11 @@ const TradingPage: React.FC = () => {
       }
     };
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
 
     return () => {
       clearTimeout(timeoutId);
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener("resize", handleResize);
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
@@ -487,11 +499,15 @@ const TradingPage: React.FC = () => {
         <main className="flex-1 p-8 space-y-8">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold">Trading Dashboard</h1>
-            <div className={`px-4 py-2 rounded-md ${
-              connectionStatus === "Connected" ? "bg-green-100 text-green-800" :
-              connectionStatus === "Connecting..." ? "bg-yellow-100 text-yellow-800" :
-              "bg-red-100 text-red-800"
-            }`}>
+            <div
+              className={`px-4 py-2 rounded-md ${
+                connectionStatus === "Connected"
+                  ? "bg-green-100 text-green-800"
+                  : connectionStatus === "Connecting..."
+                  ? "bg-yellow-100 text-yellow-800"
+                  : "bg-red-100 text-red-800"
+              }`}
+            >
               Status: {connectionStatus}
             </div>
           </div>
@@ -507,14 +523,15 @@ const TradingPage: React.FC = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div 
-                ref={chartContainerRef} 
+              <div
+                ref={chartContainerRef}
                 className="w-full"
-                style={{ height: '500px' }}
+                style={{ height: "500px" }}
               />
               {candleCount === 0 && marketData && (
                 <div className="text-center text-gray-500 mt-4">
-                  Connecting to market data... (Bid: ${marketData.bid}, Ask: ${marketData.ask}, Last: ${marketData.last || 'N/A'})
+                  Connecting to market data... (Bid: ${marketData.bid}, Ask: $
+                  {marketData.ask}, Last: ${marketData.last || "N/A"})
                 </div>
               )}
               {candleCount === 0 && !marketData && (
@@ -572,13 +589,17 @@ const TradingPage: React.FC = () => {
                   id="group-select"
                   value={selectedGroup?.id || ""}
                   onChange={(e) => {
-                    const group = groups.find(g => g.id === e.target.value);
+                    const group = groups.find((g) => g.id === e.target.value);
                     setSelectedGroup(group || null);
                   }}
                   className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled={groups.length === 0}
                 >
-                  <option value="">{groups.length === 0 ? "No groups available" : "Select a group"}</option>
+                  <option value="">
+                    {groups.length === 0
+                      ? "No groups available"
+                      : "Select a group"}
+                  </option>
                   {groups.map((group) => (
                     <option key={group.id} value={group.id}>
                       {group.name} ({group.sub_brokers.length} sub-brokers)
@@ -594,10 +615,12 @@ const TradingPage: React.FC = () => {
                     <h3 className="font-semibold mb-2">Group Details</h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-500">Name:</span> {selectedGroup.name}
+                        <span className="text-gray-500">Name:</span>{" "}
+                        {selectedGroup.name}
                       </div>
                       <div>
-                        <span className="text-gray-500">Sub-brokers:</span> {selectedGroup.sub_brokers.length}
+                        <span className="text-gray-500">Sub-brokers:</span>{" "}
+                        {selectedGroup.sub_brokers.length}
                       </div>
                     </div>
                   </div>
@@ -612,7 +635,9 @@ const TradingPage: React.FC = () => {
                           id="quantity"
                           type="number"
                           value={orderQuantity}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOrderQuantity(e.target.value)}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                            setOrderQuantity(e.target.value)
+                          }
                           min="1"
                           placeholder="Enter quantity"
                         />
@@ -624,7 +649,9 @@ const TradingPage: React.FC = () => {
                         <select
                           id="order-type"
                           value={orderType}
-                          onChange={(e) => setOrderType(e.target.value as "market" | "limit")}
+                          onChange={(e) =>
+                            setOrderType(e.target.value as "market" | "limit")
+                          }
                           className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="market">Market Order</option>
@@ -633,68 +660,93 @@ const TradingPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Limit Price */}
                     {orderType === "limit" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="limit-price">Limit Price</Label>
-                        <Input
-                          id="limit-price"
-                          type="number"
-                          step="0.01"
-                          value={limitPrice}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLimitPrice(e.target.value)}
-                          placeholder="Enter limit price"
-                        />
-                      </div>
-                    )}
-
-                    {/* SL/TP Configuration */}
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="sl-tp-option">Stop Loss / Take Profit</Label>
-                        <select
-                          id="sl-tp-option"
-                          value={slTpOption}
-                          onChange={(e) => setSlTpOption(e.target.value as "none" | "default1" | "default2" | "custom")}
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="none">None</option>
-                          <option value="default1">Default1 (SL: 10, TP: 10)</option>
-                          <option value="default2">Default2 (SL: 20, TP: 20)</option>
-                          <option value="custom">Custom</option>
-                        </select>
-                      </div>
-
-                      {/* Custom SL/TP Input Fields */}
-                      {slTpOption === "custom" && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="custom-sl">Custom Stop Loss</Label>
-                            <Input
-                              id="custom-sl"
-                              type="number"
-                              step="0.01"
-                              value={customSL}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomSL(e.target.value)}
-                              placeholder="Enter SL value"
-                              min="0"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="custom-tp">Custom Take Profit</Label>
-                            <Input
-                              id="custom-tp"
-                              type="number"
-                              step="0.01"
-                              value={customTP}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustomTP(e.target.value)}
-                              placeholder="Enter TP value"
-                              min="0"
-                            />
-                          </div>
+                      <>
+                        {/* Limit Price */}
+                        <div className="space-y-2">
+                          <Label htmlFor="limit-price">Limit Price</Label>
+                          <Input
+                            id="limit-price"
+                            type="number"
+                            step="0.01"
+                            value={limitPrice}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>
+                            ) => setLimitPrice(e.target.value)}
+                            placeholder="Enter limit price"
+                          />
                         </div>
-                      )}
-                    </div>
+                        {/* SL/TP Configuration */}
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="sl-tp-option">
+                              Stop Loss / Take Profit
+                            </Label>
+                            <select
+                              id="sl-tp-option"
+                              value={slTpOption}
+                              onChange={(e) =>
+                                setSlTpOption(
+                                  e.target.value as
+                                    | "none"
+                                    | "default1"
+                                    | "default2"
+                                    | "custom"
+                                )
+                              }
+                              className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="none">None</option>
+                              <option value="default1">
+                                Default1 (SL: 10, TP: 10)
+                              </option>
+                              <option value="default2">
+                                Default2 (SL: 20, TP: 20)
+                              </option>
+                              <option value="custom">Custom</option>
+                            </select>
+                          </div>
+
+                          {/* Custom SL/TP Input Fields */}
+                          {slTpOption === "custom" && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="custom-sl">
+                                  Custom Stop Loss
+                                </Label>
+                                <Input
+                                  id="custom-sl"
+                                  type="number"
+                                  step="0.01"
+                                  value={customSL}
+                                  onChange={(
+                                    e: React.ChangeEvent<HTMLInputElement>
+                                  ) => setCustomSL(e.target.value)}
+                                  placeholder="Enter SL value"
+                                  min="0"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="custom-tp">
+                                  Custom Take Profit
+                                </Label>
+                                <Input
+                                  id="custom-tp"
+                                  type="number"
+                                  step="0.01"
+                                  value={customTP}
+                                  onChange={(
+                                    e: React.ChangeEvent<HTMLInputElement>
+                                  ) => setCustomTP(e.target.value)}
+                                  placeholder="Enter TP value"
+                                  min="0"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="flex gap-4">
@@ -733,30 +785,50 @@ const TradingPage: React.FC = () => {
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
                     >
                       <div className="flex items-center gap-4">
-                        <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                          order.action === "Buy" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-semibold ${
+                            order.action === "Buy"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
                           {order.action}
                         </span>
-                        <span className="font-medium">{order.quantity} contracts</span>
-                        <span className="text-sm text-gray-500">{order.orderType}</span>
+                        <span className="font-medium">
+                          {order.quantity} contracts
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          {order.orderType}
+                        </span>
                         {order.limitPrice && (
-                          <span className="text-sm text-gray-500">@ ${order.limitPrice}</span>
+                          <span className="text-sm text-gray-500">
+                            @ ${order.limitPrice}
+                          </span>
                         )}
                         {order.sl > 0 && (
-                          <span className="text-sm text-red-500">SL: ${order.sl}</span>
+                          <span className="text-sm text-red-500">
+                            SL: ${order.sl}
+                          </span>
                         )}
                         {order.tp > 0 && (
-                          <span className="text-sm text-green-500">TP: ${order.tp}</span>
+                          <span className="text-sm text-green-500">
+                            TP: ${order.tp}
+                          </span>
                         )}
-                        <span className="text-sm text-gray-500">Group: {order.groupName}</span>
+                        <span className="text-sm text-gray-500">
+                          Group: {order.groupName}
+                        </span>
                       </div>
                       <div className="flex items-center gap-4">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          order.status === "Pending" ? "bg-yellow-100 text-yellow-800" :
-                          order.status === "Executed" ? "bg-green-100 text-green-800" :
-                          "bg-red-100 text-red-800"
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs ${
+                            order.status === "Pending"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : order.status === "Executed"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
                           {order.status}
                         </span>
                         <span className="text-xs text-gray-500">
