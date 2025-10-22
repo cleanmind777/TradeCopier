@@ -124,5 +124,5 @@ def get_Tokens_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
     "/execute-order/market",
     status_code=status.HTTP_201_CREATED,
 )
-def execute_Market_order(order: MarketOrder, db: Session = Depends(get_db)):
-    return execute_market_order(db, order)
+async def execute_Market_order(order: MarketOrder, db: Session = Depends(get_db)):
+    return await execute_market_order(db, order)

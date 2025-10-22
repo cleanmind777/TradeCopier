@@ -395,7 +395,7 @@ def get_token_for_websocket(
 ) -> WebSocketTokens | None:
     return user_get_tokens_for_websocket(db, user_id)
 
-def execute_market_order(db: Session, order: MarketOrder):
+async def execute_market_order(db: Session, order: MarketOrder):
     db_subroker_accounts = (
         db.query(GroupBroker).filter(GroupBroker.group_id == order.group_id).all()
     )
@@ -417,6 +417,6 @@ def execute_market_order(db: Session, order: MarketOrder):
         )
         access_token = db_broker_account.access_token
         is_demo = db_subroker_account.is_demo
-        response = tradovate_execute_market_order(tradovate_order, access_token, is_demo)
+        response = await tradovate_execute_market_order(tradovate_order, access_token, is_demo)
     
     return "Success"
