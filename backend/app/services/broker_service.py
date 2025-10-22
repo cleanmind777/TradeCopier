@@ -403,7 +403,7 @@ def execute_market_order(db: Session, order: MarketOrder):
         db_subroker_account = (
             db.query(SubBrokerAccount).filter(SubBrokerAccount.id == subbroker.sub_broker_id).first()
         )
-        order = TradovateMarketOrder(
+        tradovate_order = TradovateMarketOrder(
             accountId=str(db_subroker_account.sub_account_id),
             accountSpec=db_subroker_account.sub_account_name,
             symbol=order.symbol,
@@ -417,6 +417,6 @@ def execute_market_order(db: Session, order: MarketOrder):
         )
         access_token = db_broker_account.access_token
         is_demo = db_subroker_account.is_demo
-        response = tradovate_execute_market_order(order, access_token, is_demo)
+        response = tradovate_execute_market_order(tradovate_order, access_token, is_demo)
     
     return "Success"
