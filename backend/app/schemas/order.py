@@ -17,4 +17,6 @@ class MarketOrder(BaseModel):
 
 class LimitOrder(MarketOrder):
     price: float
-    sltp: Optional[SLTP] = None
+
+class LimitOrderWithSLTP(LimitOrder):
+    sltp: SLTP
