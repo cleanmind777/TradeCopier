@@ -94,6 +94,8 @@ class BrokerChange(BaseModel):
     id: UUID
     nickname: Optional[str] = None
     status: Optional[bool] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class SubBrokerChange(BaseModel):
@@ -105,6 +107,7 @@ class SubBrokerSumary(BaseModel):
     id: UUID
     nickname: str
     sub_account_name: str
+    sub_account_id: str
     qty: int
 
 class SubBrokerSummaryForGet(BaseModel):
@@ -123,3 +126,15 @@ class ExitPosition(BaseModel):
     orderQty: int
     orderType: str
     isAutomated: bool
+
+class WebSocketCredintial(BaseModel):
+    id: UUID
+    username: str
+    password: str
+
+class Tokens(BaseModel):
+    access_token: str
+    md_access_token: str
+
+class WebSocketTokens(Tokens):
+    id: UUID

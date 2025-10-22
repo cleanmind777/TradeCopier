@@ -16,11 +16,9 @@ import { Trash2 } from "lucide-react";
 import Modal from "../components/ui/Modal";
 import Input from "../components/ui/Input";
 import {
-  SubBrokerForCreate,
   SubBrokerSummaryForGet,
-  SubBrokerSummary,
 } from "../types/broker";
-import { getSubBrokers, getSubBrokersForGroup } from "../api/brokerApi";
+import { getSubBrokersForGroup } from "../api/brokerApi";
 import { GroupCreate, GroupInfo } from "../types/group";
 import { createGroup, editGroup, deleteGroup, getGroup } from "../api/groupApi";
 
@@ -39,7 +37,6 @@ const GroupPage: React.FC = () => {
   const [brokerQuantities, setBrokerQuantities] = useState<{
     [key: string]: number;
   }>({});
-  const [allSelected, setAllSelected] = useState(false);
 
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
@@ -105,7 +102,6 @@ const GroupPage: React.FC = () => {
   const handleEditClick = (group: GroupInfo) => {
     setEditGroupData(group);
     setIsEditModalOpen(true);
-    setAllSelected(group.sub_brokers.length === availableBrokers.length);
   };
 
   const handleDeleteGroup = async (groupID: string) => {
@@ -117,32 +113,41 @@ const GroupPage: React.FC = () => {
     }
   };
 
+  const handleSelectAllCreate = () => {
+    if (selectedBrokers.length > 0) {
+      setSelectedBrokers([]);
+      setBrokerQuantities({});
+    } else {
+      const allBrokerIds = availableBrokers.map(broker => broker.id);
+      const initialQuantities = availableBrokers.reduce((acc, broker) => {
+        acc[broker.id] = 1;
+        return acc;
+      }, {} as { [key: string]: number });
+      
+      setSelectedBrokers(allBrokerIds);
+      setBrokerQuantities(initialQuantities);
+    }
+  };
+
   const handleSelectAll = () => {
-    if (allSelected) {
+    if (editGroupData?.sub_brokers.length) {
       setEditGroupData((prev) =>
-        prev
-          ? {
-              ...prev,
-              sub_brokers: [],
-            }
-          : null
+        prev ? { ...prev, sub_brokers: [] } : null
       );
     } else {
       setEditGroupData((prev) =>
-        prev
-          ? {
-              ...prev,
-              sub_brokers: availableBrokers.map((broker) => ({
-                id: broker.id,
-                nickname: broker.nickname,
-                sub_account_name: broker.sub_account_name,
-                qty: 1,
-              })),
-            }
-          : null
+        prev ? {
+          ...prev,
+          sub_brokers: availableBrokers.map((broker) => ({
+            id: broker.id,
+            nickname: broker.nickname,
+            sub_account_name: broker.sub_account_name,
+            qty: 1,
+            sub_account_id: broker.id, // Use broker.id as sub_account_id
+          })),
+        } : null
       );
     }
-    setAllSelected(!allSelected);
   };
 
   const handleBrokerSelection = (broker: SubBrokerSummaryForGet) => {
@@ -166,6 +171,7 @@ const GroupPage: React.FC = () => {
               nickname: broker.nickname,
               sub_account_name: broker.sub_account_name,
               qty: 1,
+              sub_account_id: broker.id, // Use broker.id as sub_account_id
             },
           ],
         };
@@ -212,39 +218,41 @@ const GroupPage: React.FC = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="p-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-sm text-gray-500">Total Quantity</p>
-                      <p className="text-lg font-medium">
-                        {group.sub_brokers.reduce(
-                          (sum, broker) => sum + (broker.qty || 1),
-                          0
-                        )}
-                      </p>
-                    </div>
-                    <div className="space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditClick(group);
-                        }}
-                        className="text-blue-600 hover:bg-blue-50"
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteGroup(group.id);
-                        }}
-                        className="text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </Button>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm text-gray-500">Total Quantity</p>
+                        <p className="text-lg font-medium">
+                          {group.sub_brokers.reduce(
+                            (sum, broker) => sum + (broker.qty || 1),
+                            0
+                          )}
+                        </p>
+                      </div>
+                      <div className="space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClick(group);
+                          }}
+                          className="text-blue-600 hover:bg-blue-50"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteGroup(group.id);
+                          }}
+                          className="text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -261,7 +269,7 @@ const GroupPage: React.FC = () => {
             {selectedGroup && (
               <div className="space-y-6">
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex items-center justify-between">
+                  <div className="grid grid-cols-3 gap-4 mb-4">
                     <div>
                       <p className="text-sm text-gray-500">Total Quantity</p>
                       <p className="text-lg font-semibold">
@@ -271,18 +279,18 @@ const GroupPage: React.FC = () => {
                         )}
                       </p>
                     </div>
-                    <div className="flex space-x-2">
-                      <Button onClick={() => handleEditClick(selectedGroup)}>
-                        Edit Group
-                      </Button>
-                      <Button
-                        variant="primary"
-                        onClick={() => handleDeleteGroup(selectedGroup.id)}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete
-                      </Button>
-                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button onClick={() => handleEditClick(selectedGroup)}>
+                      Edit Group
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => handleDeleteGroup(selectedGroup.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </Button>
                   </div>
                 </div>
 
@@ -340,9 +348,19 @@ const GroupPage: React.FC = () => {
               </div>
 
               <div className="border rounded-lg p-4">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Select Sub Brokers and Set Quantities
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Select Sub Brokers and Set Quantities
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSelectAllCreate}
+                    className="text-blue-600 hover:bg-blue-50"
+                  >
+                    {selectedBrokers.length > 0 ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-2">
                   {availableBrokers.map((broker) => (
                     <div
@@ -470,15 +488,14 @@ const GroupPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700">
                       Sub Brokers and Quantities
                     </label>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={handleSelectAll}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">Select All</span>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSelectAll}
+                      className="text-blue-600 hover:bg-blue-50"
+                    >
+                      {editGroupData.sub_brokers.length > 0 ? 'Deselect All' : 'Select All'}
+                    </Button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[500px] overflow-y-auto p-2">
                     {availableBrokers.map((broker) => {

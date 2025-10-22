@@ -19,6 +19,8 @@ from app.schemas.broker import (
     SubBrokerSumary,
     SubBrokerSummaryForGet,
     ExitPosition,
+    WebSocketCredintial,
+    WebSocketTokens
 )
 from app.schemas.tradovate import (
     TradovatePositionListForFrontend,
@@ -47,7 +49,7 @@ from app.utils.tradovate import (
     get_product_item,
     get_cash_balances,
     place_order,
-    get_order_version_depends
+    get_order_version_depends,
 )
 from app.db.repositories.broker_repository import (
     user_add_broker,
@@ -56,9 +58,11 @@ from app.db.repositories.broker_repository import (
     user_add_sub_broker,
     user_get_sub_brokers,
     user_refresh_token,
+    user_refresh_websocket_token,
     user_change_broker,
     user_change_sub_brokers,
     user_get_summary_sub_broker,
+    user_get_tokens_for_websocket,
 )
 
 
@@ -184,8 +188,10 @@ async def refresh_new_token(db: Session):
     db_broker_accounts = result.scalars().all()
     if len(db_broker_accounts) != 0 and db_broker_accounts:
         for broker in db_broker_accounts:
-            new_token = get_renew_token(broker.access_token)
-            await user_refresh_token(db, broker.id, new_token)
+            new_tokens = get_renew_token(broker.access_token)
+            await user_refresh_token(db, broker.id, new_tokens)
+            new_websocket_tokens = get_renew_token(broker.websocket_access_token)
+            await user_refresh_websocket_token(db, broker.id, new_websocket_tokens)
 
 
 def change_broker(db: Session, broker_change: BrokerChange):
@@ -209,8 +215,10 @@ async def get_positions(db: Session, user_id: UUID):
         live_positions = get_position_list_of_live_account(
             db_broker_account.access_token
         )
-        positions_status.extend(demo_positions)
-        positions_status.extend(live_positions)
+        if demo_positions:
+            positions_status.extend(demo_positions)
+        if live_positions:
+            positions_status.extend(live_positions)
     if positions_status != []:
         for position in positions_status:
             print("Position: ", position)
@@ -228,6 +236,7 @@ async def get_positions(db: Session, user_id: UUID):
                 p = TradovatePositionListForFrontend(
                     id=position["id"],
                     accountId=position["accountId"],
+                    contractId=position["contractId"],
                     accountNickname=(
                         db_sub_broker_account.nickname
                         if db_sub_broker_account
@@ -240,7 +249,7 @@ async def get_positions(db: Session, user_id: UUID):
                     boughtValue=position["boughtValue"],
                     sold=position["sold"],
                     soldValue=position["soldValue"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name
+                    accountDisplayName=db_sub_broker_account.sub_account_name,
                 )
 
                 positions_for_frontend.append(p)
@@ -256,8 +265,10 @@ async def get_orders(db: Session, user_id: UUID):
     for db_broker_account in db_broker_accounts:
         demo_orders = get_order_list_of_demo_account(db_broker_account.access_token)
         live_orders = get_order_list_of_live_account(db_broker_account.access_token)
-        order_status.extend(demo_orders)
-        order_status.extend(live_orders)
+        if demo_orders:
+            order_status.extend(demo_orders)
+        if live_orders:
+            order_status.extend(live_orders)
     if order_status != []:
         for order in order_status:
             db_sub_broker_account = (
@@ -270,8 +281,12 @@ async def get_orders(db: Session, user_id: UUID):
                     order["contractId"], db_broker_account.access_token, is_demo=True
                 )
                 order_version = await get_order_version_depends(
-                    order['id'], db_broker_account.access_token, is_demo=True
+                    order["id"], db_broker_account.access_token, is_demo=True
                 )
+                if order_version is not None:
+                    price = order_version.get("price", 0)
+                else:
+                    price = 0
                 o = TradovateOrderForFrontend(
                     id=order["id"],
                     accountId=order["accountId"],
@@ -280,7 +295,7 @@ async def get_orders(db: Session, user_id: UUID):
                         if db_sub_broker_account
                         else None
                     ),
-                    price = order_version.get('price', 0),
+                    price=price,
                     contractId=order["contractId"],
                     timestamp=order["timestamp"],
                     action=order["action"],
@@ -290,7 +305,7 @@ async def get_orders(db: Session, user_id: UUID):
                     external=order["external"],
                     admin=order["admin"],
                     symbol=contract_item["name"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name
+                    accountDisplayName=db_sub_broker_account.sub_account_name,
                 )
                 order_for_frontend.append(o)
     return order_for_frontend
@@ -305,8 +320,10 @@ async def get_accounts(db: Session, user_id: UUID):
     for db_broker_account in db_broker_accounts:
         demo_accounts = get_cash_balances(db_broker_account.access_token, True)
         live_accounts = get_cash_balances(db_broker_account.access_token, False)
-        accounts_status.extend(demo_accounts)
-        accounts_status.extend(live_accounts)
+        if demo_accounts:
+            accounts_status.extend(demo_accounts)
+        if live_accounts:
+            accounts_status.extend(live_accounts)
     print("Accounts: ", accounts_status)
     if accounts_status != []:
         for account in accounts_status:
@@ -331,7 +348,7 @@ async def get_accounts(db: Session, user_id: UUID):
                     weekRealizedPnL=account["weekRealizedPnL"],
                     archived=account["archived"],
                     amountSOD=account["amountSOD"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name
+                    accountDisplayName=db_sub_broker_account.sub_account_name,
                 )
                 accounts_for_dashboard.append(a)
     return accounts_for_dashboard
@@ -359,3 +376,9 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
     )
     access_token = db_broker.access_token
     return place_order(access_token, db_sub_broker.is_demo, exit_position_data)
+
+
+def get_token_for_websocket(
+    db: Session, user_id: UUID
+) -> WebSocketTokens | None:
+    return user_get_tokens_for_websocket(db, user_id)

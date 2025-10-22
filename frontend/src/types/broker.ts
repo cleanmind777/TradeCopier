@@ -56,6 +56,7 @@ export interface SubBrokerSummary {
   nickname: string;
   sub_account_name: string;
   qty: number;
+  sub_account_id: string;
 }
 
 export interface SubBrokerSummaryForGet {
@@ -81,6 +82,8 @@ export interface BrokerChange {
   id: string;
   nickname?: string;
   status?: boolean;
+  username?: string;
+  password?: string;
 }
 
 export interface SubBrokerChange {
@@ -97,6 +100,7 @@ export interface TradeDate {
 export interface TradovatePositionListResponse {
   id: number;
   accountId: number;
+  contractId: number;
   accountNickname: string;
   symbol: string;
   netPos: number;
@@ -193,4 +197,16 @@ export interface ExitPostion {
 export interface SubBrokerForCreate {
   id: string;
   qty: number;
+}
+
+export interface SetPassword {
+  id: string;
+  username: string;
+  password: string;
+}
+
+export interface Tokens {
+  id: string;
+  access_token: string;
+  md_access_token: string;
 }

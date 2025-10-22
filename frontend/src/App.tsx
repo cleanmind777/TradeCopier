@@ -16,6 +16,7 @@ import AdminPage from "./pages/admin/AdminPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import SubBrokerPage from "./pages/SubBrokerPage";
 import GroupPage from "./pages/GroupPage";
+import TradingPage from "./pages/TradingPage";
 
 function App() {
   return (
@@ -64,12 +65,8 @@ function App() {
               </AdminProtectedRoute>
             }
           />
-          <Route
-            path="/group"
-            element={
-                <GroupPage />
-            }
-          />
+          <Route path="/group" element={<GroupPage />} />
+          <Route path="/trading" element={<TradingPage />} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>

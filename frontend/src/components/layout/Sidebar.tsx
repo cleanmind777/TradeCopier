@@ -12,6 +12,7 @@ const Sidebar: React.FC = () => {
     { icon: Home, label: 'Dashboard', path: '/dashboard' },
     { icon: Users, label: 'Broker Accounts', path: '/broker' },
     { icon: Group, label: 'Group', path: '/group' },
+    { icon: BarChart3, label: 'Trading', path: '/trading' },
   ];
 
   return (

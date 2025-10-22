@@ -1,8 +1,7 @@
 import axios, { AxiosError } from "axios";
 import { UserCreate, User } from "../types/user";
 
-const API_BASE =
-  import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000/api/v1";
 
 export const signUp = async (userInfo: UserCreate): Promise<boolean> => {
   try {

@@ -13,7 +13,7 @@ export interface GroupEdit {
 }
 
 export interface GroupInfo {
-    id: string;
-    name: string;
-    sub_brokers: SubBrokerSummary[];
+  id: string;
+  name: string;
+  sub_brokers: SubBrokerSummary[];
 }

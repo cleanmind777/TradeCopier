@@ -20,12 +20,17 @@ class BrokerAccount(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    username = Column(String, nullable=True)
+    password = Column(String, nullable=True)
     nickname = Column(String, nullable=False)
     type = Column(String, nullable=False)
     last_sync = Column(DateTime, default=func.now())
     status = Column(Boolean, default=False)
     user_broker_id = Column(String, nullable=True)
     access_token = Column(String, nullable=True)
+    md_access_token = Column(String, nullable=True)
+    websocket_access_token = Column(String, nullable=True)
+    websocket_md_access_token = Column(String, nullable=True)
     expire_in = Column(String, nullable=True)
 
     user = relationship("User", back_populates="broker_accounts")
