@@ -15,7 +15,8 @@ from app.schemas.broker import (
 from app.schemas.order import (
     MarketOrder,
     SLTP,
-    LimitOrder
+    LimitOrder,
+    LimitOrderWithSLTP
 )
 from app.services.broker_service import (
     add_broker,
@@ -28,7 +29,8 @@ from app.services.broker_service import (
     exit_position,
     get_token_for_websocket,
     execute_market_order,
-    execute_limit_order
+    execute_limit_order,
+    execute_limit_order_with_sltp
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -134,3 +136,10 @@ async def execute_Market_order(order: MarketOrder, db: Session = Depends(get_db)
 )
 async def execute_Limit_order(order: LimitOrder, db: Session = Depends(get_db)):
     return await execute_limit_order(db, order)
+
+@router.post(
+    "/execute-order/limitwithsltp",
+    status_code=status.HTTP_201_CREATED,
+)
+async def execute_Limit_order_with_sltp(order: LimitOrderWithSLTP, db: Session = Depends(get_db)):
+    return await execute_limit_order_with_sltp(db, order)

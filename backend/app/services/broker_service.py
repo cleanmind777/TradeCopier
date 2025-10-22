@@ -25,6 +25,7 @@ from app.schemas.broker import (
 from app.schemas.order import (
     MarketOrder,
     LimitOrder,
+    LimitOrderWithSLTP,
     SLTP
 )
 from app.schemas.tradovate import (
@@ -40,7 +41,9 @@ from app.schemas.tradovate import (
     TradovateAccountsForFrontend,
     TradovateMarketOrder,
     TradovateLimitOrder,
-    TradovateLimitOrderWithSLTP
+    TradovateLimitOrderWithSLTP,
+    TradovateLimitBracket,
+    TradovateStopBracket
 )
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
 from app.models.group_broker import GroupBroker
@@ -445,5 +448,45 @@ async def execute_limit_order(db: Session, order: LimitOrder):
         access_token = db_broker_account.access_token
         is_demo = db_subroker_account.is_demo
         response = await tradovate_execute_limit_order(tradovate_order, access_token, is_demo)
+    
+    return "Success"
+
+async def execute_limit_order_with_sltp(db: Session, order: LimitOrderWithSLTP):
+    db_subroker_accounts = (
+        db.query(GroupBroker).filter(GroupBroker.group_id == order.group_id).all()
+    )
+    for subbroker in db_subroker_accounts:
+        db_subroker_account = (
+            db.query(SubBrokerAccount).filter(SubBrokerAccount.id == subbroker.sub_broker_id).first()
+        )
+        sltp:SLTP = order.sltp
+        bracket1 = TradovateLimitBracket(
+            action = "Sell" if order.action == "Buy" else "Buy",
+            orderType='Limit',
+            price=sltp.tp
+        )
+        bracket2 = TradovateStopBracket(
+            action = "Sell" if order.action == "Buy" else "Buy",
+            orderType='Stop',
+            price=sltp.sl
+        )
+        tradovate_order = TradovateLimitOrderWithSLTP(
+            accountId=int(db_subroker_account.sub_account_id),
+            accountSpec=db_subroker_account.sub_account_name,
+            symbol=order.symbol,
+            orderQty=int(order.quantity * subbroker.qty),
+            price=order.price,
+            orderType='Limit',
+            action=order.action,
+            isAutomated=True,
+            bracket1=bracket1,
+            bracket2=bracket2
+        )
+        db_broker_account = (
+            db.query(BrokerAccount).filter(BrokerAccount.id == db_subroker_account.broker_account_id).first()
+        )
+        access_token = db_broker_account.access_token
+        is_demo = db_subroker_account.is_demo
+        response = await tradovate_execute_limit_order_with_sltp(tradovate_order, access_token, is_demo)
     
     return "Success"
