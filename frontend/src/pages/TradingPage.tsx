@@ -31,6 +31,7 @@ const TradingPage: React.FC = () => {
   const [limitPrice, setLimitPrice] = useState<string>("");
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
+  const [symbol, setSymbol] = useState<string>("");
 
   // SL/TP state
   const [slTpOption, setSlTpOption] = useState<
@@ -577,11 +578,27 @@ const TradingPage: React.FC = () => {
           )}
 
           {/* Trading Interface */}
+          {/* Trading Interface */}
           <Card>
             <CardHeader>
               <h2 className="text-xl font-bold">Trading Interface</h2>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Symbol Input */}
+              <div className="space-y-2">
+                <Label htmlFor="symbol">Symbol</Label>
+                <Input
+                  id="symbol"
+                  type="text"
+                  value={symbol}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setSymbol(e.target.value)
+                  }
+                  placeholder="Enter symbol"
+                  className="w-full"
+                />
+              </div>
+
               {/* Group Selection */}
               <div className="space-y-2">
                 <Label htmlFor="group-select">Select Group</Label>
