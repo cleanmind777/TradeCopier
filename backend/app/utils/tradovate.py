@@ -303,7 +303,11 @@ async def tradovate_execute_market_order(
     else:
         url = f"{TRADO_LIVE_URL}/order/placeOrder"
     print("Market Order: ", order)
-    response = requests.post(url, headers=headers, json=order)
+    if hasattr(order, 'dict'):
+        order_dict = order.dict()
+    else:
+        order_dict = order
+    response = requests.post(url, headers=headers, json=order_dict)
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
@@ -326,7 +330,11 @@ async def tradovate_execute_limit_order(
         url = f"{TRADO_DEMO_URL}/order/placeOrder"
     else:
         url = f"{TRADO_LIVE_URL}/order/placeOrder"
-    response = requests.post(url, headers=headers, json=order)
+    if hasattr(order, 'dict'):
+        order_dict = order.dict()
+    else:
+        order_dict = order
+    response = requests.post(url, headers=headers, json=order_dict)
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
@@ -349,7 +357,11 @@ async def tradovate_execute_limit_order_with_sltp(
         url = f"{TRADO_DEMO_URL}/order/placeoso"
     else:
         url = f"{TRADO_LIVE_URL}/order/placeoso"
-    response = requests.post(url, headers=headers, json=order)
+    if hasattr(order, 'dict'):
+        order_dict = order.dict()
+    else:
+        order_dict = order
+    response = requests.post(url, headers=headers, json=order_dict)
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
