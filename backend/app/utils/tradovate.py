@@ -318,6 +318,7 @@ async def tradovate_execute_market_order(
     else:
         # Log error or handle non-200 statuses and empty responses gracefully
         data = None
+    print(response.status_code)
     return data
 
 async def tradovate_execute_limit_order(
