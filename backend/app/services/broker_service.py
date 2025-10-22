@@ -463,12 +463,12 @@ async def execute_limit_order_with_sltp(db: Session, order: LimitOrderWithSLTP):
         bracket1 = TradovateLimitBracket(
             action = "Sell" if order.action == "Buy" else "Buy",
             orderType='Limit',
-            price=sltp.tp
+            price=sltp.tp + order.price if order.action == "Buy" else order.price - sltp.tp
         )
         bracket2 = TradovateStopBracket(
             action = "Sell" if order.action == "Buy" else "Buy",
             orderType='Stop',
-            price=sltp.sl
+            price=order.price - sltp.sl if order.action == "Buy" else order.price + sltp.tp
         )
         tradovate_order = TradovateLimitOrderWithSLTP(
             accountId=int(db_subroker_account.sub_account_id),
