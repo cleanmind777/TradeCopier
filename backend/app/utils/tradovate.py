@@ -7,6 +7,9 @@ from app.schemas.tradovate import (
     TradovateOrderListResponse,
     TradovatePositionListResponse,
     TradovateProductItemResponse,
+    TradovateMarketOrder,
+    TradovateLimitOrder,
+    TradovateLimitOrderWithSLTP,
 )
 
 from app.schemas.broker import ExitPosition, Tokens
@@ -72,8 +75,7 @@ def get_renew_token(access_token: str) -> Tokens | None:
         # Log error or handle non-200 statuses and empty responses gracefully
         return None
     tokens = Tokens(
-        access_token=data["accessToken"],
-        md_access_token=data['mdAccessToken']
+        access_token=data["accessToken"], md_access_token=data["mdAccessToken"]
     )
     return tokens
 
@@ -169,6 +171,7 @@ async def get_contract_item(
         data = None
     return data
 
+
 async def get_contract_maturity_item(
     id: int, access_token: str, is_demo: bool
 ) -> TradovateContractMaturityItemResponse:
@@ -191,6 +194,7 @@ async def get_contract_maturity_item(
         # Log error or handle non-200 statuses and empty responses gracefully
         data = None
     return data
+
 
 async def get_product_item(
     id: int, access_token: str, is_demo: bool
@@ -215,6 +219,7 @@ async def get_product_item(
         data = None
     return data
 
+
 def get_cash_balances(access_token: str, is_demo: bool):
     headers = {"Authorization": f"Bearer {access_token}"}
     if is_demo:
@@ -234,12 +239,17 @@ def get_cash_balances(access_token: str, is_demo: bool):
         return None
     return data
 
+
 def place_order(access_token: str, is_demo: bool, order: ExitPosition):
     print(access_token)
     print(is_demo)
     print(order)
     headers = {"Authorization": f"Bearer {access_token}"}
-    url = f"{TRADO_DEMO_URL}/order/placeorder" if is_demo else f"{TRADO_LIVE_URL}/order/placeorder"
+    url = (
+        f"{TRADO_DEMO_URL}/order/placeorder"
+        if is_demo
+        else f"{TRADO_LIVE_URL}/order/placeorder"
+    )
 
     try:
         response = requests.post(url, headers=headers, json=order.dict())
@@ -258,9 +268,8 @@ def place_order(access_token: str, is_demo: bool, order: ExitPosition):
         # Log or handle request error
         return None
 
-async def get_order_version_depends(
-    id: int, access_token: str, is_demo: bool
-):
+
+async def get_order_version_depends(id: int, access_token: str, is_demo: bool):
     headers = {
         "Authorization": f"Bearer {access_token}",
     }
@@ -276,7 +285,76 @@ async def get_order_version_depends(
             print("Data: ", data)
         except ValueError:
             # Log error or handle malformed JSON
-            print("@!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            data = None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        data = None
+    return data
+
+
+async def tradovate_execute_market_order(
+    order: TradovateMarketOrder, access_token: str, is_demo: bool
+):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+    if is_demo:
+        url = f"{TRADO_DEMO_URL}/order/placeOrder"
+    else:
+        url = f"{TRADO_LIVE_URL}/order/placeOrder"
+    response = requests.post(url, headers=headers, json=order)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print("Data: ", data)
+        except ValueError:
+            # Log error or handle malformed JSON
+            data = None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        data = None
+    return data
+
+async def tradovate_execute_limit_order(
+    order: TradovateLimitOrder, access_token: str, is_demo: bool
+):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+    if is_demo:
+        url = f"{TRADO_DEMO_URL}/order/placeOrder"
+    else:
+        url = f"{TRADO_LIVE_URL}/order/placeOrder"
+    response = requests.post(url, headers=headers, json=order)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print("Data: ", data)
+        except ValueError:
+            # Log error or handle malformed JSON
+            data = None
+    else:
+        # Log error or handle non-200 statuses and empty responses gracefully
+        data = None
+    return data
+
+async def tradovate_execute_limit_order_with_sltp(
+    order: TradovateLimitOrderWithSLTP, access_token: str, is_demo: bool
+):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+    if is_demo:
+        url = f"{TRADO_DEMO_URL}/order/placeoso"
+    else:
+        url = f"{TRADO_LIVE_URL}/order/placeoso"
+    response = requests.post(url, headers=headers, json=order)
+    if response.status_code == 200 and response.content:
+        try:
+            data = response.json()
+            print("Data: ", data)
+        except ValueError:
+            # Log error or handle malformed JSON
             data = None
     else:
         # Log error or handle non-200 statuses and empty responses gracefully

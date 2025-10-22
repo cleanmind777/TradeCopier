@@ -22,6 +22,11 @@ from app.schemas.broker import (
     WebSocketCredintial,
     WebSocketTokens
 )
+from app.schemas.order import (
+    MarketOrder,
+    LimitOrder,
+    SLTP
+)
 from app.schemas.tradovate import (
     TradovatePositionListForFrontend,
     TradovateOrderListResponse,
@@ -33,8 +38,12 @@ from app.schemas.tradovate import (
     TradovateOrderForFrontend,
     TradovateCashBalanceResponse,
     TradovateAccountsForFrontend,
+    TradovateMarketOrder,
+    TradovateLimitOrder,
+    TradovateLimitOrderWithSLTP
 )
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
+from app.models.group_broker import GroupBroker
 from app.utils.broker import getAccessTokenForTradoVate
 from app.utils.tradovate import (
     get_account_list,
@@ -50,6 +59,9 @@ from app.utils.tradovate import (
     get_cash_balances,
     place_order,
     get_order_version_depends,
+    tradovate_execute_limit_order,
+    tradovate_execute_limit_order_with_sltp,
+    tradovate_execute_market_order
 )
 from app.db.repositories.broker_repository import (
     user_add_broker,
@@ -382,3 +394,29 @@ def get_token_for_websocket(
     db: Session, user_id: UUID
 ) -> WebSocketTokens | None:
     return user_get_tokens_for_websocket(db, user_id)
+
+def execute_market_order(db: Session, order: MarketOrder):
+    db_subroker_accounts = (
+        db.query(GroupBroker).filter(GroupBroker.group_id == order.group_id).all()
+    )
+    for subbroker in db_subroker_accounts:
+        db_subroker_account = (
+            db.query(SubBrokerAccount).filter(SubBrokerAccount.id == subbroker.sub_broker_id).first()
+        )
+        order = TradovateMarketOrder(
+            accountId=str(db_subroker_account.sub_account_id),
+            accountSpec=db_subroker_account.sub_account_name,
+            symbol=order.symbol,
+            orderQty=int(order.quantity * subbroker.qty),
+            orderType='Market',
+            action=order.action,
+            isAutomated=True
+        )
+        db_broker_account = (
+            db.query(BrokerAccount).filter(BrokerAccount.id == db_subroker_account.broker_account_id).first()
+        )
+        access_token = db_broker_account.access_token
+        is_demo = db_subroker_account.is_demo
+        response = tradovate_execute_market_order(order, access_token, is_demo)
+    
+    return "Success"

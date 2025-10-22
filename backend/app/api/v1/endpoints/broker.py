@@ -12,6 +12,11 @@ from app.schemas.broker import (
     WebSocketCredintial,
     WebSocketTokens
 )
+from app.schemas.order import (
+    MarketOrder,
+    SLTP,
+    LimitOrder
+)
 from app.services.broker_service import (
     add_broker,
     get_brokers,
@@ -22,6 +27,7 @@ from app.services.broker_service import (
     get_accounts,
     exit_position,
     get_token_for_websocket,
+    execute_market_order
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -113,3 +119,10 @@ async def get_Accounts(user_id: UUID, db: Session = Depends(get_db)):
 )
 def get_Tokens_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
     return get_token_for_websocket(db, user_id)
+
+@router.post(
+    "/execute-order/market",
+    status_code=status.HTTP_201_CREATED,
+)
+def execute_Market_order(order: MarketOrder, db: Session = Depends(get_db)):
+    return execute_market_order(db, order)
