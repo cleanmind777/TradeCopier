@@ -564,7 +564,7 @@ const TradingPage: React.FC = () => {
             </div>
           </div>
 
-          Real-time Price Chart using Lightweight Charts
+          {/* Real-time Price Chart using Lightweight Charts
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -592,7 +592,7 @@ const TradingPage: React.FC = () => {
                 </div>
               )}
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* <div>
             <TradingViewWidget symbol={"NQZ2025"} />
