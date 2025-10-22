@@ -145,4 +145,4 @@ class TradovateStopBracket(BaseModel):
 
 class TradovateLimitOrderWithSLTP(TradovateLimitOrder):
     bracket1: TradovateLimitBracket
-    brakcet2: TradovateStopBracket
+    bracket2: TradovateStopBracket
