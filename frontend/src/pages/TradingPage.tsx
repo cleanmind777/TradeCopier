@@ -79,11 +79,9 @@ const TradingPage: React.FC = () => {
   // Execute buy/sell order directly via WebSocket
   const executeOrder = async (action: "Buy" | "Sell") => {
     if (
-      !selectedGroup ||
-      !wsRef.current ||
-      wsRef.current.readyState !== WebSocket.OPEN
+      !selectedGroup
     ) {
-      alert("Please select a group and ensure WebSocket is connected");
+      alert("Please select a group");
       return;
     }
 
