@@ -420,3 +420,30 @@ async def execute_market_order(db: Session, order: MarketOrder):
         response = await tradovate_execute_market_order(tradovate_order, access_token, is_demo)
     
     return "Success"
+
+async def execute_limit_order(db: Session, order: LimitOrder):
+    db_subroker_accounts = (
+        db.query(GroupBroker).filter(GroupBroker.group_id == order.group_id).all()
+    )
+    for subbroker in db_subroker_accounts:
+        db_subroker_account = (
+            db.query(SubBrokerAccount).filter(SubBrokerAccount.id == subbroker.sub_broker_id).first()
+        )
+        tradovate_order = TradovateLimitOrder(
+            accountId=int(db_subroker_account.sub_account_id),
+            accountSpec=db_subroker_account.sub_account_name,
+            symbol=order.symbol,
+            orderQty=int(order.quantity * subbroker.qty),
+            price=order.price,
+            orderType='Market',
+            action=order.action,
+            isAutomated=True
+        )
+        db_broker_account = (
+            db.query(BrokerAccount).filter(BrokerAccount.id == db_subroker_account.broker_account_id).first()
+        )
+        access_token = db_broker_account.access_token
+        is_demo = db_subroker_account.is_demo
+        response = await tradovate_execute_limit_order(tradovate_order, access_token, is_demo)
+    
+    return "Success"

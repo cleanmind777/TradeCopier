@@ -27,7 +27,8 @@ from app.services.broker_service import (
     get_accounts,
     exit_position,
     get_token_for_websocket,
-    execute_market_order
+    execute_market_order,
+    execute_limit_order
 )
 from app.dependencies.database import get_db
 from app.core.config import settings
@@ -126,3 +127,10 @@ def get_Tokens_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
 )
 async def execute_Market_order(order: MarketOrder, db: Session = Depends(get_db)):
     return await execute_market_order(db, order)
+
+@router.post(
+    "/execute-order/limit",
+    status_code=status.HTTP_201_CREATED,
+)
+async def execute_Limit_order(order: LimitOrder, db: Session = Depends(get_db)):
+    return await execute_limit_order(db, order)
