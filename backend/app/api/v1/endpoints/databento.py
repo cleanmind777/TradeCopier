@@ -11,6 +11,6 @@ from fastapi.responses import StreamingResponse
 router = APIRouter()
 
 @router.post("/sse/current-price")
-async def sse_endpoint(request: Request, symbols: list[str]):
-    return StreamingResponse(databento_price_stream(request, symbols), media_type="text/event-stream")
+async def sse_endpoint(request: Request, data: dict):
+    return StreamingResponse(databento_price_stream(request, data['symbols']), media_type="text/event-stream")
 
