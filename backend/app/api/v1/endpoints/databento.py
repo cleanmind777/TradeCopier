@@ -38,9 +38,9 @@ async def sse_price_stream(request: Request):
     client = db.Live(key=settings.DATABENTO_KEY)
     client.subscribe(
         dataset="GLBX.MDP3",
-        schema="trades",
-        stype_in="parent",
-        symbols=",".join(symbols),
+        schema="mbp-1",
+        stype_in="raw_symbol",
+        symbols=symbols,
     )
     stream = client.start()
     if stream is None:
