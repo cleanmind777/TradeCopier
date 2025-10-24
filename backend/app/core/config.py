@@ -54,6 +54,8 @@ class Settings(BaseSettings):
 
     TRADOVATE_API_ME_URL: str = Field(env="TRADOVATE_API_ME_URL")
 
+    DATABENTO_KEY: str = Field(env="DATABENTO_KEY")
+
     class Config:
         # Path to the .env file (relative to project root)
         env_file = ".env"
