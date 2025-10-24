@@ -33,8 +33,6 @@ async def sse_price_stream(request: Request):
     client_host = request.client.host
     symbols = user_subscriptions.get(client_host)
     if not symbols:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=400, detail="No symbols subscribed")
 
     client = db.Live(key=settings.DATABENTO_KEY)
