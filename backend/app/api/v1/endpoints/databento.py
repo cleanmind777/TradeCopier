@@ -24,7 +24,7 @@ async def sse_current_price(request: Request, symbols_req: Symbols):
             dataset="GLBX.MDP3",
             schema="trades",
             stype_in="parent",
-            symbols=symbols_req['symbols']
+            symbols=symbols_req.symbols
         )
         stream = client.start()
 
