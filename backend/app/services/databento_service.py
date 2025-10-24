@@ -38,5 +38,6 @@ async def databento_price_stream(request: Request, symbols: list[str]):
 
             # Yield control to event loop
             await asyncio.sleep(0)
-    finally:
-        client.close()
+    except Exception as e:
+        # optionally log or handle errors
+        print(f"Error in stream: {e}")
