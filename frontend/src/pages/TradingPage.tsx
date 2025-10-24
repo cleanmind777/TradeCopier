@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import Label from "../components/ui/Label";
+import SymbolsMonitor from "../components/trading/SymbolMonitor";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
 import {
   getWebSocketToken,
@@ -625,7 +626,7 @@ const TradingPage: React.FC = () => {
               </CardContent>
             </Card>
           )} */}
-
+          <SymbolsMonitor symbols={['NQZ5', 'ESZ5']}></SymbolsMonitor>
           {/* Trading Interface */}
           {/* Trading Interface */}
           <Card>
