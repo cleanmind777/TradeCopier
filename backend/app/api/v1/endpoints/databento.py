@@ -37,7 +37,7 @@ async def sse_price_stream(request: Request):
 
         raise HTTPException(status_code=400, detail="No symbols subscribed")
 
-    client = db.Live(key="YOUR_API_KEY")
+    client = db.Live(key=settings.DATABENTO_KEY)
     client.subscribe(
         dataset="GLBX.MDP3",
         schema="trades",
