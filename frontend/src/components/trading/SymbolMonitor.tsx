@@ -49,7 +49,7 @@ const SymbolsMonitor = () => {
 
     try {
       // First, subscribe to symbols
-      const response = await fetch(`${API_BASE}/api/v1/databento/sse/current-price`, {
+      const response = await fetch(`${API_BASE}/databento/sse/current-price`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbols: symbolList }),
@@ -61,7 +61,7 @@ const SymbolsMonitor = () => {
       }
 
       // Then start the SSE stream
-      const es = new EventSource(`${API_BASE}/api/v1/databento/sse/current-price`);
+      const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
       eventSourceRef.current = es;
 
       es.onopen = () => {
