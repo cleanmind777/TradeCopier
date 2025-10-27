@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { createChart, ColorType, IChartApi, ISeriesApi, AreaSeries } from "lightweight-charts";
+import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries } from "lightweight-charts";
 import Input from "../ui/Input";
 import Button from "../ui/Button";
 
@@ -19,23 +19,62 @@ interface PriceData {
   test?: string;
 }
 
-interface ChartDataPoint {
+interface CandleData {
   time: number;
-  bid: number;
-  ask: number;
-  mid: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface TickData {
+  time: number;
+  price: number;
 }
 
 const SymbolsMonitor = () => {
   const [symbolInput, setSymbolInput] = useState("");
   const [symbols, setSymbols] = useState<string[]>([]);
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
-  const [priceHistory, setPriceHistory] = useState<Record<string, ChartDataPoint[]>>({});
+  const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
+  const [candleHistory, setCandleHistory] = useState<Record<string, CandleData[]>>({});
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("");
   const eventSourceRef = useRef<EventSource | null>(null);
-  const chartRefs = useRef<Record<string, { chart: IChartApi; bidSeries: ISeriesApi<any>; askSeries: ISeriesApi<any> }>>({});
+  const chartRefs = useRef<Record<string, { chart: IChartApi; candleSeries: ISeriesApi<any> }>>({});
+
+  // Aggregate ticks into 1-minute candles
+  const aggregateTicksToCandles = (ticks: TickData[]): CandleData[] => {
+    if (ticks.length === 0) return [];
+
+    const candleMap = new Map<number, CandleData>();
+
+    ticks.forEach(tick => {
+      // Round down to the minute (1-minute candles)
+      const candleTime = Math.floor(tick.time / 60) * 60;
+      
+      if (!candleMap.has(candleTime)) {
+        // Initialize candle with first tick as open
+        candleMap.set(candleTime, {
+          time: candleTime,
+          open: tick.price,
+          high: tick.price,
+          low: tick.price,
+          close: tick.price
+        });
+      } else {
+        // Update existing candle
+        const candle = candleMap.get(candleTime)!;
+        candle.high = Math.max(candle.high, tick.price);
+        candle.low = Math.min(candle.low, tick.price);
+        candle.close = tick.price; // Last price becomes close
+      }
+    });
+
+    // Convert map to array and sort by time
+    return Array.from(candleMap.values()).sort((a, b) => a.time - b.time);
+  };
 
   const handleConnect = async () => {
     if (!symbolInput.trim()) {
@@ -100,73 +139,57 @@ const SymbolsMonitor = () => {
             
             setPrices((prev: Record<string, PriceData>) => ({ ...prev, [symbol]: data }));
             
-            // Add to price history
-            setPriceHistory((prev: Record<string, ChartDataPoint[]>) => {
-              // Ensure values are numbers
-              const bid = Number(data.bid_price);
-              const ask = Number(data.ask_price);
+            // Add tick to history and create candles
+            const midPrice = (Number(data.bid_price) + Number(data.ask_price)) / 2;
+            const tick: TickData = { time: now, price: midPrice };
+            
+            setTickHistory((prev: Record<string, TickData[]>) => {
+              const currentTicks = prev[symbol] || [];
+              const updatedTicks = [...currentTicks, tick];
+              // Keep last 1000 ticks for aggregation
+              const limitedTicks = updatedTicks.slice(-1000);
               
-              const newPoint: ChartDataPoint = {
-                time: now,
-                bid: bid,
-                ask: ask,
-                mid: (bid + ask) / 2
-              };
+              // Aggregate ticks into candles
+              const candles = aggregateTicksToCandles(limitedTicks);
+              // Keep last 50 candles
+              const limitedCandles = candles.slice(-50);
               
-              const currentHistory = prev[symbol] || [];
-              const updatedHistory = [...currentHistory, newPoint];
-              
-              // Keep only last 50 data points
-              const limitedHistory = updatedHistory.slice(-50);
+              // Update candle history
+              setCandleHistory((candlePrev: Record<string, CandleData[]>) => ({
+                ...candlePrev,
+                [symbol]: limitedCandles
+              }));
               
               // Update chart if it exists
               const chartData = chartRefs.current[symbol];
-              if (chartData && limitedHistory.length > 0) {
-                // Filter and set all data points (only include valid values)
-                const bidData = limitedHistory
-                  .filter(p => {
-                    const bidValue = Number(p.bid);
-                    const timeValue = Number(p.time);
-                    return bidValue != null && 
-                           !isNaN(bidValue) && 
-                           isFinite(bidValue) &&
-                           timeValue != null &&
-                           !isNaN(timeValue) &&
-                           isFinite(timeValue);
-                  })
-                  .map(p => ({ 
-                    time: Number(p.time), 
-                    value: Number(p.bid) 
-                  }));
-                const askData = limitedHistory
-                  .filter(p => {
-                    const askValue = Number(p.ask);
-                    const timeValue = Number(p.time);
-                    return askValue != null && 
-                           !isNaN(askValue) && 
-                           isFinite(askValue) &&
-                           timeValue != null &&
-                           !isNaN(timeValue) &&
-                           isFinite(timeValue);
-                  })
-                  .map(p => ({ 
-                    time: Number(p.time), 
-                    value: Number(p.ask) 
-                  }));
-                
-                if (bidData.length > 0 && askData.length > 0) {
-                  try {
-                    chartData.bidSeries.setData(bidData);
-                    chartData.askSeries.setData(askData);
-                  } catch (error) {
-                    console.error(`Error setting chart data for ${symbol}:`, error);
-                    console.log("Bid data:", bidData);
-                    console.log("Ask data:", askData);
+              if (chartData && limitedCandles.length > 0) {
+                try {
+                  // Filter valid candles only
+                  const validCandles = limitedCandles
+                    .filter(c => 
+                      c.open != null && !isNaN(c.open) && isFinite(c.open) &&
+                      c.high != null && !isNaN(c.high) && isFinite(c.high) &&
+                      c.low != null && !isNaN(c.low) && isFinite(c.low) &&
+                      c.close != null && !isNaN(c.close) && isFinite(c.close) &&
+                      c.time != null && !isNaN(c.time) && isFinite(c.time)
+                    )
+                    .map(c => ({
+                      time: c.time,
+                      open: Number(c.open),
+                      high: Number(c.high),
+                      low: Number(c.low),
+                      close: Number(c.close)
+                    }));
+                  
+                  if (validCandles.length > 0) {
+                    chartData.candleSeries.setData(validCandles);
                   }
+                } catch (error) {
+                  console.error(`Error setting candle data for ${symbol}:`, error);
                 }
               }
               
-              return { ...prev, [symbol]: limitedHistory };
+              return { ...prev, [symbol]: limitedTicks };
             });
           }
         } catch (error) {
@@ -204,7 +227,8 @@ const SymbolsMonitor = () => {
     setIsConnected(false);
     setConnectionStatus("Disconnected");
     setPrices({});
-    setPriceHistory({});
+    setTickHistory({});
+    setCandleHistory({});
     setSymbols([]);
   };
 
@@ -226,63 +250,41 @@ const SymbolsMonitor = () => {
       height: 300,
     });
 
-    const bidSeries = chart.addSeries(AreaSeries, {
-      color: 'rgba(239, 68, 68, 0.5)',
-      lineColor: 'rgba(239, 68, 68, 1)',
-      title: 'Bid',
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderVisible: false,
+      wickVisible: true,
+      title: symbol,
     });
 
-    const askSeries = chart.addSeries(AreaSeries, {
-      color: 'rgba(34, 197, 94, 0.5)',
-      lineColor: 'rgba(34, 197, 94, 1)',
-      title: 'Ask',
-    });
+    chartRefs.current[symbol] = { chart, candleSeries };
 
-    chartRefs.current[symbol] = { chart, bidSeries, askSeries };
-
-    // Set data for both series
-    const history = priceHistory[symbol] || [];
+    // Set initial candle data if available
+    const history = candleHistory[symbol] || [];
     if (history.length > 0) {
-      const bidData = history
-        .filter((p: ChartDataPoint) => {
-          const bidValue = Number(p.bid);
-          const timeValue = Number(p.time);
-          return bidValue != null && 
-                 !isNaN(bidValue) && 
-                 isFinite(bidValue) &&
-                 timeValue != null &&
-                 !isNaN(timeValue) &&
-                 isFinite(timeValue);
-        })
-        .map((p: ChartDataPoint) => ({ 
-          time: Number(p.time), 
-          value: Number(p.bid) 
-        }));
-      const askData = history
-        .filter((p: ChartDataPoint) => {
-          const askValue = Number(p.ask);
-          const timeValue = Number(p.time);
-          return askValue != null && 
-                 !isNaN(askValue) && 
-                 isFinite(askValue) &&
-                 timeValue != null &&
-                 !isNaN(timeValue) &&
-                 isFinite(timeValue);
-        })
-        .map((p: ChartDataPoint) => ({ 
-          time: Number(p.time), 
-          value: Number(p.ask) 
-        }));
-      
-      if (bidData.length > 0 && askData.length > 0) {
-        try {
-          bidSeries.setData(bidData);
-          askSeries.setData(askData);
-        } catch (error) {
-          console.error(`Error setting initial chart data for ${symbol}:`, error);
-          console.log("Bid data:", bidData);
-          console.log("Ask data:", askData);
+      try {
+        const validCandles = history
+          .filter((c: CandleData) => 
+            c.open != null && !isNaN(c.open) && isFinite(c.open) &&
+            c.high != null && !isNaN(c.high) && isFinite(c.high) &&
+            c.low != null && !isNaN(c.low) && isFinite(c.low) &&
+            c.close != null && !isNaN(c.close) && isFinite(c.close) &&
+            c.time != null && !isNaN(c.time) && isFinite(c.time)
+          )
+          .map((c: CandleData) => ({
+            time: Number(c.time),
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close)
+          }));
+        
+        if (validCandles.length > 0) {
+          candleSeries.setData(validCandles);
         }
+      } catch (error) {
+        console.error(`Error setting initial candle data for ${symbol}:`, error);
       }
     }
 
@@ -369,7 +371,7 @@ const SymbolsMonitor = () => {
             const bid = priceData?.bid_price;
             const ask = priceData?.ask_price;
             const spread = bid && ask ? (ask - bid).toFixed(2) : null;
-            const history = priceHistory[symbol] || [];
+            const candles = candleHistory[symbol] || [];
 
             return (
               <div
@@ -420,7 +422,7 @@ const SymbolsMonitor = () => {
                     </div>
 
                     {/* Chart */}
-                    {history.length > 0 && (
+                    {candles.length > 0 && (
                       <div className="mt-4">
                         <div
                           ref={(el: HTMLDivElement | null) => {
@@ -431,7 +433,7 @@ const SymbolsMonitor = () => {
                           className="w-full rounded-lg overflow-hidden"
                         />
                         <div className="text-xs text-slate-400 mt-2">
-                          Data points: {history.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
+                          Candles: {candles.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
                         </div>
                       </div>
                     )}
