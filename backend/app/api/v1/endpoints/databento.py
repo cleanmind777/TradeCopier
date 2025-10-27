@@ -100,6 +100,7 @@ async def stream_price_data(
                         # Handle actual price/trade data
                         # Extract data from MBP1Msg structure
                         # Get instrument_id from record
+                        print(f"📦 Record: {record}")
                         instrument_id = getattr(record, 'instrument_id', None)
                         
                         # Get symbol name from mapping if available
