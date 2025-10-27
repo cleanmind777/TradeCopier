@@ -146,13 +146,13 @@ const SymbolsMonitor = () => {
             setTickHistory((prev: Record<string, TickData[]>) => {
               const currentTicks = prev[symbol] || [];
               const updatedTicks = [...currentTicks, tick];
-              // Keep last 1000 ticks for aggregation
-              const limitedTicks = updatedTicks.slice(-1000);
+              // Keep last 6000 ticks for aggregation (enough for 100 minutes at 1 tick/sec)
+              const limitedTicks = updatedTicks.slice(-6000);
               
               // Aggregate ticks into candles
               const candles = aggregateTicksToCandles(limitedTicks);
-              // Keep last 50 candles
-              const limitedCandles = candles.slice(-50);
+              // Keep last 100 candles
+              const limitedCandles = candles.slice(-100);
               
               // Update candle history
               setCandleHistory((candlePrev: Record<string, CandleData[]>) => ({
