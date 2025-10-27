@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { createChart, ColorType, IChartApi, ISeriesApi } from "lightweight-charts";
+import { createChart, ColorType, IChartApi, ISeriesApi, AreaSeries } from "lightweight-charts";
 import Input from "../ui/Input";
 import Button from "../ui/Button";
 
@@ -179,13 +179,13 @@ const SymbolsMonitor = () => {
       height: 300,
     });
 
-    const bidSeries = chart.addAreaSeries({
+    const bidSeries = chart.addSeries(AreaSeries, {
       color: 'rgba(239, 68, 68, 0.5)',
       lineColor: 'rgba(239, 68, 68, 1)',
       title: 'Bid',
     });
 
-    const askSeries = chart.addAreaSeries({
+    const askSeries = chart.addSeries(AreaSeries, {
       color: 'rgba(34, 197, 94, 0.5)',
       lineColor: 'rgba(34, 197, 94, 1)',
       title: 'Ask',
