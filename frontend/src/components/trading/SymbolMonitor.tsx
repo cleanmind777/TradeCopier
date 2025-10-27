@@ -91,7 +91,10 @@ const SymbolsMonitor = () => {
           }
 
           // Update prices with the received data
-          if (data.symbol && data.bid_price && data.ask_price) {
+          // Ensure bid_price and ask_price are valid numbers (not null, undefined, or NaN)
+          if (data.symbol && 
+              data.bid_price != null && !isNaN(data.bid_price) && 
+              data.ask_price != null && !isNaN(data.ask_price)) {
             const symbol = data.symbol;
             const now = Math.floor(Date.now() / 1000); // Unix timestamp in seconds
             
@@ -99,11 +102,15 @@ const SymbolsMonitor = () => {
             
             // Add to price history
             setPriceHistory((prev: Record<string, ChartDataPoint[]>) => {
+              // Ensure values are numbers
+              const bid = Number(data.bid_price);
+              const ask = Number(data.ask_price);
+              
               const newPoint: ChartDataPoint = {
                 time: now,
-                bid: data.bid_price!,
-                ask: data.ask_price!,
-                mid: (data.bid_price! + data.ask_price!) / 2
+                bid: bid,
+                ask: ask,
+                mid: (bid + ask) / 2
               };
               
               const currentHistory = prev[symbol] || [];
@@ -115,12 +122,48 @@ const SymbolsMonitor = () => {
               // Update chart if it exists
               const chartData = chartRefs.current[symbol];
               if (chartData && limitedHistory.length > 0) {
-                // Set all data points to show full history
-                const bidData = limitedHistory.map(p => ({ time: p.time, value: p.bid }));
-                const askData = limitedHistory.map(p => ({ time: p.time, value: p.ask }));
+                // Filter and set all data points (only include valid values)
+                const bidData = limitedHistory
+                  .filter(p => {
+                    const bidValue = Number(p.bid);
+                    const timeValue = Number(p.time);
+                    return bidValue != null && 
+                           !isNaN(bidValue) && 
+                           isFinite(bidValue) &&
+                           timeValue != null &&
+                           !isNaN(timeValue) &&
+                           isFinite(timeValue);
+                  })
+                  .map(p => ({ 
+                    time: Number(p.time), 
+                    value: Number(p.bid) 
+                  }));
+                const askData = limitedHistory
+                  .filter(p => {
+                    const askValue = Number(p.ask);
+                    const timeValue = Number(p.time);
+                    return askValue != null && 
+                           !isNaN(askValue) && 
+                           isFinite(askValue) &&
+                           timeValue != null &&
+                           !isNaN(timeValue) &&
+                           isFinite(timeValue);
+                  })
+                  .map(p => ({ 
+                    time: Number(p.time), 
+                    value: Number(p.ask) 
+                  }));
                 
-                chartData.bidSeries.setData(bidData);
-                chartData.askSeries.setData(askData);
+                if (bidData.length > 0 && askData.length > 0) {
+                  try {
+                    chartData.bidSeries.setData(bidData);
+                    chartData.askSeries.setData(askData);
+                  } catch (error) {
+                    console.error(`Error setting chart data for ${symbol}:`, error);
+                    console.log("Bid data:", bidData);
+                    console.log("Ask data:", askData);
+                  }
+                }
               }
               
               return { ...prev, [symbol]: limitedHistory };
@@ -200,11 +243,47 @@ const SymbolsMonitor = () => {
     // Set data for both series
     const history = priceHistory[symbol] || [];
     if (history.length > 0) {
-      const bidData = history.map((p: ChartDataPoint) => ({ time: p.time, value: p.bid }));
-      const askData = history.map((p: ChartDataPoint) => ({ time: p.time, value: p.ask }));
+      const bidData = history
+        .filter((p: ChartDataPoint) => {
+          const bidValue = Number(p.bid);
+          const timeValue = Number(p.time);
+          return bidValue != null && 
+                 !isNaN(bidValue) && 
+                 isFinite(bidValue) &&
+                 timeValue != null &&
+                 !isNaN(timeValue) &&
+                 isFinite(timeValue);
+        })
+        .map((p: ChartDataPoint) => ({ 
+          time: Number(p.time), 
+          value: Number(p.bid) 
+        }));
+      const askData = history
+        .filter((p: ChartDataPoint) => {
+          const askValue = Number(p.ask);
+          const timeValue = Number(p.time);
+          return askValue != null && 
+                 !isNaN(askValue) && 
+                 isFinite(askValue) &&
+                 timeValue != null &&
+                 !isNaN(timeValue) &&
+                 isFinite(timeValue);
+        })
+        .map((p: ChartDataPoint) => ({ 
+          time: Number(p.time), 
+          value: Number(p.ask) 
+        }));
       
-      bidSeries.setData(bidData);
-      askSeries.setData(askData);
+      if (bidData.length > 0 && askData.length > 0) {
+        try {
+          bidSeries.setData(bidData);
+          askSeries.setData(askData);
+        } catch (error) {
+          console.error(`Error setting initial chart data for ${symbol}:`, error);
+          console.log("Bid data:", bidData);
+          console.log("Ask data:", askData);
+        }
+      }
     }
 
     chart.timeScale().fitContent();
