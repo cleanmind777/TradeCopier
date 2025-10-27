@@ -13,6 +13,9 @@ router = APIRouter()
 # Store user subscriptions by client IP
 user_subscriptions = {}
 
+# Store symbol mapping (instrument_id -> symbol name)
+symbol_mapping = {}
+
 # Configuration constants
 DATASET = "GLBX.MDP3"
 SCHEMA = "mbp-1"
@@ -79,23 +82,40 @@ async def stream_price_data(
                     break
                 
                 try:
-                    # Debug: Print raw record to understand structure
-                    print(f"📦 Received record: {type(record)}")
-                    
                     # Handle different record types
                     record_type = type(record).__name__
                     
                     if record_type == "SymbolMappingMsg":
                         # Handle symbol mapping messages
-                        print(f"🗺️ Symbol mapping: {getattr(record, 'stype_in_symbol', 'Unknown')} -> {getattr(record, 'stype_out_symbol', 'Unknown')}")
+                        instrument_id = getattr(record, 'instrument_id', None)
+                        symbol = getattr(record, 'stype_in_symbol', None)
+                        
+                        if instrument_id is not None and symbol is not None:
+                            symbol_mapping[instrument_id] = symbol
+                            print(f"🗺️ Symbol mapping: {symbol} -> Instrument ID {instrument_id}")
+                        
                         continue  # Skip symbol mapping messages for price display
                     
                     elif record_type in ["MBP1Msg", "MBPMsg", "TradeMsg"]:
                         # Handle actual price/trade data
                         # Extract data from MBP1Msg structure
-                        print(f"📦 Record: {record}")
-                        symbol = getattr(record, 'symbol', getattr(record, 'instrument_id', 'UNKNOWN'))
-                        timestamp = getattr(record, 'ts_event', getattr(record.hd, 'ts_event', datetime.now()))
+                        # Get instrument_id from record
+                        instrument_id = getattr(record, 'instrument_id', None)
+                        
+                        # Get symbol name from mapping if available
+                        symbol = symbol_mapping.get(instrument_id, f"Instrument-{instrument_id}")
+                        
+                        # Get timestamp - try record.hd.ts_event first, then record.ts_event
+                        timestamp = None
+                        try:
+                            if hasattr(record, 'hd') and hasattr(record.hd, 'ts_event'):
+                                timestamp = record.hd.ts_event
+                            elif hasattr(record, 'ts_event'):
+                                timestamp = record.ts_event
+                            else:
+                                timestamp = datetime.now()
+                        except:
+                            timestamp = datetime.now()
                         
                         # Extract bid/ask data from levels array
                         bid_price = None
@@ -106,37 +126,20 @@ async def stream_price_data(
                         if hasattr(record, 'levels') and record.levels and len(record.levels) > 0:
                             level = record.levels[0]
                             
-                            # Extract prices - they may be in fixed-point format (int * 1e9)
-                            # If the value is > 1000000, it's likely in fixed-point format, divide by 1e9
-                            raw_bid = level.bid_px if hasattr(level, 'bid_px') else None
-                            raw_ask = level.ask_px if hasattr(level, 'ask_px') else None
-                            
-                            # Convert to float, then check if we need to scale down
-                            if raw_bid is not None:
-                                bid_value = float(raw_bid)
-                                # Check if value seems to be in fixed-point format (very large number)
-                                if bid_value > 1000000:
-                                    bid_price = bid_value / 1e9
-                                else:
-                                    bid_price = bid_value
-                            else:
-                                bid_price = None
-                            
-                            if raw_ask is not None:
-                                ask_value = float(raw_ask)
-                                # Check if value seems to be in fixed-point format (very large number)
-                                if ask_value > 1000000:
-                                    ask_price = ask_value / 1e9
-                                else:
-                                    ask_price = ask_value
-                            else:
-                                ask_price = None
-                            
-                            bid_size = int(level.bid_sz) if hasattr(level, 'bid_sz') and level.bid_sz else None
-                            ask_size = int(level.ask_sz) if hasattr(level, 'ask_sz') and level.ask_sz else None
+                            # Extract prices from BidAskPair
+                            # Prices are already in the correct format (no fixed-point conversion needed)
+                            if hasattr(level, 'bid_px'):
+                                bid_price = float(level.bid_px)
+                            if hasattr(level, 'ask_px'):
+                                ask_price = float(level.ask_px)
+                            if hasattr(level, 'bid_sz'):
+                                bid_size = int(level.bid_sz)
+                            if hasattr(level, 'ask_sz'):
+                                ask_size = int(level.ask_sz)
                         
                         data = {
-                            "symbol": str(symbol),
+                            "symbol": symbol,
+                            "instrument_id": int(instrument_id) if instrument_id is not None else None,
                             "timestamp": str(timestamp),
                             "bid_price": bid_price,
                             "ask_price": ask_price,
@@ -147,7 +150,7 @@ async def stream_price_data(
                         }
 
                         # Always send data to frontend (even if price data is None)
-                        print(f"💰 Sending {record_type} data: {data['symbol']} - Bid: {data['bid_price']}, Ask: {data['ask_price']}")
+                        print(f"💰 Sending {record_type} data: {data['symbol']} (ID: {data['instrument_id']}) - Bid: {data['bid_price']}, Ask: {data['ask_price']}")
                         yield f"data: {json.dumps(data)}\n\n"
                     
                     else:
