@@ -109,14 +109,18 @@ const SymbolsMonitor = () => {
               const currentHistory = prev[symbol] || [];
               const updatedHistory = [...currentHistory, newPoint];
               
-              // Keep only last 1000 data points to prevent memory issues
-              const limitedHistory = updatedHistory.slice(-1000);
+              // Keep only last 50 data points
+              const limitedHistory = updatedHistory.slice(-50);
               
               // Update chart if it exists
               const chartData = chartRefs.current[symbol];
-              if (chartData) {
-                chartData.bidSeries.update({ time: newPoint.time, value: newPoint.bid });
-                chartData.askSeries.update({ time: newPoint.time, value: newPoint.ask });
+              if (chartData && limitedHistory.length > 0) {
+                // Set all data points to show full history
+                const bidData = limitedHistory.map(p => ({ time: p.time, value: p.bid }));
+                const askData = limitedHistory.map(p => ({ time: p.time, value: p.ask }));
+                
+                chartData.bidSeries.setData(bidData);
+                chartData.askSeries.setData(askData);
               }
               
               return { ...prev, [symbol]: limitedHistory };
