@@ -146,13 +146,24 @@ async def stream_price_data(
                                 print(f"🔍 Level attributes: {dir(level)}")
                                 
                                 # Extract prices from BidAskPair
-                                # Prices are already in the correct format (no fixed-point conversion needed)
-                                if hasattr(level, 'bid_px'):
+                                # Use 'pretty_bid_px' and 'pretty_ask_px' for human-readable float values
+                                # These are the correctly formatted prices, not the raw integer values
+                                if hasattr(level, 'pretty_bid_px'):
+                                    bid_price = float(level.pretty_bid_px)
+                                    print(f"📊 Extracted bid_px (pretty): {bid_price}")
+                                elif hasattr(level, 'bid_px'):
+                                    # Fallback to raw bid_px if pretty not available
                                     bid_price = float(level.bid_px)
-                                    print(f"📊 Extracted bid_px: {bid_price}")
-                                if hasattr(level, 'ask_px'):
+                                    print(f"📊 Extracted bid_px (raw): {bid_price}")
+                                    
+                                if hasattr(level, 'pretty_ask_px'):
+                                    ask_price = float(level.pretty_ask_px)
+                                    print(f"📊 Extracted ask_px (pretty): {ask_price}")
+                                elif hasattr(level, 'ask_px'):
+                                    # Fallback to raw ask_px if pretty not available
                                     ask_price = float(level.ask_px)
-                                    print(f"📊 Extracted ask_px: {ask_price}")
+                                    print(f"📊 Extracted ask_px (raw): {ask_price}")
+                                    
                                 if hasattr(level, 'bid_sz'):
                                     bid_size = int(level.bid_sz)
                                     print(f"📊 Extracted bid_sz: {bid_size}")
