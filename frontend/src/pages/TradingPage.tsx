@@ -626,7 +626,7 @@ const TradingPage: React.FC = () => {
               </CardContent>
             </Card>
           )} */}
-          <SymbolsMonitor symbols={['NQZ5', 'ESZ5']}></SymbolsMonitor>
+          <SymbolsMonitor />
           {/* Trading Interface */}
           {/* Trading Interface */}
           <Card>
