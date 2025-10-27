@@ -93,6 +93,7 @@ async def stream_price_data(
                     elif record_type in ["MBP1Msg", "MBPMsg", "TradeMsg"]:
                         # Handle actual price/trade data
                         # Extract data from MBP1Msg structure
+                        print(f"📦 Record: {record}")
                         symbol = getattr(record, 'symbol', getattr(record, 'instrument_id', 'UNKNOWN'))
                         timestamp = getattr(record, 'ts_event', getattr(record.hd, 'ts_event', datetime.now()))
                         
