@@ -182,6 +182,7 @@ const SymbolsMonitor = () => {
                     }));
                   
                   if (validCandles.length > 0) {
+                    console.log(`Setting ${validCandles.length} candles for ${symbol}`, validCandles);
                     chartData.candleSeries.setData(validCandles);
                   }
                 } catch (error) {
@@ -237,6 +238,8 @@ const SymbolsMonitor = () => {
       return; // Chart already initialized
     }
 
+    console.log(`Initializing chart for ${symbol}`, container.clientWidth, container.clientHeight);
+
     const chart = createChart(container, {
       layout: {
         background: { type: ColorType.Solid, color: 'white' },
@@ -262,6 +265,7 @@ const SymbolsMonitor = () => {
 
     // Set initial candle data if available
     const history = candleHistory[symbol] || [];
+    console.log(`Initial chart setup for ${symbol}:`, history.length, 'candles available');
     if (history.length > 0) {
       try {
         const validCandles = history
@@ -281,11 +285,16 @@ const SymbolsMonitor = () => {
           }));
         
         if (validCandles.length > 0) {
+          console.log(`Setting initial ${validCandles.length} candles for ${symbol}`);
           candleSeries.setData(validCandles);
+        } else {
+          console.log(`No valid candles for ${symbol}`);
         }
       } catch (error) {
         console.error(`Error setting initial candle data for ${symbol}:`, error);
       }
+    } else {
+      console.log(`No initial candles for ${symbol}, will update when data arrives`);
     }
 
     chart.timeScale().fitContent();
@@ -422,21 +431,19 @@ const SymbolsMonitor = () => {
                     </div>
 
                     {/* Chart */}
-                    {candles.length > 0 && (
-                      <div className="mt-4">
-                        <div
-                          ref={(el: HTMLDivElement | null) => {
-                            if (el && !chartRefs.current[symbol]) {
-                              initializeChart(symbol, el);
-                            }
-                          }}
-                          className="w-full rounded-lg overflow-hidden"
-                        />
-                        <div className="text-xs text-slate-400 mt-2">
-                          Candles: {candles.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
-                        </div>
+                    <div className="mt-4">
+                      <div
+                        ref={(el: HTMLDivElement | null) => {
+                          if (el && !chartRefs.current[symbol]) {
+                            initializeChart(symbol, el);
+                          }
+                        }}
+                        className="w-full h-[300px] rounded-lg overflow-hidden"
+                      />
+                      <div className="text-xs text-slate-400 mt-2">
+                        Candles: {candles.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
                       </div>
-                    )}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-slate-400">Waiting for data...</div>
