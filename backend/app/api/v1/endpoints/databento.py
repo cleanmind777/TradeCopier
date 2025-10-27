@@ -117,25 +117,47 @@ async def stream_price_data(
                         except:
                             timestamp = datetime.now()
                         
-                        # Extract bid/ask data from levels array
+                        # Extract bid/ask data from levels
                         bid_price = None
                         ask_price = None
                         bid_size = None
                         ask_size = None
                         
-                        if hasattr(record, 'levels') and record.levels and len(record.levels) > 0:
-                            level = record.levels[0]
+                        # Debug: Print record structure to understand levels format
+                        print(f"🔍 Record levels type: {type(record.levels) if hasattr(record, 'levels') else 'None'}")
+                        print(f"🔍 Record levels value: {record.levels if hasattr(record, 'levels') else 'None'}")
+                        
+                        # Check if levels is a list or a single object
+                        if hasattr(record, 'levels'):
+                            levels_data = record.levels
                             
-                            # Extract prices from BidAskPair
-                            # Prices are already in the correct format (no fixed-point conversion needed)
-                            if hasattr(level, 'bid_px'):
-                                bid_price = float(level.bid_px)
-                            if hasattr(level, 'ask_px'):
-                                ask_price = float(level.ask_px)
-                            if hasattr(level, 'bid_sz'):
-                                bid_size = int(level.bid_sz)
-                            if hasattr(level, 'ask_sz'):
-                                ask_size = int(level.ask_sz)
+                            # If it's a list, get first element
+                            if isinstance(levels_data, list) and len(levels_data) > 0:
+                                level = levels_data[0]
+                            elif hasattr(levels_data, 'bid_px'):
+                                # It might be a single BidAskPair object
+                                level = levels_data
+                            else:
+                                level = None
+                                
+                            if level is not None:
+                                print(f"🔍 Level type: {type(level)}")
+                                print(f"🔍 Level attributes: {dir(level)}")
+                                
+                                # Extract prices from BidAskPair
+                                # Prices are already in the correct format (no fixed-point conversion needed)
+                                if hasattr(level, 'bid_px'):
+                                    bid_price = float(level.bid_px)
+                                    print(f"📊 Extracted bid_px: {bid_price}")
+                                if hasattr(level, 'ask_px'):
+                                    ask_price = float(level.ask_px)
+                                    print(f"📊 Extracted ask_px: {ask_price}")
+                                if hasattr(level, 'bid_sz'):
+                                    bid_size = int(level.bid_sz)
+                                    print(f"📊 Extracted bid_sz: {bid_size}")
+                                if hasattr(level, 'ask_sz'):
+                                    ask_size = int(level.ask_sz)
+                                    print(f"📊 Extracted ask_sz: {ask_size}")
                         
                         data = {
                             "symbol": symbol,
