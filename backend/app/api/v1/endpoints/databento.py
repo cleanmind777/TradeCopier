@@ -70,13 +70,9 @@ async def stream_price_data(
         print(f"📤 Sending status message: {status_data}")
         yield f"data: {json.dumps(status_data)}\n\n"
         
-        # Stream data with proper error handling
-        stream = client.start()
-        if stream is None:
-            raise HTTPException(status_code=500, detail="Failed to start data stream")
-        
+                
         try:
-            for record in stream:
+            for record in client:
                 # Check if client disconnected
                 if await request.is_disconnected():
                     print("❌ Client disconnected")
