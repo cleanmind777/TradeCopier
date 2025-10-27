@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from app.core.config import settings
+from app.schemas.broker import Symbols
 from typing import AsyncGenerator
 import databento as db
 import asyncio
@@ -219,18 +220,19 @@ async def stream_price_data(
 
 
 @router.post("/sse/current-price")
-async def subscribe_symbols(request: Request, symbols: list[str]):
+async def subscribe_symbols(request: Request, body: Symbols):
     """
     Subscribe to symbols for real-time price streaming
     
     Args:
         request: FastAPI request object
-        symbols: List of symbols to subscribe to (e.g., ['ES.FUT', 'NQ.FUT'])
+        body: Pydantic model containing list of symbols to subscribe to (e.g., {'symbols': ['ES.FUT', 'NQ.FUT']})
     
     Returns:
         Confirmation message
     """
     client_host = request.client.host
+    symbols = body.symbols
     user_subscriptions[client_host] = symbols
     
     print(f"📝 Client {client_host} subscribed to symbols: {symbols}")
