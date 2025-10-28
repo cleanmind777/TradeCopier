@@ -37,6 +37,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
   const [symbols, setSymbols] = useState<string[]>([]);
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [ohlcvHistory, setOhlcvHistory] = useState<Record<string, OHLCVData[]>>({});
+  const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '30m' | '45m' | '1h' | '12h' | '1d'>('1m');
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("");
@@ -53,6 +54,57 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     const now = new Date();
     now.setSeconds(0, 0); // Reset seconds and milliseconds
     return Math.floor(now.getTime() / 1000);
+  };
+
+  // Helper function to get timeframe in minutes
+  const getTimeframeMinutes = (tf: typeof timeframe): number => {
+    switch (tf) {
+      case '1m': return 1;
+      case '5m': return 5;
+      case '15m': return 15;
+      case '30m': return 30;
+      case '45m': return 45;
+      case '1h': return 60;
+      case '12h': return 12 * 60;
+      case '1d': return 24 * 60;
+    }
+  };
+
+  // Aggregate 1-minute OHLCV data to higher timeframes
+  const aggregateToTimeframe = (oneMinuteData: OHLCVData[], targetTimeframe: typeof timeframe): OHLCVData[] => {
+    if (targetTimeframe === '1m' || oneMinuteData.length === 0) {
+      return oneMinuteData;
+    }
+
+    const timeframeMinutes = getTimeframeMinutes(targetTimeframe);
+    const aggregatedMap = new Map<number, OHLCVData>();
+
+    oneMinuteData.forEach(candle => {
+      // Calculate the bucket time for the target timeframe
+      const bucketTime = Math.floor(candle.time / (timeframeMinutes * 60)) * (timeframeMinutes * 60);
+      
+      if (!aggregatedMap.has(bucketTime)) {
+        // Create new aggregated candle
+        aggregatedMap.set(bucketTime, {
+          time: bucketTime,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          volume: candle.volume
+        });
+      } else {
+        // Update existing aggregated candle
+        const existing = aggregatedMap.get(bucketTime)!;
+        existing.high = Math.max(existing.high, candle.high);
+        existing.low = Math.min(existing.low, candle.low);
+        existing.close = candle.close; // Last candle's close becomes the close
+        existing.volume += candle.volume;
+      }
+    });
+
+    // Convert map to array and sort by time
+    return Array.from(aggregatedMap.values()).sort((a, b) => a.time - b.time);
   };
 
   // Update OHLCV data for current minute
@@ -251,11 +303,12 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     chartRefs.current[symbol] = { chart, candleSeries };
 
     // Set initial OHLCV data if available
-    const history = ohlcvHistory[symbol] || [];
-    console.log(`Initial chart setup for ${symbol}:`, history.length, 'candles available');
-    if (history.length > 0) {
+    const oneMinuteData = ohlcvHistory[symbol] || [];
+    const aggregatedData = aggregateToTimeframe(oneMinuteData, timeframe);
+    console.log(`Initial chart setup for ${symbol}:`, oneMinuteData.length, '1m candles, aggregated to', aggregatedData.length, `${timeframe} candles`);
+    if (aggregatedData.length > 0) {
       try {
-        const validCandles = history
+        const validCandles = aggregatedData
           .filter((c: OHLCVData) => 
             c.open != null && !isNaN(c.open) && isFinite(c.open) &&
             c.high != null && !isNaN(c.high) && isFinite(c.high) &&
@@ -272,16 +325,16 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
           }));
         
         if (validCandles.length > 0) {
-          console.log(`Setting initial ${validCandles.length} candles for ${symbol}`);
+          console.log(`Setting initial ${validCandles.length} ${timeframe} candles for ${symbol}`);
           candleSeries.setData(validCandles as any);
         } else {
-          console.log(`No valid candles for ${symbol}`);
+          console.log(`No valid ${timeframe} candles for ${symbol}`);
         }
       } catch (error) {
-        console.error(`Error setting initial candle data for ${symbol}:`, error);
+        console.error(`Error setting initial ${timeframe} candle data for ${symbol}:`, error);
       }
     } else {
-      console.log(`No initial candles for ${symbol}, will update when data arrives`);
+      console.log(`No initial ${timeframe} candles for ${symbol}, will update when data arrives`);
     }
 
     // Configure time axis to show date and time
@@ -323,18 +376,19 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     };
   }, []);
 
-  // Update charts when OHLCV data changes
+  // Update charts when OHLCV data or timeframe changes
   useEffect(() => {
     if (!isConnected || symbols.length === 0) return;
 
-    console.log(`📈 Updating charts with OHLCV data`);
+    console.log(`📈 Updating charts with ${timeframe} timeframe`);
     
     symbols.forEach((symbol) => {
-      const candles = ohlcvHistory[symbol] || [];
+      const oneMinuteData = ohlcvHistory[symbol] || [];
+      const aggregatedData = aggregateToTimeframe(oneMinuteData, timeframe);
       
       const chartData = chartRefs.current[symbol];
-      if (chartData && candles.length > 0) {
-        const validCandles = candles
+      if (chartData && aggregatedData.length > 0) {
+        const validCandles = aggregatedData
           .filter((c: OHLCVData) => 
             c.open != null && !isNaN(c.open) && isFinite(c.open) &&
             c.high != null && !isNaN(c.high) && isFinite(c.high) &&
@@ -350,11 +404,12 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
             close: Number(c.close)
           }));
 
+        console.log(`📊 Rendering ${validCandles.length} ${timeframe} candles for ${symbol}`);
         // Update the series with new data
         chartData.candleSeries.setData((validCandles as any) || []);
       }
     });
-  }, [ohlcvHistory, symbols, isConnected]);
+  }, [ohlcvHistory, symbols, isConnected, timeframe]);
 
 
   return (
@@ -402,7 +457,21 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
             <h3 className="text-xl font-bold text-slate-800">Live Prices</h3>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-600">Timeframe: 1m (Fixed)</span>
+                <span className="text-sm text-slate-600">Timeframe:</span>
+                <select
+                  value={timeframe}
+                  onChange={(e) => setTimeframe(e.target.value as any)}
+                  className="border border-slate-300 rounded px-2 py-1 text-sm"
+                >
+                  <option value="1m">1m</option>
+                  <option value="5m">5m</option>
+                  <option value="15m">15m</option>
+                  <option value="30m">30m</option>
+                  <option value="45m">45m</option>
+                  <option value="1h">1h</option>
+                  <option value="12h">12h</option>
+                  <option value="1d">1d</option>
+                </select>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">Chart Controls:</span>
@@ -435,7 +504,8 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
             const bid = priceData?.bid_price;
             const ask = priceData?.ask_price;
             const spread = bid && ask ? (ask - bid).toFixed(2) : null;
-            const candles = ohlcvHistory[symbol] || [];
+            const oneMinuteData = ohlcvHistory[symbol] || [];
+            const aggregatedData = aggregateToTimeframe(oneMinuteData, timeframe);
 
             return (
               <div
@@ -496,7 +566,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
                         className="w-full h-[300px] rounded-lg overflow-hidden"
                       />
                       <div className="text-xs text-slate-400 mt-2">
-                        Candles: {candles.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
+                        {timeframe} Candles: {aggregatedData.length} | 1m Base: {oneMinuteData.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
                       </div>
                     </div>
                   </div>
