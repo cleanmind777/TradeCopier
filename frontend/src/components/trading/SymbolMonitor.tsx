@@ -378,10 +378,11 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     };
   }, []);
 
-  // Re-aggregate and refresh charts when timeframe changes or new ticks arrive
+  // Re-aggregate and refresh charts when timeframe changes
   useEffect(() => {
     if (!isConnected || symbols.length === 0) return;
 
+    console.log(`🔄 Timeframe changed to ${timeframe}, redrawing all candles`);
     const bucket = timeframeToSeconds(timeframe);
 
     // Recreate candle history based on stored ticks
@@ -409,6 +410,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
             close: Number(c.close)
           }));
 
+        console.log(`📊 Redrawing ${validCandles.length} candles for ${symbol} with ${timeframe} timeframe`);
         // Always reset data to ensure previous candles are replaced
         chartData.candleSeries.setData((validCandles as any) || []);
         // Don't auto-fit - let user control zoom level
@@ -417,7 +419,42 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     });
 
     setCandleHistory(newCandleHistory);
-  }, [timeframe, symbols, tickHistory, isConnected]);
+  }, [timeframe]);
+
+  // Update charts when new tick data arrives (but don't re-aggregate)
+  useEffect(() => {
+    if (!isConnected || symbols.length === 0) return;
+
+    const bucket = timeframeToSeconds(timeframe);
+    
+    // Only update charts for symbols that have new data
+    symbols.forEach((symbol) => {
+      const ticks = tickHistory[symbol] || [];
+      const candles = aggregateTicksToCandles(ticks, bucket).slice(-100);
+      
+      const chartData = chartRefs.current[symbol];
+      if (chartData && candles.length > 0) {
+        const validCandles = candles
+          .filter((c: CandleData) => 
+            c.open != null && !isNaN(c.open) && isFinite(c.open) &&
+            c.high != null && !isNaN(c.high) && isFinite(c.high) &&
+            c.low != null && !isNaN(c.low) && isFinite(c.low) &&
+            c.close != null && !isNaN(c.close) && isFinite(c.close) &&
+            c.time != null && !isNaN(c.time) && isFinite(c.time)
+          )
+          .map((c: CandleData) => ({
+            time: Number(c.time),
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close)
+          }));
+
+        // Update the series with new data
+        chartData.candleSeries.setData((validCandles as any) || []);
+      }
+    });
+  }, [tickHistory, symbols, isConnected]);
 
   return (
     <div className="p-6 space-y-6">
