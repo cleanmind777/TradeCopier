@@ -537,9 +537,9 @@ async def stream_pnl_data(
                         # Long: (current_price - entry_price) * quantity
                         # Short: (entry_price - current_price) * abs(quantity)
                         if netPos > 0:  # Long position
-                            unrealized_pnl = (current_price - netPrice) * netPos
+                            unrealized_pnl = (current_price - netPrice) * netPos * 10
                         else:  # Short position
-                            unrealized_pnl = (netPrice - current_price) * abs(netPos)
+                            unrealized_pnl = (netPrice - current_price) * abs(netPos) * 10
                         
                         # Send PnL data to frontend
                         pnl_data = {
