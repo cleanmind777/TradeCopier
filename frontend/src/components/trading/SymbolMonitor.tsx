@@ -41,6 +41,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
   const [candleHistory, setCandleHistory] = useState<Record<string, CandleData[]>>({});
+  const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '30m' | '1h' | '1d'>('1m');
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("");
@@ -52,15 +53,26 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     setSymbolInput(initialSymbol);
   }, [initialSymbol]);
 
-  // Aggregate ticks into 1-minute candles
-  const aggregateTicksToCandles = (ticks: TickData[]): CandleData[] => {
+  const timeframeToSeconds = (tf: typeof timeframe): number => {
+    switch (tf) {
+      case '1m': return 60;
+      case '5m': return 5 * 60;
+      case '15m': return 15 * 60;
+      case '30m': return 30 * 60;
+      case '1h': return 60 * 60;
+      case '1d': return 24 * 60 * 60;
+    }
+  };
+
+  // Aggregate ticks into candles by timeframe
+  const aggregateTicksToCandles = (ticks: TickData[], bucketSeconds: number): CandleData[] => {
     if (ticks.length === 0) return [];
 
     const candleMap = new Map<number, CandleData>();
 
     ticks.forEach(tick => {
-      // Round down to the minute (1-minute candles)
-      const candleTime = Math.floor(tick.time / 60) * 60;
+      // Round down to bucket
+      const candleTime = Math.floor(tick.time / bucketSeconds) * bucketSeconds;
       
       if (!candleMap.has(candleTime)) {
         // Initialize candle with first tick as open
@@ -158,7 +170,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
               const limitedTicks = updatedTicks.slice(-100000);
               
               // Aggregate ticks into candles
-              const candles = aggregateTicksToCandles(limitedTicks);
+              const candles = aggregateTicksToCandles(limitedTicks, timeframeToSeconds(timeframe));
               // Keep last 100 candles
               const limitedCandles = candles.slice(-100);
               
@@ -191,7 +203,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
                   
                   if (validCandles.length > 0) {
                     console.log(`Setting ${validCandles.length} candles for ${symbol}`, validCandles);
-                    chartData.candleSeries.setData(validCandles);
+                    chartData.candleSeries.setData(validCandles as any);
                   }
                 } catch (error) {
                   console.error(`Error setting candle data for ${symbol}:`, error);
@@ -294,7 +306,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
         
         if (validCandles.length > 0) {
           console.log(`Setting initial ${validCandles.length} candles for ${symbol}`);
-          candleSeries.setData(validCandles);
+          candleSeries.setData(validCandles as any);
         } else {
           console.log(`No valid candles for ${symbol}`);
         }
@@ -338,6 +350,47 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     };
   }, []);
 
+  // Re-aggregate and refresh charts when timeframe changes
+  useEffect(() => {
+    if (!isConnected || symbols.length === 0) return;
+
+    const bucket = timeframeToSeconds(timeframe);
+
+    // Recreate candle history based on stored ticks
+    const newCandleHistory: Record<string, CandleData[]> = {};
+    symbols.forEach((symbol) => {
+      const ticks = tickHistory[symbol] || [];
+      const candles = aggregateTicksToCandles(ticks, bucket).slice(-100);
+      newCandleHistory[symbol] = candles;
+
+      const chartData = chartRefs.current[symbol];
+      if (chartData) {
+        const validCandles = candles
+          .filter((c: CandleData) => 
+            c.open != null && !isNaN(c.open) && isFinite(c.open) &&
+            c.high != null && !isNaN(c.high) && isFinite(c.high) &&
+            c.low != null && !isNaN(c.low) && isFinite(c.low) &&
+            c.close != null && !isNaN(c.close) && isFinite(c.close) &&
+            c.time != null && !isNaN(c.time) && isFinite(c.time)
+          )
+          .map((c: CandleData) => ({
+            time: Number(c.time),
+            open: Number(c.open),
+            high: Number(c.high),
+            low: Number(c.low),
+            close: Number(c.close)
+          }));
+
+        if (validCandles.length > 0) {
+          chartData.candleSeries.setData(validCandles as any);
+          chartData.chart.timeScale().fitContent();
+        }
+      }
+    });
+
+    setCandleHistory(newCandleHistory);
+  }, [timeframe]);
+
   return (
     <div className="p-6 space-y-6">
       <div className="bg-white rounded-lg shadow-md p-6">
@@ -379,7 +432,24 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
       {/* Price Display */}
       {isConnected && symbols.length > 0 && (
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-          <h3 className="text-xl font-bold text-slate-800 mb-4">Live Prices</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-slate-800">Live Prices</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-600">Timeframe:</span>
+              <select
+                value={timeframe}
+                onChange={(e) => setTimeframe(e.target.value as any)}
+                className="border border-slate-300 rounded px-2 py-1 text-sm"
+              >
+                <option value="1m">1m</option>
+                <option value="5m">5m</option>
+                <option value="15m">15m</option>
+                <option value="30m">30m</option>
+                <option value="1h">1h</option>
+                <option value="1d">1d</option>
+              </select>
+            </div>
+          </div>
           
           {symbols.map((symbol: string) => {
             const priceData = prices[symbol];
