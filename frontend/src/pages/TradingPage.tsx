@@ -58,7 +58,7 @@ const TradingPage: React.FC = () => {
 
   // Calculate PnL for selected group and symbol
   const calculateGroupPnL = () => {
-    if (!selectedGroup || !symbol) {
+    if (!selectedGroup) {
       setGroupPnL({
         totalPnL: 0,
         symbolPnL: 0,
@@ -73,15 +73,33 @@ const TradingPage: React.FC = () => {
 
     // Get sub-broker account IDs from selected group
     const groupAccountIds = selectedGroup.sub_brokers.map(sub => sub.sub_account_id);
+    
+    console.log("🔍 Calculating PnL for group:", selectedGroup.name);
+    console.log("📊 Group account IDs:", groupAccountIds);
+    console.log("📈 Available PnL data keys:", Object.keys(pnlData));
 
     // Calculate PnL for all positions in the group
     Object.values(pnlData).forEach((data: any) => {
-      if (groupAccountIds.includes(data.accountId?.toString())) {
-        totalPnL += data.unrealizedPnL || 0;
+      const accountIdStr = data.accountId?.toString();
+      const accountIdNum = data.accountId;
+      
+      // Check if this account ID matches any in the group (handle both string and number formats)
+      const isAccountInGroup = groupAccountIds.some(groupAccountId => 
+        groupAccountId === accountIdStr || 
+        groupAccountId === accountIdNum?.toString() ||
+        parseInt(groupAccountId) === accountIdNum
+      );
+      
+      if (isAccountInGroup) {
+        const pnl = data.unrealizedPnL || 0;
+        totalPnL += pnl;
+        
+        console.log(`💰 Account ${accountIdStr} (${data.symbol}): $${pnl}`);
         
         // If symbol matches, add to symbol-specific PnL
-        if (data.symbol === symbol) {
-          symbolPnL += data.unrealizedPnL || 0;
+        if (symbol && data.symbol === symbol) {
+          symbolPnL += pnl;
+          console.log(`🎯 Symbol ${symbol} PnL: $${pnl}`);
         }
         
         // Track the latest update time
@@ -90,6 +108,8 @@ const TradingPage: React.FC = () => {
         }
       }
     });
+
+    console.log(`📊 Total Group PnL: $${totalPnL}, Symbol PnL: $${symbolPnL}`);
 
     setGroupPnL({
       totalPnL: Math.round(totalPnL * 100) / 100, // Round to 2 decimal places
@@ -122,19 +142,29 @@ const TradingPage: React.FC = () => {
         
         // Check for status messages
         if (data.status === "connected") {
-          console.log("PnL stream connected:", data);
+          console.log("✅ PnL stream connected:", data);
           return;
         }
 
         // Check for errors
         if (data.error) {
-          console.error("PnL stream error:", data);
+          console.error("❌ PnL stream error:", data);
           return;
         }
 
         // Update PnL data; key by symbol+account to avoid overwriting
         if (data.symbol && data.unrealizedPnL !== undefined) {
           const key = data.positionKey || `${data.symbol}:${data.accountId}`;
+          console.log(`📊 Received PnL data:`, {
+            key,
+            symbol: data.symbol,
+            accountId: data.accountId,
+            unrealizedPnL: data.unrealizedPnL,
+            netPos: data.netPos,
+            entryPrice: data.entryPrice,
+            currentPrice: data.currentPrice
+          });
+          
           setPnlData(prev => ({
             ...prev,
             [key]: data
@@ -819,13 +849,18 @@ const TradingPage: React.FC = () => {
                       </div>
                       <div className="text-center">
                         <div className="text-sm text-gray-600 mb-1">
-                          {symbol ? `${symbol} PnL` : 'Symbol PnL'}
+                          {symbol ? `${symbol} PnL` : 'Symbol PnL (Select Symbol)'}
                         </div>
                         <div className={`text-2xl font-bold ${
                           groupPnL.symbolPnL >= 0 ? 'text-green-600' : 'text-red-600'
                         }`}>
                           ${groupPnL.symbolPnL.toFixed(2)}
                         </div>
+                        {!symbol && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            Enter symbol above
+                          </div>
+                        )}
                       </div>
                       <div className="text-center">
                         <div className="text-sm text-gray-600 mb-1">Connection</div>
@@ -841,9 +876,10 @@ const TradingPage: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    {selectedGroup && symbol && (
+                    {selectedGroup && (
                       <div className="mt-3 text-xs text-gray-600 text-center">
-                        Tracking {selectedGroup.sub_brokers.length} sub-brokers for {symbol}
+                        Tracking {selectedGroup.sub_brokers.length} sub-brokers
+                        {symbol && ` for ${symbol}`}
                       </div>
                     )}
                   </div>
