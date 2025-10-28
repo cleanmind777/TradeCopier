@@ -297,6 +297,14 @@ const SymbolsMonitor = () => {
       console.log(`No initial candles for ${symbol}, will update when data arrives`);
     }
 
+    // Configure time axis to show date and time
+    chart.timeScale().applyOptions({
+      timeVisible: true,
+      secondsVisible: false,
+      rightOffset: 10,
+      barSpacing: 3,
+    });
+
     chart.timeScale().fitContent();
 
     // Handle resize
