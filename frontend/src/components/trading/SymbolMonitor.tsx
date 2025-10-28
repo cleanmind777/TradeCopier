@@ -32,8 +32,12 @@ interface TickData {
   price: number;
 }
 
-const SymbolsMonitor = () => {
-  const [symbolInput, setSymbolInput] = useState("");
+interface SymbolsMonitorProps {
+  initialSymbol?: string;
+}
+
+const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) => {
+  const [symbolInput, setSymbolInput] = useState(initialSymbol);
   const [symbols, setSymbols] = useState<string[]>([]);
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
@@ -43,6 +47,11 @@ const SymbolsMonitor = () => {
   const [connectionStatus, setConnectionStatus] = useState("");
   const eventSourceRef = useRef<EventSource | null>(null);
   const chartRefs = useRef<Record<string, { chart: IChartApi; candleSeries: ISeriesApi<any> }>>({});
+
+  // Sync symbolInput with initialSymbol prop
+  useEffect(() => {
+    setSymbolInput(initialSymbol);
+  }, [initialSymbol]);
 
   // Aggregate ticks into 1-minute candles
   const aggregateTicksToCandles = (ticks: TickData[]): CandleData[] => {
@@ -335,36 +344,60 @@ const SymbolsMonitor = () => {
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold text-slate-800 mb-4">Symbol Monitor</h2>
         
-        {/* Input and Connect/Disconnect Controls */}
-        <div className="flex gap-4 items-end mb-4">
-          <div className="flex-1">
-            <Input
-              label="Symbols (comma-separated)"
-              placeholder="e.g., ES.FUT, NQ.FUT, YM.FUT"
-              value={symbolInput}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSymbolInput(e.target.value)}
-              disabled={isConnected}
-            />
-            <p className="text-sm text-slate-500 mt-1">
-              Example: ES.FUT, NQ.FUT, YM.FUT, GC.FUT
-            </p>
+        {/* Input and Connect/Disconnect Controls - Only show if no initialSymbol prop */}
+        {!initialSymbol && (
+          <div className="flex gap-4 items-end mb-4">
+            <div className="flex-1">
+              <Input
+                label="Symbols (comma-separated)"
+                placeholder="e.g., ES.FUT, NQ.FUT, YM.FUT"
+                value={symbolInput}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSymbolInput(e.target.value)}
+                disabled={isConnected}
+              />
+              <p className="text-sm text-slate-500 mt-1">
+                Example: ES.FUT, NQ.FUT, YM.FUT, GC.FUT
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {!isConnected ? (
+                <Button
+                  onClick={handleConnect}
+                  disabled={isConnecting || !symbolInput.trim()}
+                  isLoading={isConnecting}
+                >
+                  {isConnecting ? "Connecting..." : "Connect"}
+                </Button>
+              ) : (
+                <Button onClick={handleDisconnect} variant="outline">
+                  Disconnect
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="flex gap-2">
-            {!isConnected ? (
-              <Button
-                onClick={handleConnect}
-                disabled={isConnecting || !symbolInput.trim()}
-                isLoading={isConnecting}
-              >
-                {isConnecting ? "Connecting..." : "Connect"}
-              </Button>
-            ) : (
-              <Button onClick={handleDisconnect} variant="outline">
-                Disconnect
-              </Button>
-            )}
+        )}
+
+        {/* Auto-connect when initialSymbol prop is provided */}
+        {initialSymbol && !isConnected && symbolInput && (
+          <div className="mb-4">
+            <Button
+              onClick={handleConnect}
+              disabled={isConnecting || !symbolInput.trim()}
+              isLoading={isConnecting}
+            >
+              {isConnecting ? "Connecting..." : "Connect to Monitor"}
+            </Button>
           </div>
-        </div>
+        )}
+
+        {/* Disconnect button when connected via prop */}
+        {initialSymbol && isConnected && (
+          <div className="mb-4">
+            <Button onClick={handleDisconnect} variant="outline">
+              Disconnect
+            </Button>
+          </div>
+        )}
 
         {/* Connection Status */}
         {connectionStatus && (
