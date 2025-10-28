@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
 from app.core.config import settings
 from app.schemas.broker import Symbols
@@ -7,6 +7,10 @@ import databento as db
 import asyncio
 import json
 from datetime import datetime
+from sqlalchemy.orm import Session
+from app.dependencies.database import get_db
+from app.services.broker_service import get_positions
+from uuid import UUID
 
 router = APIRouter()
 
@@ -361,3 +365,244 @@ async def get_available_symbols():
             {"symbol": "CL.FUT", "name": "Crude Oil Futures"},
         ]
     }
+
+
+async def stream_pnl_data(
+    user_id: UUID,
+    request: Request,
+    db: Session
+) -> AsyncGenerator[str, None]:
+    """
+    Stream real-time profit and loss (PnL) data for user's positions using DataBento Live API
+    
+    Args:
+        user_id: User ID to fetch positions for
+        request: FastAPI request object for connection management
+        db: Database session
+        
+    Returns:
+        SSE stream with real-time PnL data
+    """
+    try:
+        # Check if API key is available
+        if not settings.DATABENTO_KEY:
+            error_data = {
+                "error": "DATABENTO_KEY environment variable not set",
+                "details": "Please set DATABENTO_KEY environment variable to use the live data stream",
+                "timestamp": datetime.now().isoformat()
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+            return
+        
+        # Fetch user's positions
+        positions = await get_positions(db, user_id)
+        
+        if not positions or len(positions) == 0:
+            error_data = {
+                "error": "No open positions",
+                "message": "You don't have any open positions to track",
+                "timestamp": datetime.now().isoformat()
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+            return
+        
+        # Extract unique symbols from positions
+        symbols = list(set([pos.symbol for pos in positions if pos.netPos != 0]))
+        
+        if not symbols:
+            error_data = {
+                "error": "No active positions",
+                "message": "All positions have zero quantity",
+                "timestamp": datetime.now().isoformat()
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+            return
+        
+        print(f"📊 Positions found: {len(positions)}")
+        print(f"🎯 Symbols to track: {symbols}")
+        
+        # Store position data for PnL calculation
+        position_map = {}
+        for pos in positions:
+            if pos.netPos != 0:
+                position_map[pos.symbol] = {
+                    "accountId": pos.accountId,
+                    "accountNickname": pos.accountNickname,
+                    "accountDisplayName": pos.accountDisplayName,
+                    "netPos": pos.netPos,
+                    "netPrice": pos.netPrice,
+                    "contractId": pos.contractId
+                }
+        
+        # Initialize DataBento Live client
+        client = db.Live(key=settings.DATABENTO_KEY)
+        print("✅ DataBento client initialized for PnL tracking")
+        
+        # Subscribe to symbols
+        print("🔄 Subscribing to symbols for PnL tracking...")
+        client.subscribe(
+            dataset=DATASET,
+            schema=SCHEMA,
+            symbols=symbols,
+            stype_in="raw_symbol"
+        )
+        print(f"✅ Successfully subscribed to symbols: {symbols}")
+        
+        # Send initial status message
+        status_data = {
+            "status": "connected",
+            "message": "Connected to DataBento for PnL tracking",
+            "positions_count": len(position_map),
+            "symbols": symbols,
+            "timestamp": datetime.now().isoformat()
+        }
+        print(f"📤 Sending status message: {status_data}")
+        yield f"data: {json.dumps(status_data)}\n\n"
+        
+        try:
+            # Track latest prices for each symbol
+            latest_prices = {}
+            
+            for record in client:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    print("❌ Client disconnected")
+                    break
+                
+                try:
+                    # Handle different record types
+                    record_type = type(record).__name__
+                    
+                    if record_type == "SymbolMappingMsg":
+                        # Handle symbol mapping messages
+                        instrument_id = getattr(record, 'instrument_id', None)
+                        symbol = getattr(record, 'stype_in_symbol', None)
+                        
+                        if instrument_id is not None and symbol is not None:
+                            symbol_mapping[instrument_id] = symbol
+                        
+                        continue
+                    
+                    elif record_type in ["MBP1Msg", "MBPMsg", "TradeMsg"]:
+                        # Extract price data
+                        instrument_id = getattr(record, 'instrument_id', None)
+                        symbol = symbol_mapping.get(instrument_id, None)
+                        
+                        if not symbol or symbol not in position_map:
+                            continue
+                        
+                        # Get current price (mid-price)
+                        bid_price = None
+                        ask_price = None
+                        
+                        if hasattr(record, 'levels'):
+                            levels_data = record.levels
+                            
+                            if isinstance(levels_data, list) and len(levels_data) > 0:
+                                level = levels_data[0]
+                            elif hasattr(levels_data, 'bid_px'):
+                                level = levels_data
+                            else:
+                                level = None
+                            
+                            if level is not None:
+                                if hasattr(level, 'pretty_bid_px'):
+                                    bid_price = float(level.pretty_bid_px)
+                                elif hasattr(level, 'bid_px'):
+                                    bid_price = float(level.bid_px)
+                                
+                                if hasattr(level, 'pretty_ask_px'):
+                                    ask_price = float(level.pretty_ask_px)
+                                elif hasattr(level, 'ask_px'):
+                                    ask_price = float(level.ask_px)
+                        
+                        # Calculate mid-price
+                        if bid_price is not None and ask_price is not None:
+                            current_price = (bid_price + ask_price) / 2
+                        elif bid_price is not None:
+                            current_price = bid_price
+                        elif ask_price is not None:
+                            current_price = ask_price
+                        else:
+                            continue
+                        
+                        latest_prices[symbol] = current_price
+                        
+                        # Calculate PnL for this position
+                        position = position_map[symbol]
+                        netPos = position["netPos"]
+                        netPrice = position["netPrice"]
+                        
+                        # Calculate unrealized PnL
+                        # Long: (current_price - entry_price) * quantity
+                        # Short: (entry_price - current_price) * abs(quantity)
+                        if netPos > 0:  # Long position
+                            unrealized_pnl = (current_price - netPrice) * netPos
+                        else:  # Short position
+                            unrealized_pnl = (netPrice - current_price) * abs(netPos)
+                        
+                        # Send PnL data to frontend
+                        pnl_data = {
+                            "symbol": symbol,
+                            "accountId": position["accountId"],
+                            "accountNickname": position["accountNickname"],
+                            "accountDisplayName": position["accountDisplayName"],
+                            "netPos": netPos,
+                            "entryPrice": netPrice,
+                            "currentPrice": current_price,
+                            "unrealizedPnL": round(unrealized_pnl, 2),
+                            "bidPrice": bid_price,
+                            "askPrice": ask_price,
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        
+                        print(f"💰 PnL for {symbol}: ${unrealized_pnl:.2f} (Entry: ${netPrice}, Current: ${current_price})")
+                        yield f"data: {json.dumps(pnl_data)}\n\n"
+                
+                except Exception as record_error:
+                    print(f"❌ Error processing record: {record_error}")
+                    continue
+                    
+        except Exception as iteration_error:
+            print(f"❌ Error during iteration: {iteration_error}")
+            error_data = {
+                "error": f"Iteration error: {str(iteration_error)}",
+                "timestamp": datetime.now().isoformat()
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
+    
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ DataBento PnL tracking error: {error_msg}")
+        
+        error_data = {
+            "error": f"PnL tracking error: {error_msg}",
+            "timestamp": datetime.now().isoformat()
+        }
+        yield f"data: {json.dumps(error_data)}\n\n"
+    
+    finally:
+        print("🧹 DataBento PnL tracking cleanup completed")
+
+
+@router.get("/sse/pnl")
+async def sse_pnl_stream(
+    user_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    SSE endpoint to stream real-time profit and loss (PnL) for user's positions
+    
+    Returns:
+        Server-Sent Events stream with real-time PnL data
+    """
+    return StreamingResponse(
+        stream_pnl_data(user_id, request, db),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )

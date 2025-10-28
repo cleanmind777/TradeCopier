@@ -51,6 +51,24 @@ const DashboardPage: React.FC = () => {
 
   const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
 
+  // Real-time PnL state
+  const [pnlData, setPnlData] = useState<Record<string, {
+    symbol: string;
+    accountId: number;
+    accountNickname: string;
+    accountDisplayName: string;
+    netPos: number;
+    entryPrice: number;
+    currentPrice: number;
+    unrealizedPnL: number;
+    bidPrice: number;
+    askPrice: number;
+    timestamp: string;
+  }>>({});
+
+  const eventSourceRef = React.useRef<EventSource | null>(null);
+  const [isConnectedToPnL, setIsConnectedToPnL] = useState(false);
+
   const [positionsSort, setPositionsSort] = useState<SortConfig | null>(null);
   const [ordersSort, setOrdersSort] = useState<SortConfig | null>(null);
   const [accountsSort, setAccountsSort] = useState<SortConfig | null>(null);
@@ -102,6 +120,63 @@ const DashboardPage: React.FC = () => {
     };
     loadData();
   }, [user_id]);
+
+  // Connect to real-time PnL SSE stream
+  useEffect(() => {
+    if (!user_id || positions.length === 0) {
+      return;
+    }
+
+    const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+    const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onopen = () => {
+      console.log("Connected to PnL stream");
+      setIsConnectedToPnL(true);
+    };
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        
+        // Check for status messages
+        if (data.status === "connected") {
+          console.log("PnL stream connected:", data);
+          return;
+        }
+
+        // Check for errors
+        if (data.error) {
+          console.error("PnL stream error:", data);
+          return;
+        }
+
+        // Update PnL data
+        if (data.symbol && data.unrealizedPnL !== undefined) {
+          setPnlData(prev => ({
+            ...prev,
+            [data.symbol]: data
+          }));
+        }
+      } catch (error) {
+        console.error("Error parsing PnL data:", error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error("PnL SSE error:", error);
+      setIsConnectedToPnL(false);
+    };
+
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      setIsConnectedToPnL(false);
+    };
+  }, [user_id, positions.length]);
 
   // General sorting utility for array of objects
   const sortData = <T,>(
@@ -327,12 +402,25 @@ const DashboardPage: React.FC = () => {
           {!isLoading && activeTab === "positions" && (
             <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
-                <h3 className="text-xl font-semibold text-slate-900">
-                  Open Positions
-                </h3>
-                <p className="text-sm text-slate-500">
-                  All active positions across accounts
-                </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900">
+                      Open Positions
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      All active positions across accounts
+                    </p>
+                  </div>
+                  {isConnectedToPnL && (
+                    <div className="flex items-center gap-2 text-xs text-green-600">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      </span>
+                      <span>Live P&L Tracking</span>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {positions.length === 0 ? (
@@ -387,6 +475,9 @@ const DashboardPage: React.FC = () => {
                             Sold{renderSortArrow(positionsSort, "sold")}
                           </TableHead>
                           <TableHead className="font-semibold text-right">
+                            Unrealized P&L
+                          </TableHead>
+                          <TableHead className="font-semibold text-right">
                             Actions
                           </TableHead>
                         </TableRow>
@@ -410,6 +501,26 @@ const DashboardPage: React.FC = () => {
                             </TableCell>
                             <TableCell className="text-right">{position.bought}</TableCell>
                             <TableCell className="text-right">{position.sold}</TableCell>
+                            <TableCell className="text-right">
+                              {pnlData[position.symbol] ? (
+                                <div className="flex flex-col items-end">
+                                  <span
+                                    className={`font-bold ${
+                                      pnlData[position.symbol].unrealizedPnL >= 0
+                                        ? "text-green-600"
+                                        : "text-red-600"
+                                    }`}
+                                  >
+                                    ${pnlData[position.symbol].unrealizedPnL.toFixed(2)}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    @ ${pnlData[position.symbol].currentPrice.toFixed(2)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">Loading...</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-right">
                               <Button
                                 variant="outline"
