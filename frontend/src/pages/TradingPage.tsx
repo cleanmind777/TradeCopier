@@ -9,32 +9,19 @@ import Label from "../components/ui/Label";
 import SymbolsMonitor from "../components/trading/SymbolMonitor";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
 import {
-  getWebSocketToken,
   executeLimitOrder,
   executeLimitOrderWithSLTP,
   executeMarketOrder,
 } from "../api/brokerApi";
 import { getGroup } from "../api/groupApi";
-import { createChart, ColorType } from "lightweight-charts";
 import { GroupInfo } from "../types/group";
 import {
   MarketOrder,
   LimitOrder,
   LimitOrderWithSLTP,
-  SLTP,
 } from "../types/broker";
 
 const TradingPage: React.FC = () => {
-  const [marketData, setMarketData] = useState<{
-    bid: number | null;
-    ask: number | null;
-    last: number | null;
-    timestamp: string;
-  } | null>(null);
-  const [connectionStatus, setConnectionStatus] =
-    useState<string>("Connected");
-  const [candleCount, setCandleCount] = useState<number>(0);
-
   // Trading state
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
@@ -44,6 +31,19 @@ const TradingPage: React.FC = () => {
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
   const [symbol, setSymbol] = useState<string>("");
+  
+  // PnL tracking state
+  const [pnlData, setPnlData] = useState<Record<string, any>>({});
+  const [isConnectedToPnL, setIsConnectedToPnL] = useState<boolean>(false);
+  const [groupPnL, setGroupPnL] = useState<{
+    totalPnL: number;
+    symbolPnL: number;
+    lastUpdate: string;
+  }>({
+    totalPnL: 0,
+    symbolPnL: 0,
+    lastUpdate: ""
+  });
 
   // SL/TP state
   const [slTpOption, setSlTpOption] = useState<
@@ -52,16 +52,120 @@ const TradingPage: React.FC = () => {
   const [customSL, setCustomSL] = useState<string>("");
   const [customTP, setCustomTP] = useState<string>("");
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
 
-  // Lightweight Charts refs
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null); // Using any to avoid complex type issues
-  const lineSeriesRef = useRef<any>(null); // Using any to avoid complex type issues
-  const lastUpdateTimeRef = useRef<number>(0); // Track last update time
+  // Calculate PnL for selected group and symbol
+  const calculateGroupPnL = () => {
+    if (!selectedGroup || !symbol) {
+      setGroupPnL({
+        totalPnL: 0,
+        symbolPnL: 0,
+        lastUpdate: ""
+      });
+      return;
+    }
+
+    let totalPnL = 0;
+    let symbolPnL = 0;
+    let lastUpdate = "";
+
+    // Get sub-broker account IDs from selected group
+    const groupAccountIds = selectedGroup.sub_brokers.map(sub => sub.sub_account_id);
+
+    // Calculate PnL for all positions in the group
+    Object.values(pnlData).forEach((data: any) => {
+      if (groupAccountIds.includes(data.accountId?.toString())) {
+        totalPnL += data.unrealizedPnL || 0;
+        
+        // If symbol matches, add to symbol-specific PnL
+        if (data.symbol === symbol) {
+          symbolPnL += data.unrealizedPnL || 0;
+        }
+        
+        // Track the latest update time
+        if (data.timestamp && (!lastUpdate || data.timestamp > lastUpdate)) {
+          lastUpdate = data.timestamp;
+        }
+      }
+    });
+
+    setGroupPnL({
+      totalPnL: Math.round(totalPnL * 100) / 100, // Round to 2 decimal places
+      symbolPnL: Math.round(symbolPnL * 100) / 100,
+      lastUpdate: lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : ""
+    });
+  };
+
+  // Connect to PnL SSE stream
+  const connectToPnLStream = () => {
+    if (!user_id) return;
+
+    // Close existing connection
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+    const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onopen = () => {
+      console.log("Connected to PnL stream for Trading Page");
+      setIsConnectedToPnL(true);
+    };
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        
+        // Check for status messages
+        if (data.status === "connected") {
+          console.log("PnL stream connected:", data);
+          return;
+        }
+
+        // Check for errors
+        if (data.error) {
+          console.error("PnL stream error:", data);
+          return;
+        }
+
+        // Update PnL data; key by symbol+account to avoid overwriting
+        if (data.symbol && data.unrealizedPnL !== undefined) {
+          const key = data.positionKey || `${data.symbol}:${data.accountId}`;
+          setPnlData(prev => ({
+            ...prev,
+            [key]: data
+          }));
+        }
+      } catch (error) {
+        console.error("Error parsing PnL data:", error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error("PnL SSE error:", error);
+      setIsConnectedToPnL(false);
+    };
+  };
+
+  // Update PnL calculations when data changes
+  useEffect(() => {
+    calculateGroupPnL();
+  }, [pnlData, selectedGroup, symbol]);
+
+  // Connect to PnL stream when component mounts
+  useEffect(() => {
+    connectToPnLStream();
+    
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, [user_id]);
 
   // Load user groups
   const loadGroups = async () => {
@@ -552,14 +656,12 @@ const TradingPage: React.FC = () => {
             <h1 className="text-2xl font-bold">Trading Dashboard</h1>
             <div
               className={`px-4 py-2 rounded-md ${
-                connectionStatus === "Connected"
+                isConnectedToPnL
                   ? "bg-green-100 text-green-800"
-                  : connectionStatus === "Connecting..."
-                  ? "bg-yellow-100 text-yellow-800"
                   : "bg-red-100 text-red-800"
               }`}
             >
-              Status: {connectionStatus}
+              PnL Status: {isConnectedToPnL ? "Connected" : "Disconnected"}
             </div>
           </div>
 
@@ -701,6 +803,49 @@ const TradingPage: React.FC = () => {
                         {selectedGroup.sub_brokers.length}
                       </div>
                     </div>
+                  </div>
+
+                  {/* PnL Display */}
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-md border border-blue-200">
+                    <h3 className="font-semibold mb-3 text-blue-800">Real-time PnL</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <div className="text-sm text-gray-600 mb-1">Total Group PnL</div>
+                        <div className={`text-2xl font-bold ${
+                          groupPnL.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          ${groupPnL.totalPnL.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm text-gray-600 mb-1">
+                          {symbol ? `${symbol} PnL` : 'Symbol PnL'}
+                        </div>
+                        <div className={`text-2xl font-bold ${
+                          groupPnL.symbolPnL >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          ${groupPnL.symbolPnL.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-sm text-gray-600 mb-1">Connection</div>
+                        <div className={`text-lg font-semibold ${
+                          isConnectedToPnL ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {isConnectedToPnL ? '🟢 Live' : '🔴 Offline'}
+                        </div>
+                        {groupPnL.lastUpdate && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Last: {groupPnL.lastUpdate}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {selectedGroup && symbol && (
+                      <div className="mt-3 text-xs text-gray-600 text-center">
+                        Tracking {selectedGroup.sub_brokers.length} sub-brokers for {symbol}
+                      </div>
+                    )}
                   </div>
 
                   {/* Order Form */}
