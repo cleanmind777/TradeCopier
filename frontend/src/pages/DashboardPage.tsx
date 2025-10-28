@@ -4,6 +4,7 @@ import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Button from "../components/ui/Button";
+import LoadingModal from "../components/ui/LoadingModal";
 import {
   Table,
   TableHeader,
@@ -39,6 +40,7 @@ const DashboardPage: React.FC = () => {
     "positions" | "orders" | "accounts"
   >("positions");
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [positions, setPositions] = useState<TradovatePositionListResponse[]>(
@@ -49,6 +51,25 @@ const DashboardPage: React.FC = () => {
 
   const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
 
+  // Real-time PnL state
+  const [pnlData, setPnlData] = useState<Record<string, {
+    symbol: string;
+    accountId: number;
+    accountNickname: string;
+    accountDisplayName: string;
+    netPos: number;
+    entryPrice: number;
+    currentPrice: number;
+    unrealizedPnL: number;
+    bidPrice: number;
+    askPrice: number;
+    timestamp: string;
+    positionKey?: string;
+  }>>({});
+
+  const eventSourceRef = React.useRef<EventSource | null>(null);
+  const [isConnectedToPnL, setIsConnectedToPnL] = useState(false);
+
   const [positionsSort, setPositionsSort] = useState<SortConfig | null>(null);
   const [ordersSort, setOrdersSort] = useState<SortConfig | null>(null);
   const [accountsSort, setAccountsSort] = useState<SortConfig | null>(null);
@@ -57,37 +78,107 @@ const DashboardPage: React.FC = () => {
   const user_id = user ? JSON.parse(user).id : null;
 
   const fetchPositions = async () => {
-    const positionData = await getPositions(user_id);
-    if (positionData != null) {
-      setPositions(positionData);
+    try {
+      const positionData = await getPositions(user_id);
+      if (positionData != null) {
+        setPositions(positionData);
+      }
+    } catch (error) {
+      console.error("Error fetching positions:", error);
     }
   };
 
   const fetchOrders = async () => {
-    const orderData = await getOrders(user_id);
-    if (orderData != null) {
-      setOrders(orderData);
+    try {
+      const orderData = await getOrders(user_id);
+      if (orderData != null) {
+        setOrders(orderData);
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
     }
   };
 
   const fetchAccounts = async () => {
-    const accountData = await getAccounts(user_id);
-    if (accountData != null) {
-      setAccounts(accountData);
+    try {
+      const accountData = await getAccounts(user_id);
+      if (accountData != null) {
+        setAccounts(accountData);
+      }
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
     }
   };
 
   useEffect(() => {
-    fetchPositions();
+    const loadData = async () => {
+      setIsInitialLoad(true);
+      try {
+        await Promise.all([fetchPositions(), fetchOrders(), fetchAccounts()]);
+      } finally {
+        setIsInitialLoad(false);
+      }
+    };
+    loadData();
   }, [user_id]);
 
+  // Connect to real-time PnL SSE stream
   useEffect(() => {
-    fetchOrders();
-  }, [user_id]);
+    if (!user_id || positions.length === 0) {
+      return;
+    }
 
-  useEffect(() => {
-    fetchAccounts();
-  }, [user_id]);
+    const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+    const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onopen = () => {
+      console.log("Connected to PnL stream");
+      setIsConnectedToPnL(true);
+    };
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        
+        // Check for status messages
+        if (data.status === "connected") {
+          console.log("PnL stream connected:", data);
+          return;
+        }
+
+        // Check for errors
+        if (data.error) {
+          console.error("PnL stream error:", data);
+          return;
+        }
+
+        // Update PnL data; key by symbol+account to avoid overwriting
+        if (data.symbol && data.unrealizedPnL !== undefined) {
+          const key = data.positionKey || `${data.symbol}:${data.accountId}`;
+          setPnlData(prev => ({
+            ...prev,
+            [key]: data
+          }));
+        }
+      } catch (error) {
+        console.error("Error parsing PnL data:", error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error("PnL SSE error:", error);
+      setIsConnectedToPnL(false);
+    };
+
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      setIsConnectedToPnL(false);
+    };
+  }, [user_id, positions.length]);
 
   // General sorting utility for array of objects
   const sortData = <T,>(
@@ -236,6 +327,7 @@ const DashboardPage: React.FC = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
+        <LoadingModal isOpen={isInitialLoad} message="Loading dashboard data..." />
         <main className="flex-1 p-8 space-y-8">
           {/* Global Action Button */}
           <div className="flex justify-end">
@@ -312,12 +404,25 @@ const DashboardPage: React.FC = () => {
           {!isLoading && activeTab === "positions" && (
             <Card className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
-                <h3 className="text-xl font-semibold text-slate-900">
-                  Open Positions
-                </h3>
-                <p className="text-sm text-slate-500">
-                  All active positions across accounts
-                </p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900">
+                      Open Positions
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      All active positions across accounts
+                    </p>
+                  </div>
+                  {isConnectedToPnL && (
+                    <div className="flex items-center gap-2 text-xs text-green-600">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      </span>
+                      <span>Live P&L Tracking</span>
+                    </div>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {positions.length === 0 ? (
@@ -372,6 +477,9 @@ const DashboardPage: React.FC = () => {
                             Sold{renderSortArrow(positionsSort, "sold")}
                           </TableHead>
                           <TableHead className="font-semibold text-right">
+                            Unrealized P&L
+                          </TableHead>
+                          <TableHead className="font-semibold text-right">
                             Actions
                           </TableHead>
                         </TableRow>
@@ -395,6 +503,26 @@ const DashboardPage: React.FC = () => {
                             </TableCell>
                             <TableCell className="text-right">{position.bought}</TableCell>
                             <TableCell className="text-right">{position.sold}</TableCell>
+                            <TableCell className="text-right">
+                              {pnlData[`${position.symbol}:${position.accountId}`] ? (
+                                <div className="flex flex-col items-end">
+                                  <span
+                                    className={`font-bold ${
+                                      pnlData[`${position.symbol}:${position.accountId}`].unrealizedPnL >= 0
+                                        ? "text-green-600"
+                                        : "text-red-600"
+                                    }`}
+                                  >
+                                    ${pnlData[`${position.symbol}:${position.accountId}`].unrealizedPnL.toFixed(2)}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    @ ${pnlData[`${position.symbol}:${position.accountId}`].currentPrice.toFixed(2)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">Loading...</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-right">
                               <Button
                                 variant="outline"

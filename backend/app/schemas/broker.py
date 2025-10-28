@@ -138,3 +138,6 @@ class Tokens(BaseModel):
 
 class WebSocketTokens(Tokens):
     id: UUID
+
+class Symbols(BaseModel):
+    symbols: list[str]

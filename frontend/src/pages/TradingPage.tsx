@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Button from "../components/ui/Button";
 import Input from "../components/ui/Input";
 import Label from "../components/ui/Label";
+import SymbolsMonitor from "../components/trading/SymbolMonitor";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
 import {
   getWebSocketToken,
@@ -625,15 +626,13 @@ const TradingPage: React.FC = () => {
               </CardContent>
             </Card>
           )} */}
-
-          {/* Trading Interface */}
-          {/* Trading Interface */}
+          
+          {/* Shared Symbol Input */}
           <Card>
             <CardHeader>
-              <h2 className="text-xl font-bold">Trading Interface</h2>
+              <h2 className="text-xl font-bold">Symbol Selection</h2>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Symbol Input */}
+            <CardContent>
               <div className="space-y-2">
                 <Label htmlFor="symbol">Symbol</Label>
                 <Input
@@ -643,11 +642,24 @@ const TradingPage: React.FC = () => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setSymbol(e.target.value)
                   }
-                  placeholder="Enter symbol"
+                  placeholder="Enter symbol (e.g., NQZ5, MNQZ5)"
                   className="w-full"
                 />
+                <p className="text-sm text-gray-500">
+                  This symbol will be used for monitoring and placing orders
+                </p>
               </div>
+            </CardContent>
+          </Card>
 
+          <SymbolsMonitor initialSymbol={symbol} />
+          
+          {/* Trading Interface */}
+          <Card>
+            <CardHeader>
+              <h2 className="text-xl font-bold">Trading Interface</h2>
+            </CardHeader>
+            <CardContent className="space-y-6">
               {/* Group Selection */}
               <div className="space-y-2">
                 <Label htmlFor="group-select">Select Group</Label>

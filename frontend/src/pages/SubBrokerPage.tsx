@@ -7,6 +7,7 @@ import Sidebar from '../components/layout/Sidebar';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
+import LoadingModal from '../components/ui/LoadingModal';
 import { SubBrokerFilter, SubBrokerInfo, BrokerInfo, BrokerFilter, SubBrokerChange, SetPassword } from '../types/broker';
 import { getSubBrokers, getBrokers, changeBrokerAccount, changeSubBrokerAccount } from '../api/brokerApi';
 
@@ -36,29 +37,38 @@ const SubBrokerPage: React.FC = () => {
         username: '',
         password: ''
     });
+    const [isLoading, setIsLoading] = useState(true);
 
     const user = localStorage.getItem('user');
     const user_id = user ? JSON.parse(user).id : null;
 
     const getSubBrokerAccounts = async () => {
-        const subBrokerFilter: SubBrokerFilter = {
-            user_id,
-            user_broker_id: id,
-        };
-        const brokers = await getSubBrokers(subBrokerFilter);
-        if (brokers) {
-            setSubBrokerAccounts(brokers);
+        try {
+            const subBrokerFilter: SubBrokerFilter = {
+                user_id,
+                user_broker_id: id,
+            };
+            const brokers = await getSubBrokers(subBrokerFilter);
+            if (brokers) {
+                setSubBrokerAccounts(brokers);
+            }
+        } catch (error) {
+            console.error("Error fetching sub broker accounts:", error);
         }
     };
 
     const getBrokerAccount = async () => {
-        const brokerFilter: BrokerFilter = {
-            user_broker_id: id
-        };
-        const brokers = await getBrokers(brokerFilter);
-        if (brokers != null) {
-            setBrokerAccount(brokers[0]);
-            setEditedBrokerNickname(brokers[0].nickname || '');
+        try {
+            const brokerFilter: BrokerFilter = {
+                user_broker_id: id
+            };
+            const brokers = await getBrokers(brokerFilter);
+            if (brokers != null) {
+                setBrokerAccount(brokers[0]);
+                setEditedBrokerNickname(brokers[0].nickname || '');
+            }
+        } catch (error) {
+            console.error("Error fetching broker account:", error);
         }
     };
 
@@ -155,8 +165,15 @@ const SubBrokerPage: React.FC = () => {
 
     // Reload data on mount
     useEffect(() => {
-        getBrokerAccount();
-        getSubBrokerAccounts();
+        const loadData = async () => {
+            setIsLoading(true);
+            try {
+                await Promise.all([getBrokerAccount(), getSubBrokerAccounts()]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadData();
     }, []);
 
     return (
@@ -164,6 +181,7 @@ const SubBrokerPage: React.FC = () => {
             <Sidebar />
             <div className="flex-1 flex flex-col">
                 <Header />
+                <LoadingModal isOpen={isLoading} message="Loading sub-broker data..." />
                 <main className="flex-1 p-6 space-y-6">
                     {/* Connection name and editing */}
                     <div className="bg-white p-4 rounded-lg shadow-sm flex items-center space-x-4">

@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     tradovate,
     sub_broker,
     group,
+    databento
 )
 
 api_router = APIRouter()
@@ -17,3 +18,4 @@ api_router.include_router(broker.router, prefix="/broker", tags=["broker"])
 api_router.include_router(sub_broker.router, prefix="/subbroker", tags=["subbroker"])
 api_router.include_router(tradovate.router, prefix="/tradovate", tags=["tradovate"])
 api_router.include_router(group.router, prefix="/group", tags=["group"])
+api_router.include_router(databento.router, prefix="/databento", tags=["databento"])
