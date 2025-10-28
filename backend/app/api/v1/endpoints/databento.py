@@ -518,29 +518,32 @@ async def stream_pnl_data(
                                 elif hasattr(level, 'ask_px'):
                                     ask_price = float(level.ask_px)
                         
-                        # Calculate mid-price
-                        if bid_price is not None and ask_price is not None:
-                            current_price = (bid_price + ask_price) / 2
-                        elif bid_price is not None:
-                            current_price = bid_price
-                        elif ask_price is not None:
-                            current_price = ask_price
-                        else:
+                        # Validate we have at least one price
+                        if bid_price is None and ask_price is None:
                             continue
                         
-                        latest_prices[symbol] = current_price
+                        latest_prices[symbol] = {
+                            "bid": bid_price,
+                            "ask": ask_price
+                        }
 
                         # Calculate and emit PnL for all positions under this symbol
                         for position in symbol_to_positions[symbol]:
                             netPos = position["netPos"]
                             netPrice = position["netPrice"]
 
-                            # Calculate unrealized PnL
-                            # Long: (current_price - entry_price) * quantity
-                            # Short: (entry_price - current_price) * abs(quantity)
+                            # Determine which price to use based on position direction
+                            # Long positions: use BID (what you'd get if you sell now)
+                            # Short positions: use ASK (what you'd pay if you buy back now)
                             if netPos > 0:  # Long position
+                                current_price = bid_price if bid_price is not None else ask_price
+                                if current_price is None:
+                                    continue
                                 unrealized_pnl = (current_price - netPrice) * netPos * 10
                             else:  # Short position
+                                current_price = ask_price if ask_price is not None else bid_price
+                                if current_price is None:
+                                    continue
                                 unrealized_pnl = (netPrice - current_price) * abs(netPos) * 10
 
                             pnl_data = {
