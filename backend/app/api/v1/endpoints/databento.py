@@ -539,12 +539,12 @@ async def stream_pnl_data(
                                 current_price = bid_price if bid_price is not None else ask_price
                                 if current_price is None:
                                     continue
-                                unrealized_pnl = (current_price - netPrice) * netPos * 10 * 2
+                                unrealized_pnl = (current_price - netPrice) * netPos
                             else:  # Short position
                                 current_price = ask_price if ask_price is not None else bid_price
                                 if current_price is None:
                                     continue
-                                unrealized_pnl = (netPrice - current_price) * abs(netPos) * 10 * 2
+                                unrealized_pnl = (netPrice - current_price) * abs(netPos)
 
                             pnl_data = {
                                 "symbol": symbol,
