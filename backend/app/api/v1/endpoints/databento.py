@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from app.core.config import settings
 from app.schemas.broker import Symbols
 from typing import AsyncGenerator
-import databento as db
+import databento as dbt
 import asyncio
 import json
 from datetime import datetime
@@ -52,7 +52,7 @@ async def stream_price_data(
         print(f"🎯 Symbols: {symbols}")
         
         # Initialize DataBento Live client
-        client = db.Live(key=settings.DATABENTO_KEY)
+        client = dbt.Live(key=settings.DATABENTO_KEY)
         print("✅ DataBento client initialized")
         
         # Subscribe to symbols with proper parameters
@@ -326,7 +326,7 @@ async def test_databento_connection():
     
     try:
         # Test basic client initialization
-        client = db.Live(key=settings.DATABENTO_KEY)
+        client = dbt.Live(key=settings.DATABENTO_KEY)
         print(f"✅ Client created: {type(client)}")
         
         return {
@@ -435,7 +435,7 @@ async def stream_pnl_data(
                 }
         
         # Initialize DataBento Live client
-        client = db.Live(key=settings.DATABENTO_KEY)
+        client = dbt.Live(key=settings.DATABENTO_KEY)
         print("✅ DataBento client initialized for PnL tracking")
         
         # Subscribe to symbols
