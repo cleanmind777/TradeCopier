@@ -271,6 +271,28 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
       },
       width: container.clientWidth,
       height: 300,
+      crosshair: {
+        mode: 1, // Normal crosshair mode
+      },
+      rightPriceScale: {
+        borderColor: '#d1d4dc',
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
+      },
+      timeScale: {
+        borderColor: '#d1d4dc',
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 10,
+        barSpacing: 3,
+        fixLeftEdge: false,
+        fixRightEdge: false,
+        lockVisibleTimeRangeOnResize: false,
+        rightBarStaysOnScroll: false,
+        shiftVisibleRangeOnNewBar: false,
+      },
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
@@ -323,9 +345,15 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
       secondsVisible: false,
       rightOffset: 10,
       barSpacing: 3,
+      fixLeftEdge: false,
+      fixRightEdge: false,
+      lockVisibleTimeRangeOnResize: false,
+      rightBarStaysOnScroll: false,
+      shiftVisibleRangeOnNewBar: false,
     });
 
-    chart.timeScale().fitContent();
+    // Don't auto-fit content initially - let user control zoom
+    // chart.timeScale().fitContent();
 
     // Handle resize
     const handleResize = () => {
@@ -383,7 +411,8 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
 
         // Always reset data to ensure previous candles are replaced
         chartData.candleSeries.setData((validCandles as any) || []);
-        chartData.chart.timeScale().fitContent();
+        // Don't auto-fit - let user control zoom level
+        // chartData.chart.timeScale().fitContent();
       }
     });
 
@@ -433,20 +462,45 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xl font-bold text-slate-800">Live Prices</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-600">Timeframe:</span>
-              <select
-                value={timeframe}
-                onChange={(e) => setTimeframe(e.target.value as any)}
-                className="border border-slate-300 rounded px-2 py-1 text-sm"
-              >
-                <option value="1m">1m</option>
-                <option value="5m">5m</option>
-                <option value="15m">15m</option>
-                <option value="30m">30m</option>
-                <option value="1h">1h</option>
-                <option value="1d">1d</option>
-              </select>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-600">Timeframe:</span>
+                <select
+                  value={timeframe}
+                  onChange={(e) => setTimeframe(e.target.value as any)}
+                  className="border border-slate-300 rounded px-2 py-1 text-sm"
+                >
+                  <option value="1m">1m</option>
+                  <option value="5m">5m</option>
+                  <option value="15m">15m</option>
+                  <option value="30m">30m</option>
+                  <option value="1h">1h</option>
+                  <option value="1d">1d</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Chart Controls:</span>
+                <button
+                  onClick={() => {
+                    Object.values(chartRefs.current).forEach(({ chart }) => {
+                      chart.timeScale().fitContent();
+                    });
+                  }}
+                  className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                >
+                  Fit All
+                </button>
+                <button
+                  onClick={() => {
+                    Object.values(chartRefs.current).forEach(({ chart }) => {
+                      chart.timeScale().scrollToPosition(0, false);
+                    });
+                  }}
+                  className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                >
+                  Reset View
+                </button>
+              </div>
             </div>
           </div>
           
