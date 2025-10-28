@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from "react";
 import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries } from "lightweight-charts";
-import Input from "../ui/Input";
 import Button from "../ui/Button";
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
@@ -344,41 +343,8 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold text-slate-800 mb-4">Symbol Monitor</h2>
         
-        {/* Input and Connect/Disconnect Controls - Only show if no initialSymbol prop */}
-        {!initialSymbol && (
-          <div className="flex gap-4 items-end mb-4">
-            <div className="flex-1">
-              <Input
-                label="Symbols (comma-separated)"
-                placeholder="e.g., ES.FUT, NQ.FUT, YM.FUT"
-                value={symbolInput}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSymbolInput(e.target.value)}
-                disabled={isConnected}
-              />
-              <p className="text-sm text-slate-500 mt-1">
-                Example: ES.FUT, NQ.FUT, YM.FUT, GC.FUT
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {!isConnected ? (
-                <Button
-                  onClick={handleConnect}
-                  disabled={isConnecting || !symbolInput.trim()}
-                  isLoading={isConnecting}
-                >
-                  {isConnecting ? "Connecting..." : "Connect"}
-                </Button>
-              ) : (
-                <Button onClick={handleDisconnect} variant="outline">
-                  Disconnect
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Auto-connect when initialSymbol prop is provided */}
-        {initialSymbol && !isConnected && symbolInput && (
+        {/* Connect/Disconnect Controls */}
+        {!isConnected && symbolInput && (
           <div className="mb-4">
             <Button
               onClick={handleConnect}
@@ -390,8 +356,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
           </div>
         )}
 
-        {/* Disconnect button when connected via prop */}
-        {initialSymbol && isConnected && (
+        {isConnected && (
           <div className="mb-4">
             <Button onClick={handleDisconnect} variant="outline">
               Disconnect
