@@ -42,6 +42,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
   const [tickHistory, setTickHistory] = useState<Record<string, TickData[]>>({});
   const [candleHistory, setCandleHistory] = useState<Record<string, CandleData[]>>({});
   const [timeframe, setTimeframe] = useState<'1m' | '5m' | '15m' | '30m' | '1h' | '1d'>('1m');
+  const [isTimeframeChanging, setIsTimeframeChanging] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState("");
@@ -383,6 +384,8 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     if (!isConnected || symbols.length === 0) return;
 
     console.log(`🔄 Timeframe changed to ${timeframe}, redrawing all candles`);
+    setIsTimeframeChanging(true);
+    
     const bucket = timeframeToSeconds(timeframe);
 
     // Recreate candle history based on stored ticks
@@ -419,12 +422,18 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     });
 
     setCandleHistory(newCandleHistory);
+    
+    // Reset the flag after a short delay to allow timeframe change to complete
+    setTimeout(() => {
+      setIsTimeframeChanging(false);
+    }, 100);
   }, [timeframe]);
 
-  // Update charts when new tick data arrives (but don't re-aggregate)
+  // Update charts when new tick data arrives (but don't re-aggregate during timeframe changes)
   useEffect(() => {
-    if (!isConnected || symbols.length === 0) return;
+    if (!isConnected || symbols.length === 0 || isTimeframeChanging) return;
 
+    console.log(`📈 Updating charts with new tick data for ${timeframe} timeframe`);
     const bucket = timeframeToSeconds(timeframe);
     
     // Only update charts for symbols that have new data
@@ -454,7 +463,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
         chartData.candleSeries.setData((validCandles as any) || []);
       }
     });
-  }, [tickHistory, symbols, isConnected]);
+  }, [tickHistory, symbols, isConnected, isTimeframeChanging]);
 
   return (
     <div className="p-6 space-y-6">
