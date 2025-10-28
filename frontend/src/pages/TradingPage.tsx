@@ -642,7 +642,7 @@ const TradingPage: React.FC = () => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                     setSymbol(e.target.value)
                   }
-                  placeholder="Enter symbol (e.g., NQ.FUT, ES.FUT)"
+                  placeholder="Enter symbol (e.g., NQZ5, MNQZ5)"
                   className="w-full"
                 />
                 <p className="text-sm text-gray-500">
