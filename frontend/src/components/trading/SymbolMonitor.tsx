@@ -350,7 +350,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     };
   }, []);
 
-  // Re-aggregate and refresh charts when timeframe changes
+  // Re-aggregate and refresh charts when timeframe changes or new ticks arrive
   useEffect(() => {
     if (!isConnected || symbols.length === 0) return;
 
@@ -381,15 +381,14 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
             close: Number(c.close)
           }));
 
-        if (validCandles.length > 0) {
-          chartData.candleSeries.setData(validCandles as any);
-          chartData.chart.timeScale().fitContent();
-        }
+        // Always reset data to ensure previous candles are replaced
+        chartData.candleSeries.setData((validCandles as any) || []);
+        chartData.chart.timeScale().fitContent();
       }
     });
 
     setCandleHistory(newCandleHistory);
-  }, [timeframe]);
+  }, [timeframe, symbols, tickHistory, isConnected]);
 
   return (
     <div className="p-6 space-y-6">
