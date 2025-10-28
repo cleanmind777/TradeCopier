@@ -164,52 +164,13 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
             const midPrice = (Number(data.bid_price) + Number(data.ask_price)) / 2;
             const tick: TickData = { time: now, price: midPrice };
             
+            // Only update tick history, don't update charts here
+            // Chart updates will be handled by useEffect to ensure correct timeframe
             setTickHistory((prev: Record<string, TickData[]>) => {
               const currentTicks = prev[symbol] || [];
               const updatedTicks = [...currentTicks, tick];
-              // Keep last 6000 ticks for aggregation (enough for 100 minutes at 1 tick/sec)
+              // Keep last 100000 ticks for aggregation
               const limitedTicks = updatedTicks.slice(-100000);
-              
-              // Aggregate ticks into candles
-              const candles = aggregateTicksToCandles(limitedTicks, timeframeToSeconds(timeframe));
-              // Keep last 100 candles
-              const limitedCandles = candles.slice(-100);
-              
-              // Update candle history
-              setCandleHistory((candlePrev: Record<string, CandleData[]>) => ({
-                ...candlePrev,
-                [symbol]: limitedCandles
-              }));
-              
-              // Update chart if it exists
-              const chartData = chartRefs.current[symbol];
-              if (chartData && limitedCandles.length > 0) {
-                try {
-                  // Filter valid candles only
-                  const validCandles = limitedCandles
-                    .filter(c => 
-                      c.open != null && !isNaN(c.open) && isFinite(c.open) &&
-                      c.high != null && !isNaN(c.high) && isFinite(c.high) &&
-                      c.low != null && !isNaN(c.low) && isFinite(c.low) &&
-                      c.close != null && !isNaN(c.close) && isFinite(c.close) &&
-                      c.time != null && !isNaN(c.time) && isFinite(c.time)
-                    )
-                    .map(c => ({
-                      time: c.time,
-                      open: Number(c.open),
-                      high: Number(c.high),
-                      low: Number(c.low),
-                      close: Number(c.close)
-                    }));
-                  
-                  if (validCandles.length > 0) {
-                    console.log(`Setting ${validCandles.length} candles for ${symbol}`, validCandles);
-                    chartData.candleSeries.setData(validCandles as any);
-                  }
-                } catch (error) {
-                  console.error(`Error setting candle data for ${symbol}:`, error);
-                }
-              }
               
               return { ...prev, [symbol]: limitedTicks };
             });
