@@ -421,18 +421,20 @@ async def stream_pnl_data(
         print(f"📊 Positions found: {len(positions)}")
         print(f"🎯 Symbols to track: {symbols}")
         
-        # Store position data for PnL calculation
-        position_map = {}
+        # Store position data for PnL calculation grouped by symbol
+        # Some users may have multiple positions for the same symbol across accounts
+        symbol_to_positions: dict[str, list[dict]] = {}
         for pos in positions:
             if pos.netPos != 0:
-                position_map[pos.symbol] = {
+                symbol_to_positions.setdefault(pos.symbol, []).append({
                     "accountId": pos.accountId,
                     "accountNickname": pos.accountNickname,
                     "accountDisplayName": pos.accountDisplayName,
                     "netPos": pos.netPos,
                     "netPrice": pos.netPrice,
-                    "contractId": pos.contractId
-                }
+                    "contractId": pos.contractId,
+                    "symbol": pos.symbol,
+                })
         
         # Initialize DataBento Live client
         client = dbt.Live(key=settings.DATABENTO_KEY)
@@ -452,7 +454,7 @@ async def stream_pnl_data(
         status_data = {
             "status": "connected",
             "message": "Connected to DataBento for PnL tracking",
-            "positions_count": len(position_map),
+            "positions_count": sum(len(v) for v in symbol_to_positions.values()),
             "symbols": symbols,
             "timestamp": datetime.now().isoformat()
         }
@@ -488,7 +490,7 @@ async def stream_pnl_data(
                         instrument_id = getattr(record, 'instrument_id', None)
                         symbol = symbol_mapping.get(instrument_id, None)
                         
-                        if not symbol or symbol not in position_map:
+                        if not symbol or symbol not in symbol_to_positions:
                             continue
                         
                         # Get current price (mid-price)
@@ -527,37 +529,40 @@ async def stream_pnl_data(
                             continue
                         
                         latest_prices[symbol] = current_price
-                        
-                        # Calculate PnL for this position
-                        position = position_map[symbol]
-                        netPos = position["netPos"]
-                        netPrice = position["netPrice"]
-                        
-                        # Calculate unrealized PnL
-                        # Long: (current_price - entry_price) * quantity
-                        # Short: (entry_price - current_price) * abs(quantity)
-                        if netPos > 0:  # Long position
-                            unrealized_pnl = (current_price - netPrice) * netPos * 10
-                        else:  # Short position
-                            unrealized_pnl = (netPrice - current_price) * abs(netPos) * 10
-                        
-                        # Send PnL data to frontend
-                        pnl_data = {
-                            "symbol": symbol,
-                            "accountId": position["accountId"],
-                            "accountNickname": position["accountNickname"],
-                            "accountDisplayName": position["accountDisplayName"],
-                            "netPos": netPos,
-                            "entryPrice": netPrice,
-                            "currentPrice": current_price,
-                            "unrealizedPnL": round(unrealized_pnl, 2),
-                            "bidPrice": bid_price,
-                            "askPrice": ask_price,
-                            "timestamp": datetime.now().isoformat()
-                        }
-                        
-                        print(f"💰 PnL for {symbol}: ${unrealized_pnl:.2f} (Entry: ${netPrice}, Current: ${current_price})")
-                        yield f"data: {json.dumps(pnl_data)}\n\n"
+
+                        # Calculate and emit PnL for all positions under this symbol
+                        for position in symbol_to_positions[symbol]:
+                            netPos = position["netPos"]
+                            netPrice = position["netPrice"]
+
+                            # Calculate unrealized PnL
+                            # Long: (current_price - entry_price) * quantity
+                            # Short: (entry_price - current_price) * abs(quantity)
+                            if netPos > 0:  # Long position
+                                unrealized_pnl = (current_price - netPrice) * netPos * 10
+                            else:  # Short position
+                                unrealized_pnl = (netPrice - current_price) * abs(netPos) * 10
+
+                            pnl_data = {
+                                "symbol": symbol,
+                                "accountId": position["accountId"],
+                                "accountNickname": position["accountNickname"],
+                                "accountDisplayName": position["accountDisplayName"],
+                                "netPos": netPos,
+                                "entryPrice": netPrice,
+                                "currentPrice": current_price,
+                                "unrealizedPnL": round(unrealized_pnl, 2),
+                                "bidPrice": bid_price,
+                                "askPrice": ask_price,
+                                "timestamp": datetime.now().isoformat(),
+                                "positionKey": f"{symbol}:{position['accountId']}"
+                            }
+
+                            print(
+                                f"💰 PnL for {symbol} (acct {position['accountId']}): "
+                                f"${unrealized_pnl:.2f} (Qty: {netPos}, Entry: ${netPrice}, Current: ${current_price})"
+                            )
+                            yield f"data: {json.dumps(pnl_data)}\n\n"
                 
                 except Exception as record_error:
                     print(f"❌ Error processing record: {record_error}")

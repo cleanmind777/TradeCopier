@@ -64,6 +64,7 @@ const DashboardPage: React.FC = () => {
     bidPrice: number;
     askPrice: number;
     timestamp: string;
+    positionKey?: string;
   }>>({});
 
   const eventSourceRef = React.useRef<EventSource | null>(null);
@@ -152,11 +153,12 @@ const DashboardPage: React.FC = () => {
           return;
         }
 
-        // Update PnL data
+        // Update PnL data; key by symbol+account to avoid overwriting
         if (data.symbol && data.unrealizedPnL !== undefined) {
+          const key = data.positionKey || `${data.symbol}:${data.accountId}`;
           setPnlData(prev => ({
             ...prev,
-            [data.symbol]: data
+            [key]: data
           }));
         }
       } catch (error) {
@@ -502,19 +504,19 @@ const DashboardPage: React.FC = () => {
                             <TableCell className="text-right">{position.bought}</TableCell>
                             <TableCell className="text-right">{position.sold}</TableCell>
                             <TableCell className="text-right">
-                              {pnlData[position.symbol] ? (
+                              {pnlData[`${position.symbol}:${position.accountId}`] ? (
                                 <div className="flex flex-col items-end">
                                   <span
                                     className={`font-bold ${
-                                      pnlData[position.symbol].unrealizedPnL >= 0
+                                      pnlData[`${position.symbol}:${position.accountId}`].unrealizedPnL >= 0
                                         ? "text-green-600"
                                         : "text-red-600"
                                     }`}
                                   >
-                                    ${pnlData[position.symbol].unrealizedPnL.toFixed(2)}
+                                    ${pnlData[`${position.symbol}:${position.accountId}`].unrealizedPnL.toFixed(2)}
                                   </span>
                                   <span className="text-xs text-gray-500">
-                                    @ ${pnlData[position.symbol].currentPrice.toFixed(2)}
+                                    @ ${pnlData[`${position.symbol}:${position.accountId}`].currentPrice.toFixed(2)}
                                   </span>
                                 </div>
                               ) : (
