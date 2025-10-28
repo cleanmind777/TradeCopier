@@ -7,6 +7,7 @@ import Sidebar from '../components/layout/Sidebar';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
+import LoadingModal from '../components/ui/LoadingModal';
 import { BrokerFilter, BrokerInfo } from '../types/broker';
 import { getBrokers, delBroker, changeBrokerAccount } from '../api/brokerApi';
 
@@ -24,16 +25,21 @@ const BrokerPage: React.FC = () => {
         apiKey: '',
         secretKey: '',
     });
+    const [isLoading, setIsLoading] = useState(true);
 
     const user = localStorage.getItem('user');
     const user_id = user ? JSON.parse(user).id : null;
 
     const getBrokerAccounts = async () => {
-        const brokerFilter: BrokerFilter = {
-            "user_id": user_id
+        try {
+            const brokerFilter: BrokerFilter = {
+                "user_id": user_id
+            }
+            const brokers = await getBrokers(brokerFilter);
+            setBrokerAccounts(brokers);
+        } catch (error) {
+            console.error("Error fetching broker accounts:", error);
         }
-        const brokers = await getBrokers(brokerFilter);
-        setBrokerAccounts(brokers);
     }
 
     const handleAddBroker = (e: React.FormEvent) => {
@@ -86,7 +92,15 @@ const BrokerPage: React.FC = () => {
     };
 
     useEffect(() => {
-        getBrokerAccounts();
+        const loadData = async () => {
+            setIsLoading(true);
+            try {
+                await getBrokerAccounts();
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        loadData();
     }, [])
 
     return (
@@ -94,6 +108,7 @@ const BrokerPage: React.FC = () => {
             <Sidebar />
             <div className="flex-1 flex flex-col">
                 <Header />
+                <LoadingModal isOpen={isLoading} message="Loading broker accounts..." />
                 <main className="flex-1 p-6 space-y-6">
                     {/* Page Header */}
                     <div className="flex items-center justify-between">

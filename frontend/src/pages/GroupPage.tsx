@@ -4,6 +4,7 @@ import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Button from "../components/ui/Button";
+import LoadingModal from "../components/ui/LoadingModal";
 import {
   Table,
   TableHeader,
@@ -37,30 +38,43 @@ const GroupPage: React.FC = () => {
   const [brokerQuantities, setBrokerQuantities] = useState<{
     [key: string]: number;
   }>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
 
   const getSubBrokerAccounts = async () => {
-    const brokers = await getSubBrokersForGroup(user_id);
-    if (brokers) {
-      setAvailableBrokers(brokers);
-    } else {
-      alert("You don't have Trading Account, Plz connect!");
+    try {
+      const brokers = await getSubBrokersForGroup(user_id);
+      if (brokers) {
+        setAvailableBrokers(brokers);
+      } else {
+        alert("You don't have Trading Account, Plz connect!");
+      }
+    } catch (error) {
+      console.error("Error fetching brokers:", error);
     }
   };
 
   const getGroups = async () => {
-    const groups = await getGroup(user_id);
-    setGroups(groups);
+    try {
+      const groups = await getGroup(user_id);
+      setGroups(groups);
+    } catch (error) {
+      console.error("Error fetching groups:", error);
+    }
   };
 
   useEffect(() => {
-    getSubBrokerAccounts();
-  }, [user_id]);
-
-  useEffect(() => {
-    getGroups();
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        await Promise.all([getSubBrokerAccounts(), getGroups()]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
   }, [user_id]);
 
   const handleCreateGroup = async () => {
@@ -184,6 +198,7 @@ const GroupPage: React.FC = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
+        <LoadingModal isOpen={isLoading} message="Loading groups data..." />
         <main className="flex-1 p-8 space-y-8">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-800">Groups</h1>

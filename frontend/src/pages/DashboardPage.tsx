@@ -4,6 +4,7 @@ import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
 import Button from "../components/ui/Button";
+import LoadingModal from "../components/ui/LoadingModal";
 import {
   Table,
   TableHeader,
@@ -39,6 +40,7 @@ const DashboardPage: React.FC = () => {
     "positions" | "orders" | "accounts"
   >("positions");
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [positions, setPositions] = useState<TradovatePositionListResponse[]>(
@@ -57,36 +59,48 @@ const DashboardPage: React.FC = () => {
   const user_id = user ? JSON.parse(user).id : null;
 
   const fetchPositions = async () => {
-    const positionData = await getPositions(user_id);
-    if (positionData != null) {
-      setPositions(positionData);
+    try {
+      const positionData = await getPositions(user_id);
+      if (positionData != null) {
+        setPositions(positionData);
+      }
+    } catch (error) {
+      console.error("Error fetching positions:", error);
     }
   };
 
   const fetchOrders = async () => {
-    const orderData = await getOrders(user_id);
-    if (orderData != null) {
-      setOrders(orderData);
+    try {
+      const orderData = await getOrders(user_id);
+      if (orderData != null) {
+        setOrders(orderData);
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
     }
   };
 
   const fetchAccounts = async () => {
-    const accountData = await getAccounts(user_id);
-    if (accountData != null) {
-      setAccounts(accountData);
+    try {
+      const accountData = await getAccounts(user_id);
+      if (accountData != null) {
+        setAccounts(accountData);
+      }
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
     }
   };
 
   useEffect(() => {
-    fetchPositions();
-  }, [user_id]);
-
-  useEffect(() => {
-    fetchOrders();
-  }, [user_id]);
-
-  useEffect(() => {
-    fetchAccounts();
+    const loadData = async () => {
+      setIsInitialLoad(true);
+      try {
+        await Promise.all([fetchPositions(), fetchOrders(), fetchAccounts()]);
+      } finally {
+        setIsInitialLoad(false);
+      }
+    };
+    loadData();
   }, [user_id]);
 
   // General sorting utility for array of objects
@@ -236,6 +250,7 @@ const DashboardPage: React.FC = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
+        <LoadingModal isOpen={isInitialLoad} message="Loading dashboard data..." />
         <main className="flex-1 p-8 space-y-8">
           {/* Global Action Button */}
           <div className="flex justify-end">
