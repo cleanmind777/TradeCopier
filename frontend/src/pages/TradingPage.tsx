@@ -843,7 +843,7 @@ const TradingPage: React.FC = () => {
                   value={pendingSymbol}
                   onChange={(e) => setPendingSymbol(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol); }}
-                  placeholder="NQ.FUT"
+                  placeholder="NQZ5"
                   className="h-8 w-28 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 <button
