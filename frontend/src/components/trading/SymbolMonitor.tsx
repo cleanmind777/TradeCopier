@@ -345,6 +345,35 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
       },
     });
 
+    // Configure custom time format for axis ticks and crosshair (dd:hh:mm)
+    const formatTick = (t: any) => {
+      let date: Date;
+      if (typeof t === 'number') {
+        date = new Date(t * 1000);
+      } else if (t && typeof t === 'object' && 'year' in t) {
+        // Business day format
+        const year = (t as any).year;
+        const month = ((t as any).month ?? 1) - 1;
+        const day = (t as any).day ?? 1;
+        date = new Date(Date.UTC(year, month, day));
+      } else {
+        date = new Date();
+      }
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      const hh = String(date.getUTCHours()).padStart(2, '0');
+      const mm = String(date.getUTCMinutes()).padStart(2, '0');
+      return `${dd}:${hh}:${mm}`;
+    };
+
+    chart.applyOptions({
+      timeScale: {
+        tickMarkFormatter: (time: any) => formatTick(time),
+      } as any,
+      localization: {
+        timeFormatter: (time: any) => formatTick(time),
+      } as any,
+    });
+
     const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: compact ? '#22c55e' : '#26a69a',
       downColor: compact ? '#ef4444' : '#ef5350',
