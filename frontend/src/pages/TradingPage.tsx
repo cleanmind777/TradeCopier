@@ -1189,6 +1189,22 @@ const TradingPage: React.FC = () => {
                     </div>
                   </>
                 )}
+                {/* Compact PnL & Net badges */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400">PnL</span>
+                  <span className={`${groupPnL.totalPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>${groupPnL.totalPnL.toFixed(0)}</span>
+                  {symbol && (
+                    <span className={`${groupPnL.symbolPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>{symbol}: ${groupPnL.symbolPnL.toFixed(0)}</span>
+                  )}
+                </div>
+                <div className="w-px h-6 bg-slate-700" />
+                {/* Group balance and symbol net */}
+                <div className="flex items-center gap-3 text-xs text-slate-300">
+                  <span>Bal ${groupBalance.toFixed(0)}</span>
+                  {symbol && (
+                    <span>Net {groupSymbolNet.netPos} @ {groupSymbolNet.avgNetPrice ? groupSymbolNet.avgNetPrice.toFixed(2) : 0}</span>
+                  )}
+                </div>
                 {/* Action buttons */}
                 <div className="flex items-center gap-2">
                   <button
@@ -1251,7 +1267,25 @@ const TradingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Equity per Sub-Broker removed per request */}
+            {/* Equity per Sub-Broker */}
+            {selectedGroup && Object.keys(subBrokerEquities).length > 0 && (
+              <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
+                <div className="text-xs font-semibold mb-1.5 text-slate-300">Equity per Sub-Broker</div>
+                <div className="flex items-center gap-2 md:gap-4 flex-wrap text-xs">
+                  {Object.values(subBrokerEquities).map((equity) => (
+                    <div key={equity.accountId} className="flex items-center gap-2 bg-slate-700/50 px-2 py-1 rounded">
+                      <span className="text-slate-400">{equity.nickname}:</span>
+                      <span className={`font-semibold ${equity.equity >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        ${equity.equity.toFixed(2)}
+                      </span>
+                      <span className="text-slate-500 text-[10px]">
+                        (Bal: ${equity.balance.toFixed(2)}, PnL: ${equity.unrealizedPnL >= 0 ? '+' : ''}${equity.unrealizedPnL.toFixed(2)})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Real-time Price Chart using Lightweight Charts
