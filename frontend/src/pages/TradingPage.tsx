@@ -966,17 +966,19 @@ const TradingPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => executeOrder("Buy")}
-                  disabled={isOrdering || !selectedGroup}
+                  disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
                   className="h-8 px-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold"
+                  title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
                 >
-                  Buy Mkt
+                  {orderType === 'limit' ? 'Buy Limit' : 'Buy Mkt'}
                 </button>
                 <button
                   onClick={() => executeOrder("Sell")}
-                  disabled={isOrdering || !selectedGroup}
+                  disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
                   className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold"
+                  title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
                 >
-                  Sell Mkt
+                  {orderType === 'limit' ? 'Sell Limit' : 'Sell Mkt'}
                 </button>
               </div>
             </div>
