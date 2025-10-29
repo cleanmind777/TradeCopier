@@ -24,7 +24,7 @@ import {
   TradovateAccountsResponse,
   TradovatePositionListResponse,
 } from "../types/broker";
-import { getHistoricalChart } from "../api/databentoApi";
+import { getHistoricalChart, getAvailableSymbols } from "../api/databentoApi";
 
 const TradingPage: React.FC = () => {
   // Trading state
@@ -36,6 +36,8 @@ const TradingPage: React.FC = () => {
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
   const [symbol, setSymbol] = useState<string>("");
+  const [availableSymbols, setAvailableSymbols] = useState<{ symbol: string; name: string }[]>([]);
+  const [pendingSymbol, setPendingSymbol] = useState<string>("");
   
   // PnL tracking state
   const [pnlData, setPnlData] = useState<Record<string, any>>({});
@@ -72,6 +74,17 @@ const TradingPage: React.FC = () => {
   const eventSourceRef = useRef<EventSource | null>(null);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
+
+  // Load selectable symbols
+  useEffect(() => {
+    const loadSymbols = async () => {
+      const res = await getAvailableSymbols();
+      if (res?.futures) {
+        setAvailableSymbols(res.futures);
+      }
+    };
+    loadSymbols();
+  }, []);
 
   // Calculate PnL for selected group and symbol
   const calculateGroupPnL = () => {
@@ -897,34 +910,61 @@ const TradingPage: React.FC = () => {
           )} */}
           
           {/* Shared Symbol Input */}
-          <Card>
+          <Card className="border-0 shadow-md bg-white/80 backdrop-blur">
             <CardHeader>
               <h2 className="text-xl font-bold">Symbol Selection</h2>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="symbol">Symbol</Label>
-                <Input
-                  id="symbol"
-                  type="text"
-                  value={symbol}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSymbol(e.target.value)
-                  }
-                  placeholder="Enter symbol (e.g., NQZ5, MNQZ5)"
-                  className="w-full"
-                />
-                <p className="text-sm text-gray-500">
-                  This symbol will be used for monitoring and placing orders
-                </p>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="md:col-span-2 space-y-2">
+                  <Label htmlFor="symbol-select">Choose a symbol</Label>
+                  <select
+                    id="symbol-select"
+                    value={pendingSymbol}
+                    onChange={(e) => setPendingSymbol(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select...</option>
+                    {availableSymbols.map((s) => (
+                      <option key={s.symbol} value={s.symbol}>
+                        {s.symbol} — {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-sm text-gray-500">
+                    Or type a custom symbol below if needed
+                  </p>
+                  <Input
+                    id="symbol-input"
+                    type="text"
+                    value={pendingSymbol}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPendingSymbol(e.target.value)}
+                    placeholder="e.g., NQ.FUT, ES.FUT, CL.FUT or NQZ5"
+                    className="w-full"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    onClick={() => setSymbol(pendingSymbol)}
+                    disabled={!pendingSymbol}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Select
+                  </Button>
+                </div>
               </div>
+              {symbol && (
+                <div className="mt-3 text-sm text-gray-600">
+                  Selected: <span className="font-semibold">{symbol}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           <SymbolsMonitor initialSymbol={symbol} />
           
           {/* Trading Interface */}
-          <Card>
+          <Card className="border-0 shadow-md bg-white/80 backdrop-blur">
             <CardHeader>
               <h2 className="text-xl font-bold">Trading Interface</h2>
             </CardHeader>
@@ -958,7 +998,7 @@ const TradingPage: React.FC = () => {
               {selectedGroup && (
                 <>
                   {/* Group Info */}
-                  <div className="bg-gray-50 p-4 rounded-md">
+                  <div className="bg-gradient-to-r from-slate-50 to-white p-4 rounded-md border border-slate-200">
                     <h3 className="font-semibold mb-2">Group Details</h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
@@ -987,7 +1027,7 @@ const TradingPage: React.FC = () => {
                   </div>
 
                   {/* PnL Display */}
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-md border border-blue-200">
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-md border border-blue-200 shadow-sm">
                     <h3 className="font-semibold mb-3 text-blue-800">Real-time PnL</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="text-center">
@@ -1183,7 +1223,7 @@ const TradingPage: React.FC = () => {
 
           {/* Order History */}
           {orderHistory.length > 0 && (
-            <Card>
+            <Card className="border-0 shadow-md bg-white/80 backdrop-blur">
               <CardHeader>
                 <h2 className="text-xl font-bold">Order History</h2>
               </CardHeader>

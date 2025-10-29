@@ -43,3 +43,22 @@ export const getHistoricalChart = async (
   }
 };
 
+export interface AvailableSymbolsResponse {
+  futures: { symbol: string; name: string }[];
+}
+
+export const getAvailableSymbols = async (): Promise<AvailableSymbolsResponse | null> => {
+  try {
+    const response = await axios.get(`${API_BASE}/databento/symbols`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get Symbols:", error.response?.data);
+      alert(error.response?.data?.detail ?? "Unknown error");
+    } else {
+      console.error("Unexpected Get Symbols error:", error);
+    }
+    return null;
+  }
+};
+
