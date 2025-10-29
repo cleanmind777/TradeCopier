@@ -821,11 +821,11 @@ const TradingPage: React.FC = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 p-6 md:p-8 space-y-6 md:space-y-8">
+        <main className="flex-1 p-4 md:p-5 space-y-4 md:space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">Trading</h1>
-              <p className="text-slate-500 text-sm md:text-base">Manage positions, place orders, and monitor group performance</p>
+              <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">Trading</h1>
+              <p className="text-slate-500 text-xs md:text-sm">Manage positions, place orders, and monitor group performance</p>
             </div>
             <div
               className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-sm ${
@@ -903,12 +903,12 @@ const TradingPage: React.FC = () => {
           {/* Shared Symbol Input */}
           <Card className="border-0 shadow-sm bg-white">
             <CardHeader>
-              <h2 className="text-lg font-semibold">Symbol</h2>
+              <h2 className="text-base font-semibold">Symbol</h2>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="symbol-input">Type a symbol</Label>
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="md:col-span-3 space-y-1.5">
+                  <Label htmlFor="symbol-input" className="text-xs">Type a symbol</Label>
                   <Input
                     id="symbol-input"
                     type="text"
@@ -918,22 +918,22 @@ const TradingPage: React.FC = () => {
                       if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol);
                     }}
                     placeholder="e.g., NQ.FUT, ES.FUT, CL.FUT or NQZ5"
-                    className="w-full"
+                    className="w-full h-9 text-sm"
                   />
-                  <p className="text-xs text-slate-500">Press Select or Enter to apply the typed symbol</p>
+                  <p className="text-[11px] text-slate-500">Press Select or Enter to apply</p>
                 </div>
                 <div className="flex items-end">
                   <Button
                     onClick={() => setSymbol(pendingSymbol)}
                     disabled={!pendingSymbol}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    className="w-full h-9 text-sm bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     Select
                   </Button>
                 </div>
               </div>
               {symbol && (
-                <div className="mt-3 text-sm text-slate-600">
+                <div className="mt-2 text-xs text-slate-600">
                   Selected: <span className="font-semibold">{symbol}</span>
                 </div>
               )}
@@ -942,22 +942,24 @@ const TradingPage: React.FC = () => {
 
           <Card className="border-0 shadow-sm bg-white">
             <CardHeader>
-              <h2 className="text-lg font-semibold">Market Monitor</h2>
+              <h2 className="text-base font-semibold">Market Monitor</h2>
             </CardHeader>
             <CardContent>
-              <SymbolsMonitor initialSymbol={symbol} />
+              <div className="h-56 lg:h-64 overflow-hidden rounded-md border border-slate-200">
+                <SymbolsMonitor initialSymbol={symbol} />
+              </div>
             </CardContent>
           </Card>
           
           {/* Trading Interface */}
           <Card className="border-0 shadow-sm bg-white">
             <CardHeader>
-              <h2 className="text-lg font-semibold">Place Order</h2>
+              <h2 className="text-base font-semibold">Place Order</h2>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-3">
               {/* Group Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="group-select">Select Group</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="group-select" className="text-xs">Select Group</Label>
                 <select
                   id="group-select"
                   value={selectedGroup?.id || ""}
@@ -965,7 +967,7 @@ const TradingPage: React.FC = () => {
                     const group = groups.find((g) => g.id === e.target.value);
                     setSelectedGroup(group || null);
                   }}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full h-9 text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   disabled={groups.length === 0}
                 >
                   <option value="">
@@ -984,9 +986,9 @@ const TradingPage: React.FC = () => {
               {selectedGroup && (
                 <>
                   {/* Group Info */}
-                  <div className="bg-gradient-to-r from-slate-50 to-white p-4 rounded-md border border-slate-200">
-                    <h3 className="font-semibold mb-2">Group Details</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="bg-gradient-to-r from-slate-50 to-white p-3 rounded-md border border-slate-200">
+                    <h3 className="font-medium mb-1 text-sm">Group Details</h3>
+                    <div className="grid grid-cols-2 gap-3 text-xs">
                       <div>
                         <span className="text-gray-500">Name:</span>{" "}
                         {selectedGroup.name}
@@ -1013,48 +1015,48 @@ const TradingPage: React.FC = () => {
                   </div>
 
                   {/* PnL Display */}
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-md border border-blue-200 shadow-sm">
-                    <h3 className="font-semibold mb-3 text-blue-800">Real-time PnL</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-md border border-blue-200 shadow-sm">
+                    <h3 className="font-medium mb-2 text-blue-800 text-sm">Real-time PnL</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="text-center">
-                        <div className="text-sm text-gray-600 mb-1">Total Group PnL</div>
-                        <div className={`text-2xl font-semibold ${
+                        <div className="text-xs text-gray-600 mb-1">Total Group PnL</div>
+                        <div className={`text-xl font-semibold ${
                           groupPnL.totalPnL >= 0 ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
                           ${groupPnL.totalPnL.toFixed(2)}
                         </div>
                       </div>
                       <div className="text-center">
-                        <div className="text-sm text-gray-600 mb-1">
+                        <div className="text-xs text-gray-600 mb-1">
                           {symbol ? `${symbol} PnL` : 'Symbol PnL (Select Symbol)'}
                         </div>
-                        <div className={`text-2xl font-semibold ${
+                        <div className={`text-xl font-semibold ${
                           groupPnL.symbolPnL >= 0 ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
                           ${groupPnL.symbolPnL.toFixed(2)}
                         </div>
                         {!symbol && (
-                          <div className="text-xs text-gray-400 mt-1">
+                          <div className="text-[11px] text-gray-400 mt-1">
                             Enter symbol above
                           </div>
                         )}
                       </div>
                       <div className="text-center">
-                        <div className="text-sm text-gray-600 mb-1">Connection</div>
-                        <div className={`text-sm font-medium ${
+                        <div className="text-xs text-gray-600 mb-1">Connection</div>
+                        <div className={`text-xs font-medium ${
                           isConnectedToPnL ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
                           {isConnectedToPnL ? '🟢 Live' : '🔴 Offline'}
                         </div>
                         {groupPnL.lastUpdate && (
-                          <div className="text-xs text-slate-500 mt-1">
+                          <div className="text-[11px] text-slate-500 mt-1">
                             Last: {groupPnL.lastUpdate}
                           </div>
                         )}
                       </div>
                     </div>
                     {selectedGroup && (
-                      <div className="mt-3 text-xs text-slate-600 text-center">
+                      <div className="mt-2 text-[11px] text-slate-600 text-center">
                         Tracking {selectedGroup.sub_brokers.length} sub-brokers
                         {symbol && ` for ${symbol}`}
                       </div>
@@ -1062,11 +1064,11 @@ const TradingPage: React.FC = () => {
                   </div>
 
                   {/* Order Form */}
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {/* Quantity */}
-                      <div className="space-y-2">
-                        <Label htmlFor="quantity">Quantity</Label>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="quantity" className="text-xs">Quantity</Label>
                         <Input
                           id="quantity"
                           type="number"
@@ -1076,19 +1078,20 @@ const TradingPage: React.FC = () => {
                           }
                           min="1"
                           placeholder="Enter quantity"
+                          className="h-9 text-sm"
                         />
                       </div>
 
                       {/* Order Type */}
-                      <div className="space-y-2">
-                        <Label htmlFor="order-type">Order Type</Label>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="order-type" className="text-xs">Order Type</Label>
                         <select
                           id="order-type"
                           value={orderType}
                           onChange={(e) =>
                             setOrderType(e.target.value as "market" | "limit")
                           }
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full h-9 text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="market">Market Order</option>
                           <option value="limit">Limit Order</option>
@@ -1099,8 +1102,8 @@ const TradingPage: React.FC = () => {
                     {orderType === "limit" && (
                       <>
                         {/* Limit Price */}
-                        <div className="space-y-2">
-                          <Label htmlFor="limit-price">Limit Price</Label>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="limit-price" className="text-xs">Limit Price</Label>
                           <Input
                             id="limit-price"
                             type="number"
@@ -1110,12 +1113,13 @@ const TradingPage: React.FC = () => {
                               e: React.ChangeEvent<HTMLInputElement>
                             ) => setLimitPrice(e.target.value)}
                             placeholder="Enter limit price"
+                            className="h-9 text-sm"
                           />
                         </div>
                         {/* SL/TP Configuration */}
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="sl-tp-option">
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="sl-tp-option" className="text-xs">
                               Stop Loss / Take Profit
                             </Label>
                             <select
@@ -1130,7 +1134,7 @@ const TradingPage: React.FC = () => {
                                     | "custom"
                                 )
                               }
-                              className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="w-full h-9 text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                               <option value="none">None</option>
                               <option value="default1">
@@ -1145,9 +1149,9 @@ const TradingPage: React.FC = () => {
 
                           {/* Custom SL/TP Input Fields */}
                           {slTpOption === "custom" && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="custom-sl">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <Label htmlFor="custom-sl" className="text-xs">
                                   Custom Stop Loss
                                 </Label>
                                 <Input
@@ -1160,10 +1164,11 @@ const TradingPage: React.FC = () => {
                                   ) => setCustomSL(e.target.value)}
                                   placeholder="Enter SL value"
                                   min="0"
+                                  className="h-9 text-sm"
                                 />
                               </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="custom-tp">
+                              <div className="space-y-1.5">
+                                <Label htmlFor="custom-tp" className="text-xs">
                                   Custom Take Profit
                                 </Label>
                                 <Input
@@ -1176,6 +1181,7 @@ const TradingPage: React.FC = () => {
                                   ) => setCustomTP(e.target.value)}
                                   placeholder="Enter TP value"
                                   min="0"
+                                  className="h-9 text-sm"
                                 />
                               </div>
                             </div>
@@ -1185,18 +1191,18 @@ const TradingPage: React.FC = () => {
                     )}
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3">
+                    <div className="flex gap-2.5">
                       <Button
                         onClick={() => executeOrder("Buy")}
                         disabled={isOrdering || !selectedGroup}
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        className="flex-1 h-9 text-sm bg-emerald-600 hover:bg-emerald-700 text-white"
                       >
                         {isOrdering ? "Executing..." : "BUY"}
                       </Button>
                       <Button
                         onClick={() => executeOrder("Sell")}
                         disabled={isOrdering || !selectedGroup}
-                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+                        className="flex-1 h-9 text-sm bg-rose-600 hover:bg-rose-700 text-white"
                       >
                         {isOrdering ? "Executing..." : "SELL"}
                       </Button>
@@ -1211,18 +1217,18 @@ const TradingPage: React.FC = () => {
           {orderHistory.length > 0 && (
             <Card className="border-0 shadow-sm bg-white">
               <CardHeader>
-                <h2 className="text-xl font-bold">Order History</h2>
+                <h2 className="text-base font-semibold">Order History</h2>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {orderHistory.slice(0, 10).map((order) => (
                     <div
                       key={order.id}
-                      className="flex items-center justify-between p-3 bg-slate-50 rounded-md border border-slate-200 hover:bg-slate-100 transition"
+                      className="flex items-center justify-between p-2.5 bg-slate-50 rounded-md border border-slate-200 hover:bg-slate-100 transition"
                     >
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <span
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
+                          className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
                             order.action === "Buy"
                               ? "bg-emerald-100 text-emerald-800"
                               : "bg-rose-100 text-rose-800"
@@ -1230,34 +1236,34 @@ const TradingPage: React.FC = () => {
                         >
                           {order.action}
                         </span>
-                        <span className="font-medium">
+                        <span className="font-medium text-sm">
                           {order.quantity} contracts
                         </span>
-                        <span className="text-sm text-gray-500">
+                        <span className="text-xs text-gray-500">
                           {order.orderType}
                         </span>
                         {order.limitPrice && (
-                          <span className="text-sm text-gray-500">
+                          <span className="text-xs text-gray-500">
                             @ ${order.limitPrice}
                           </span>
                         )}
                         {order.sl > 0 && (
-                          <span className="text-sm text-red-500">
+                          <span className="text-xs text-red-500">
                             SL: ${order.sl}
                           </span>
                         )}
                         {order.tp > 0 && (
-                          <span className="text-sm text-green-500">
+                          <span className="text-xs text-green-500">
                             TP: ${order.tp}
                           </span>
                         )}
-                        <span className="text-sm text-gray-500">
+                        <span className="text-xs text-gray-500">
                           Group: {order.groupName}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <span
-                          className={`px-2 py-1 rounded text-xs ${
+                          className={`px-2 py-0.5 rounded text-[11px] ${
                             order.status === "Pending"
                               ? "bg-yellow-100 text-yellow-800"
                               : order.status === "Executed"
@@ -1267,7 +1273,7 @@ const TradingPage: React.FC = () => {
                         >
                           {order.status}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-[11px] text-gray-500">
                           {new Date(order.timestamp).toLocaleTimeString()}
                         </span>
                       </div>
