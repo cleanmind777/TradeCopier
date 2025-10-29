@@ -56,6 +56,25 @@ const TradingPage: React.FC = () => {
   const [groupSymbolNet, setGroupSymbolNet] = useState<{ netPos: number; avgNetPrice: number; }>({ netPos: 0, avgNetPrice: 0 });
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
 
+  // Real-time price data (bid, ask, last, sizes)
+  const [currentPrice, setCurrentPrice] = useState<{
+    bid?: number;
+    ask?: number;
+    last?: number;
+    bidSize?: number;
+    askSize?: number;
+  }>({});
+  const priceEventSourceRef = useRef<EventSource | null>(null);
+
+  // Equity per sub-broker (balance + unrealizedPnL)
+  const [subBrokerEquities, setSubBrokerEquities] = useState<Record<string, {
+    accountId: string;
+    nickname: string;
+    balance: number;
+    unrealizedPnL: number;
+    equity: number;
+  }>>({});
+
   // Offline PnL fallback
   const offlinePnlIntervalRef = useRef<number | null>(null);
 
@@ -318,6 +337,105 @@ const TradingPage: React.FC = () => {
       setIsConnectedToPnL(false);
     };
   };
+
+  // Subscribe to real-time price stream when symbol changes
+  useEffect(() => {
+    if (!symbol) {
+      if (priceEventSourceRef.current) {
+        priceEventSourceRef.current.close();
+        priceEventSourceRef.current = null;
+      }
+      setCurrentPrice({});
+      return;
+    }
+
+    const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+    
+    // Subscribe to symbol
+    fetch(`${API_BASE}/databento/sse/current-price`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbols: [symbol] }),
+    }).catch(console.error);
+
+    // Connect to SSE stream
+    const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
+    priceEventSourceRef.current = es;
+
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.status === "connected" || data.test || data.error) return;
+        
+        if (data.symbol === symbol) {
+          setCurrentPrice({
+            bid: data.bid_price,
+            ask: data.ask_price,
+            last: data.last_price || (data.bid_price && data.ask_price ? (data.bid_price + data.ask_price) / 2 : undefined),
+            bidSize: data.bid_size,
+            askSize: data.ask_size,
+          });
+        }
+      } catch (err) {
+        console.error("Error parsing price data:", err);
+      }
+    };
+
+    es.onerror = () => {
+      console.error("Price SSE error");
+      es.close();
+    };
+
+    return () => {
+      if (priceEventSourceRef.current) {
+        priceEventSourceRef.current.close();
+        priceEventSourceRef.current = null;
+      }
+    };
+  }, [symbol]);
+
+  // Calculate equity per sub-broker (balance + unrealizedPnL)
+  useEffect(() => {
+    if (!selectedGroup || accounts.length === 0) {
+      setSubBrokerEquities({});
+      return;
+    }
+
+    const equities: Record<string, {
+      accountId: string;
+      nickname: string;
+      balance: number;
+      unrealizedPnL: number;
+      equity: number;
+    }> = {};
+
+    selectedGroup.sub_brokers.forEach(subBroker => {
+      const accountId = subBroker.sub_account_id;
+      const account = accounts.find(a => a.accountId.toString() === accountId);
+      const balance = account?.amount || 0;
+      
+      // Sum unrealizedPnL for this account across all positions
+      let unrealizedPnL = 0;
+      Object.values(pnlData).forEach((data: any) => {
+        const dataAccountId = data.accountId?.toString();
+        if (dataAccountId === accountId) {
+          unrealizedPnL += data.unrealizedPnL || 0;
+        }
+      });
+
+      const equity = balance + unrealizedPnL;
+      
+      equities[accountId] = {
+        accountId,
+        nickname: subBroker.nickname || subBroker.sub_account_name,
+        balance,
+        unrealizedPnL,
+        equity,
+      };
+    });
+
+    setSubBrokerEquities(equities);
+  }, [selectedGroup, accounts, pnlData]);
 
   // Update PnL calculations when data changes
   useEffect(() => {
@@ -1048,10 +1166,70 @@ const TradingPage: React.FC = () => {
             </Card>
           )} */}
           
-          {/* Chart - majority of the page */}
-          <div className="rounded-md border border-slate-200 overflow-hidden" style={{ height: 'calc(100vh - 220px)' }}>
-            <SymbolsMonitor initialSymbol={symbol} compact height={Math.max(400, window.innerHeight - 240)} />
+          {/* Real-time Price Display */}
+          {symbol && (
+            <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
+              <div className="flex items-center gap-6 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Bid:</span>
+                  <span className="font-mono font-semibold text-red-400">
+                    {currentPrice.bid?.toFixed(2) || "—"}
+                  </span>
+                  {currentPrice.bidSize !== undefined && (
+                    <span className="text-slate-400">({currentPrice.bidSize})</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Ask:</span>
+                  <span className="font-mono font-semibold text-emerald-400">
+                    {currentPrice.ask?.toFixed(2) || "—"}
+                  </span>
+                  {currentPrice.askSize !== undefined && (
+                    <span className="text-slate-400">({currentPrice.askSize})</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Last:</span>
+                  <span className="font-mono font-semibold">
+                    {currentPrice.last?.toFixed(2) || "—"}
+                  </span>
+                </div>
+                {currentPrice.bid && currentPrice.ask && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Spread:</span>
+                    <span className="font-mono">
+                      {(currentPrice.ask - currentPrice.bid).toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
+            </div>
+          )}
+
+          {/* Equity per Sub-Broker */}
+          {selectedGroup && Object.keys(subBrokerEquities).length > 0 && (
+            <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
+              <div className="text-xs font-semibold mb-1.5 text-slate-300">Equity per Sub-Broker</div>
+              <div className="flex items-center gap-4 flex-wrap text-xs">
+                {Object.values(subBrokerEquities).map((equity) => (
+                  <div key={equity.accountId} className="flex items-center gap-2 bg-slate-700/50 px-2 py-1 rounded">
+                    <span className="text-slate-400">{equity.nickname}:</span>
+                    <span className={`font-semibold ${equity.equity >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      ${equity.equity.toFixed(2)}
+                    </span>
+                    <span className="text-slate-500 text-[10px]">
+                      (Bal: ${equity.balance.toFixed(2)}, PnL: ${equity.unrealizedPnL >= 0 ? '+' : ''}${equity.unrealizedPnL.toFixed(2)})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Chart - majority of the page */}
+          <div className="rounded-md border border-slate-200 overflow-hidden" style={{ height: 'calc(100vh - 340px)' }}>
+            <SymbolsMonitor initialSymbol={symbol} compact height={Math.max(400, window.innerHeight - 360)} />
+          </div>
           
           {/* Reduced panels removed to maximize chart area */}
 
