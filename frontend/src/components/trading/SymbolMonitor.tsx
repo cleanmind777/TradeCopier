@@ -31,9 +31,11 @@ interface OHLCVData {
 
 interface SymbolsMonitorProps {
   initialSymbol?: string;
+  compact?: boolean;
+  height?: number; // height in px for compact mode
 }
 
-const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) => {
+const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", compact = false, height = 600 }) => {
   const [symbolInput, setSymbolInput] = useState(initialSymbol);
   const [symbols, setSymbols] = useState<string[]>([]);
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
@@ -49,6 +51,13 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
   useEffect(() => {
     setSymbolInput(initialSymbol);
   }, [initialSymbol]);
+
+  // Auto-connect in compact mode when a symbol is provided
+  useEffect(() => {
+    if (compact && symbolInput && !isConnected && !isConnecting) {
+      handleConnect();
+    }
+  }, [compact, symbolInput]);
 
   // Helper function to get current minute timestamp
   const getCurrentMinuteTimestamp = (): number => {
@@ -303,27 +312,27 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
 
     const chart = createChart(container, {
       layout: {
-        background: { type: ColorType.Solid, color: 'white' },
-        textColor: '#333',
+        background: { type: ColorType.Solid, color: compact ? '#0f172a' : 'white' },
+        textColor: compact ? '#e2e8f0' : '#333',
       },
       grid: {
-        vertLines: { color: '#e0e0e0' },
-        horzLines: { color: '#e0e0e0' },
+        vertLines: { color: compact ? '#1f2937' : '#e0e0e0' },
+        horzLines: { color: compact ? '#1f2937' : '#e0e0e0' },
       },
       width: container.clientWidth,
-      height: 300,
+      height: compact ? height : 300,
       crosshair: {
         mode: 1, // Normal crosshair mode
       },
       rightPriceScale: {
-        borderColor: '#d1d4dc',
+        borderColor: compact ? '#334155' : '#d1d4dc',
         scaleMargins: {
           top: 0.1,
           bottom: 0.1,
         },
       },
       timeScale: {
-        borderColor: '#d1d4dc',
+        borderColor: compact ? '#334155' : '#d1d4dc',
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 10,
@@ -337,8 +346,8 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#26a69a',
-      downColor: '#ef5350',
+      upColor: compact ? '#22c55e' : '#26a69a',
+      downColor: compact ? '#ef4444' : '#ef5350',
       borderVisible: false,
       wickVisible: true,
       title: symbol,
@@ -457,7 +466,8 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
 
 
   return (
-    <div className="p-6 space-y-6">
+    <div className={compact ? "w-full h-full" : "p-6 space-y-6"}>
+      {!compact && (
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold text-slate-800 mb-4">Symbol Monitor</h2>
         
@@ -493,19 +503,20 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
           </div>
         )}
       </div>
+      )}
 
       {/* Price Display */}
       {isConnected && symbols.length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+        <div className={compact ? "w-full h-full" : "bg-white rounded-lg shadow-md p-6 space-y-6"}>
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-slate-800">Live Prices</h3>
+            {!compact && <h3 className="text-xl font-bold text-slate-800">Live Prices</h3>}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-600">Timeframe:</span>
+                <span className={compact ? "text-xs text-slate-300" : "text-sm text-slate-600"}>Timeframe:</span>
                 <select
                   value={timeframe}
                   onChange={(e) => setTimeframe(e.target.value as any)}
-                  className="border border-slate-300 rounded px-2 py-1 text-sm"
+                  className={compact ? "border border-slate-600 bg-slate-800 text-slate-100 rounded px-2 py-1 text-xs" : "border border-slate-300 rounded px-2 py-1 text-sm"}
                 >
                   <option value="1m">1m</option>
                   <option value="5m">5m</option>
@@ -517,7 +528,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
                   <option value="1d">1d</option>
                 </select>
               </div>
-              <div className="flex items-center gap-2">
+              {!compact && (<div className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">Chart Controls:</span>
                 <button
                   onClick={() => {
@@ -539,7 +550,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
                 >
                   Reset View
                 </button>
-              </div>
+              </div>)}
             </div>
           </div>
           
@@ -554,15 +565,17 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
             return (
               <div
                 key={symbol}
-                className="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                className={compact ? "w-full h-full" : "border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow"}
               >
-                <h4 className="text-lg font-semibold text-slate-800 mb-3">
-                  {symbol}
-                </h4>
+                {!compact && (
+                  <h4 className="text-lg font-semibold text-slate-800 mb-3">
+                    {symbol}
+                  </h4>
+                )}
                 
                 {priceData ? (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    {!compact && (<div className="grid grid-cols-2 gap-4">
                       <div className="flex justify-between items-center">
                         <span className="text-slate-600">Bid:</span>
                         <div className="text-right">
@@ -597,7 +610,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
                           </span>
                         </div>
                       )}
-                    </div>
+                    </div>)}
 
                     {/* Chart */}
                     <div className="mt-4">
@@ -607,15 +620,18 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
                             initializeChart(symbol, el);
                           }
                         }}
-                        className="w-full h-[300px] rounded-lg overflow-hidden"
+                        className={compact ? "w-full overflow-hidden rounded-md" : "w-full h-[300px] rounded-lg overflow-hidden"}
+                        style={compact ? { height: `${height}px` } : undefined}
                       />
-                      <div className="text-xs text-slate-400 mt-2">
-                        {timeframe} Candles: {aggregatedData.length} | 1m Base: {oneMinuteData.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
-                      </div>
+                      {!compact && (
+                        <div className="text-xs text-slate-400 mt-2">
+                          {timeframe} Candles: {aggregatedData.length} | 1m Base: {oneMinuteData.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
-                  <div className="text-slate-400">Waiting for data...</div>
+                  <div className={compact ? "text-slate-300" : "text-slate-400"}>Waiting for data...</div>
                 )}
               </div>
             );
@@ -624,7 +640,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
       )}
 
       {/* Debug Mode - Show Raw JSON */}
-      {isConnected && Object.keys(prices).length > 0 && (
+      {!compact && isConnected && Object.keys(prices).length > 0 && (
         <details className="bg-slate-50 rounded-lg p-4">
           <summary className="cursor-pointer font-semibold text-slate-700">
             Debug: Raw JSON Data

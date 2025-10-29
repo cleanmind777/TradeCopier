@@ -3,9 +3,6 @@ import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
-import Button from "../components/ui/Button";
-import Input from "../components/ui/Input";
-import Label from "../components/ui/Label";
 import SymbolsMonitor from "../components/trading/SymbolMonitor";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
 import {
@@ -55,22 +52,19 @@ const TradingPage: React.FC = () => {
   // Accounts and positions for aggregates/balance
   const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
   const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
-  const [groupBalance, setGroupBalance] = useState<number>(0);
-  const [groupSymbolNet, setGroupSymbolNet] = useState<{
-    netPos: number;
-    avgNetPrice: number;
-  }>({ netPos: 0, avgNetPrice: 0 });
+  const [groupBalance, setGroupBalance] = useState<number>(0); // kept for future toolbar summaries
+  const [groupSymbolNet, setGroupSymbolNet] = useState<{ netPos: number; avgNetPrice: number; }>({ netPos: 0, avgNetPrice: 0 });
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
 
   // Offline PnL fallback
   const offlinePnlIntervalRef = useRef<number | null>(null);
 
   // SL/TP state
-  const [slTpOption, setSlTpOption] = useState<
+  const [slTpOption] = useState<
     "none" | "default1" | "default2" | "custom"
   >("none");
-  const [customSL, setCustomSL] = useState<string>("");
-  const [customTP, setCustomTP] = useState<string>("");
+  const [customSL] = useState<string>("");
+  const [customTP] = useState<string>("");
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const user = localStorage.getItem("user");
@@ -872,6 +866,40 @@ const TradingPage: React.FC = () => {
                 />
               </div>
               <div className="w-px h-6 bg-slate-700" />
+              {/* Group select */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Group</span>
+                <select
+                  value={selectedGroup?.id || ""}
+                  onChange={(e) => {
+                    const group = groups.find((g) => g.id === e.target.value);
+                    setSelectedGroup(group || null);
+                  }}
+                  className="h-8 min-w-[160px] rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Select group</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-px h-6 bg-slate-700" />
+              {/* Compact PnL badges */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-400">PnL</span>
+                <span className={`${groupPnL.totalPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>${groupPnL.totalPnL.toFixed(0)}</span>
+                {symbol && (
+                  <span className={`${groupPnL.symbolPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>{symbol}: ${groupPnL.symbolPnL.toFixed(0)}</span>
+                )}
+              </div>
+              <div className="w-px h-6 bg-slate-700" />
+              {/* Group balance and symbol net */}
+              <div className="flex items-center gap-3 text-xs text-slate-300">
+                <span>Bal ${groupBalance.toFixed(0)}</span>
+                {symbol && (
+                  <span>Net {groupSymbolNet.netPos} @ {groupSymbolNet.avgNetPrice ? groupSymbolNet.avgNetPrice.toFixed(2) : 0}</span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => executeOrder("Buy")}
@@ -955,318 +983,12 @@ const TradingPage: React.FC = () => {
             </Card>
           )} */}
           
-          {/* Shared Symbol Input */}
-          <Card className="border-0 shadow-sm bg-white">
-            <CardHeader>
-              <h2 className="text-base font-semibold">Symbol</h2>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="md:col-span-3 space-y-1.5">
-                  <Label htmlFor="symbol-input" className="text-xs">Type a symbol</Label>
-                  <Input
-                    id="symbol-input"
-                    type="text"
-                    value={pendingSymbol}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPendingSymbol(e.target.value)}
-                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                      if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol);
-                    }}
-                    placeholder="e.g., NQ.FUT, ES.FUT, CL.FUT or NQZ5"
-                    className="w-full h-9 text-sm"
-                  />
-                  <p className="text-[11px] text-slate-500">Press Select or Enter to apply</p>
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    onClick={() => setSymbol(pendingSymbol)}
-                    disabled={!pendingSymbol}
-                    className="w-full h-9 text-sm bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    Select
-                  </Button>
-                </div>
+          {/* Chart - majority of the page */}
+          <div className="rounded-md border border-slate-200 overflow-hidden" style={{ height: 'calc(100vh - 220px)' }}>
+            <SymbolsMonitor initialSymbol={symbol} compact height={Math.max(400, window.innerHeight - 240)} />
               </div>
-              {symbol && (
-                <div className="mt-2 text-xs text-slate-600">
-                  Selected: <span className="font-semibold">{symbol}</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-sm bg-white">
-            <CardHeader>
-              <h2 className="text-base font-semibold">Market Monitor</h2>
-            </CardHeader>
-            <CardContent>
-              <div className="h-56 lg:h-64 overflow-hidden rounded-md border border-slate-200">
-                <SymbolsMonitor initialSymbol={symbol} />
-              </div>
-            </CardContent>
-          </Card>
           
-          {/* Trading Interface */}
-          <Card className="border-0 shadow-sm bg-white">
-            <CardHeader>
-              <h2 className="text-base font-semibold">Place Order</h2>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Group Selection */}
-              <div className="space-y-1.5">
-                <Label htmlFor="group-select" className="text-xs">Select Group</Label>
-                <select
-                  id="group-select"
-                  value={selectedGroup?.id || ""}
-                  onChange={(e) => {
-                    const group = groups.find((g) => g.id === e.target.value);
-                    setSelectedGroup(group || null);
-                  }}
-                  className="w-full h-9 text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={groups.length === 0}
-                >
-                  <option value="">
-                    {groups.length === 0
-                      ? "No groups available"
-                      : "Select a group"}
-                  </option>
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name} ({group.sub_brokers.length} sub-brokers)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedGroup && (
-                <>
-                  {/* Group Info */}
-                  <div className="bg-gradient-to-r from-slate-50 to-white p-3 rounded-md border border-slate-200">
-                    <h3 className="font-medium mb-1 text-sm">Group Details</h3>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <span className="text-gray-500">Name:</span>{" "}
-                        {selectedGroup.name}
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Sub-brokers:</span>{" "}
-                        {selectedGroup.sub_brokers.length}
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Total Balance:</span>{" "}
-                        ${groupBalance.toFixed(2)}
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Symbol Net / Avg:</span>{" "}
-                        {symbol ? (
-                          <>
-                            {groupSymbolNet.netPos} @ ${groupSymbolNet.avgNetPrice.toFixed(2)}
-                          </>
-                        ) : (
-                          <span className="text-gray-400">Select symbol</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* PnL Display */}
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-md border border-blue-200 shadow-sm">
-                    <h3 className="font-medium mb-2 text-blue-800 text-sm">Real-time PnL</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="text-center">
-                        <div className="text-xs text-gray-600 mb-1">Total Group PnL</div>
-                        <div className={`text-xl font-semibold ${
-                          groupPnL.totalPnL >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                        }`}>
-                          ${groupPnL.totalPnL.toFixed(2)}
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xs text-gray-600 mb-1">
-                          {symbol ? `${symbol} PnL` : 'Symbol PnL (Select Symbol)'}
-                        </div>
-                        <div className={`text-xl font-semibold ${
-                          groupPnL.symbolPnL >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                        }`}>
-                          ${groupPnL.symbolPnL.toFixed(2)}
-                        </div>
-                        {!symbol && (
-                          <div className="text-[11px] text-gray-400 mt-1">
-                            Enter symbol above
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-center">
-                        <div className="text-xs text-gray-600 mb-1">Connection</div>
-                        <div className={`text-xs font-medium ${
-                          isConnectedToPnL ? 'text-emerald-600' : 'text-rose-600'
-                        }`}>
-                          {isConnectedToPnL ? '🟢 Live' : '🔴 Offline'}
-                        </div>
-                        {groupPnL.lastUpdate && (
-                          <div className="text-[11px] text-slate-500 mt-1">
-                            Last: {groupPnL.lastUpdate}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {selectedGroup && (
-                      <div className="mt-2 text-[11px] text-slate-600 text-center">
-                        Tracking {selectedGroup.sub_brokers.length} sub-brokers
-                        {symbol && ` for ${symbol}`}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Order Form */}
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {/* Quantity */}
-                      <div className="space-y-1.5">
-                        <Label htmlFor="quantity" className="text-xs">Quantity</Label>
-                        <Input
-                          id="quantity"
-                          type="number"
-                          value={orderQuantity}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setOrderQuantity(e.target.value)
-                          }
-                          min="1"
-                          placeholder="Enter quantity"
-                          className="h-9 text-sm"
-                        />
-                      </div>
-
-                      {/* Order Type */}
-                      <div className="space-y-1.5">
-                        <Label htmlFor="order-type" className="text-xs">Order Type</Label>
-                        <select
-                          id="order-type"
-                          value={orderType}
-                          onChange={(e) =>
-                            setOrderType(e.target.value as "market" | "limit")
-                          }
-                          className="w-full h-9 text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="market">Market Order</option>
-                          <option value="limit">Limit Order</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {orderType === "limit" && (
-                      <>
-                        {/* Limit Price */}
-                        <div className="space-y-1.5">
-                          <Label htmlFor="limit-price" className="text-xs">Limit Price</Label>
-                          <Input
-                            id="limit-price"
-                            type="number"
-                            step="0.01"
-                            value={limitPrice}
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>
-                            ) => setLimitPrice(e.target.value)}
-                            placeholder="Enter limit price"
-                            className="h-9 text-sm"
-                          />
-                        </div>
-                        {/* SL/TP Configuration */}
-                        <div className="space-y-3">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="sl-tp-option" className="text-xs">
-                              Stop Loss / Take Profit
-                            </Label>
-                            <select
-                              id="sl-tp-option"
-                              value={slTpOption}
-                              onChange={(e) =>
-                                setSlTpOption(
-                                  e.target.value as
-                                    | "none"
-                                    | "default1"
-                                    | "default2"
-                                    | "custom"
-                                )
-                              }
-                              className="w-full h-9 text-sm p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="none">None</option>
-                              <option value="default1">
-                                Default1 (SL: 10, TP: 10)
-                              </option>
-                              <option value="default2">
-                                Default2 (SL: 20, TP: 20)
-                              </option>
-                              <option value="custom">Custom</option>
-                            </select>
-                          </div>
-
-                          {/* Custom SL/TP Input Fields */}
-                          {slTpOption === "custom" && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <Label htmlFor="custom-sl" className="text-xs">
-                                  Custom Stop Loss
-                                </Label>
-                                <Input
-                                  id="custom-sl"
-                                  type="number"
-                                  step="0.01"
-                                  value={customSL}
-                                  onChange={(
-                                    e: React.ChangeEvent<HTMLInputElement>
-                                  ) => setCustomSL(e.target.value)}
-                                  placeholder="Enter SL value"
-                                  min="0"
-                                  className="h-9 text-sm"
-                                />
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label htmlFor="custom-tp" className="text-xs">
-                                  Custom Take Profit
-                                </Label>
-                                <Input
-                                  id="custom-tp"
-                                  type="number"
-                                  step="0.01"
-                                  value={customTP}
-                                  onChange={(
-                                    e: React.ChangeEvent<HTMLInputElement>
-                                  ) => setCustomTP(e.target.value)}
-                                  placeholder="Enter TP value"
-                                  min="0"
-                                  className="h-9 text-sm"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-2.5">
-                      <Button
-                        onClick={() => executeOrder("Buy")}
-                        disabled={isOrdering || !selectedGroup}
-                        className="flex-1 h-9 text-sm bg-emerald-600 hover:bg-emerald-700 text-white"
-                      >
-                        {isOrdering ? "Executing..." : "BUY"}
-                      </Button>
-                      <Button
-                        onClick={() => executeOrder("Sell")}
-                        disabled={isOrdering || !selectedGroup}
-                        className="flex-1 h-9 text-sm bg-rose-600 hover:bg-rose-700 text-white"
-                      >
-                        {isOrdering ? "Executing..." : "SELL"}
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          {/* Reduced panels removed to maximize chart area */}
 
           {/* Order History */}
           {orderHistory.length > 0 && (
