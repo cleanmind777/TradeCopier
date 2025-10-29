@@ -171,10 +171,14 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
       const endTime = new Date();
       const startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
       
+      // Adjust end time to be 10 minutes ago to ensure we're within available data range
+      const safeEndTime = new Date(endTime.getTime() - 10 * 60 * 1000);
+      
       const start = startTime.toISOString();
-      const end = endTime.toISOString();
+      const end = safeEndTime.toISOString();
       
       console.log(`📊 Loading historical data for ${symbolList.length} symbols`);
+      console.log(`📅 Time range: ${start} to ${end}`);
       
       for (const symbol of symbolList) {
         try {

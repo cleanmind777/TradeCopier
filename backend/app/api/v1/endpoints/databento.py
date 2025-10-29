@@ -724,7 +724,34 @@ async def get_historical_chart(
                 detail="DATABENTO_KEY environment variable not set"
             )
         
-        print(f"📊 Fetching historical data for {symbol} from {start} to {end}")
+        # Parse and adjust times to ensure they're within available data range
+        from datetime import datetime, timezone, timedelta
+        
+        # Parse input times
+        start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+        
+        # DataBento typically has data available up to a few minutes ago
+        # Adjust end time to be 5 minutes before current time to be safe
+        current_time = datetime.now(timezone.utc)
+        safe_end_time = current_time - timedelta(minutes=5)
+        
+        # Use the earlier of: requested end time or safe end time
+        if end_dt > safe_end_time:
+            end_dt = safe_end_time
+            print(f"⚠️ Adjusted end time to {end_dt.isoformat()} to stay within available data range")
+        
+        # Ensure start time is not after end time
+        if start_dt >= end_dt:
+            # If start is after or equal to end, go back 1 hour from end
+            start_dt = end_dt - timedelta(hours=1)
+            print(f"⚠️ Adjusted start time to {start_dt.isoformat()} to ensure valid range")
+        
+        # Convert back to ISO strings for the API call
+        start_iso = start_dt.isoformat()
+        end_iso = end_dt.isoformat()
+        
+        print(f"📊 Fetching historical data for {symbol} from {start_iso} to {end_iso}")
         
         # Create a historical client
         client = dbt.Historical(key=settings.DATABENTO_KEY)
@@ -732,8 +759,8 @@ async def get_historical_chart(
         # Request historical OHLCV data
         historical_data = client.timeseries.get_range(
             dataset=DATASET,
-            start=start,
-            end=end,
+            start=start_iso,
+            end=end_iso,
             symbols=[symbol],
             schema=schema,
         )
@@ -759,8 +786,8 @@ async def get_historical_chart(
         
         return {
             "symbol": symbol,
-            "start": start,
-            "end": end,
+            "start": start_iso,
+            "end": end_iso,
             "schema": schema,
             "count": len(records),
             "data": records
