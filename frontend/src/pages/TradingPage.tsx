@@ -817,21 +817,22 @@ const TradingPage: React.FC = () => {
   // }, []);
 
   return (
-    <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
+    <div className="flex bg-slate-50 min-h-screen">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 p-8 space-y-8">
+        <main className="flex-1 p-6 md:p-8 space-y-6 md:space-y-8">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Trading Dashboard</h1>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">Trading</h1>
+              <p className="text-slate-500 text-sm md:text-base">Manage positions, place orders, and monitor group performance</p>
+            </div>
             <div
-              className={`px-4 py-2 rounded-md ${
-                isConnectedToPnL
-                  ? "bg-green-100 text-green-800"
-                  : "bg-red-100 text-red-800"
+              className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-sm ${
+                isConnectedToPnL ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
               }`}
             >
-              PnL Status: {isConnectedToPnL ? "Connected" : "Disconnected"}
+              {isConnectedToPnL ? "PnL: Live" : "PnL: Offline"}
             </div>
           </div>
 
@@ -900,9 +901,9 @@ const TradingPage: React.FC = () => {
           )} */}
           
           {/* Shared Symbol Input */}
-          <Card className="border-0 shadow-md bg-white/80 backdrop-blur">
+          <Card className="border-0 shadow-sm bg-white">
             <CardHeader>
-              <h2 className="text-xl font-bold">Symbol Selection</h2>
+              <h2 className="text-lg font-semibold">Symbol</h2>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
@@ -913,10 +914,13 @@ const TradingPage: React.FC = () => {
                     type="text"
                     value={pendingSymbol}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPendingSymbol(e.target.value)}
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                      if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol);
+                    }}
                     placeholder="e.g., NQ.FUT, ES.FUT, CL.FUT or NQZ5"
                     className="w-full"
                   />
-                  <p className="text-sm text-gray-500">Press Select to apply the typed symbol.</p>
+                  <p className="text-xs text-slate-500">Press Select or Enter to apply the typed symbol</p>
                 </div>
                 <div className="flex items-end">
                   <Button
@@ -929,19 +933,26 @@ const TradingPage: React.FC = () => {
                 </div>
               </div>
               {symbol && (
-                <div className="mt-3 text-sm text-gray-600">
+                <div className="mt-3 text-sm text-slate-600">
                   Selected: <span className="font-semibold">{symbol}</span>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <SymbolsMonitor initialSymbol={symbol} />
+          <Card className="border-0 shadow-sm bg-white">
+            <CardHeader>
+              <h2 className="text-lg font-semibold">Market Monitor</h2>
+            </CardHeader>
+            <CardContent>
+              <SymbolsMonitor initialSymbol={symbol} />
+            </CardContent>
+          </Card>
           
           {/* Trading Interface */}
-          <Card className="border-0 shadow-md bg-white/80 backdrop-blur">
+          <Card className="border-0 shadow-sm bg-white">
             <CardHeader>
-              <h2 className="text-xl font-bold">Trading Interface</h2>
+              <h2 className="text-lg font-semibold">Place Order</h2>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Group Selection */}
@@ -1007,8 +1018,8 @@ const TradingPage: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="text-center">
                         <div className="text-sm text-gray-600 mb-1">Total Group PnL</div>
-                        <div className={`text-2xl font-bold ${
-                          groupPnL.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'
+                        <div className={`text-2xl font-semibold ${
+                          groupPnL.totalPnL >= 0 ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
                           ${groupPnL.totalPnL.toFixed(2)}
                         </div>
@@ -1017,8 +1028,8 @@ const TradingPage: React.FC = () => {
                         <div className="text-sm text-gray-600 mb-1">
                           {symbol ? `${symbol} PnL` : 'Symbol PnL (Select Symbol)'}
                         </div>
-                        <div className={`text-2xl font-bold ${
-                          groupPnL.symbolPnL >= 0 ? 'text-green-600' : 'text-red-600'
+                        <div className={`text-2xl font-semibold ${
+                          groupPnL.symbolPnL >= 0 ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
                           ${groupPnL.symbolPnL.toFixed(2)}
                         </div>
@@ -1030,20 +1041,20 @@ const TradingPage: React.FC = () => {
                       </div>
                       <div className="text-center">
                         <div className="text-sm text-gray-600 mb-1">Connection</div>
-                        <div className={`text-lg font-semibold ${
-                          isConnectedToPnL ? 'text-green-600' : 'text-red-600'
+                        <div className={`text-sm font-medium ${
+                          isConnectedToPnL ? 'text-emerald-600' : 'text-rose-600'
                         }`}>
                           {isConnectedToPnL ? '🟢 Live' : '🔴 Offline'}
                         </div>
                         {groupPnL.lastUpdate && (
-                          <div className="text-xs text-gray-500 mt-1">
+                          <div className="text-xs text-slate-500 mt-1">
                             Last: {groupPnL.lastUpdate}
                           </div>
                         )}
                       </div>
                     </div>
                     {selectedGroup && (
-                      <div className="mt-3 text-xs text-gray-600 text-center">
+                      <div className="mt-3 text-xs text-slate-600 text-center">
                         Tracking {selectedGroup.sub_brokers.length} sub-brokers
                         {symbol && ` for ${symbol}`}
                       </div>
@@ -1174,18 +1185,18 @@ const TradingPage: React.FC = () => {
                     )}
 
                     {/* Action Buttons */}
-                    <div className="flex gap-4">
+                    <div className="flex gap-3">
                       <Button
                         onClick={() => executeOrder("Buy")}
                         disabled={isOrdering || !selectedGroup}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                       >
                         {isOrdering ? "Executing..." : "BUY"}
                       </Button>
                       <Button
                         onClick={() => executeOrder("Sell")}
                         disabled={isOrdering || !selectedGroup}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white"
                       >
                         {isOrdering ? "Executing..." : "SELL"}
                       </Button>
@@ -1198,7 +1209,7 @@ const TradingPage: React.FC = () => {
 
           {/* Order History */}
           {orderHistory.length > 0 && (
-            <Card className="border-0 shadow-md bg-white/80 backdrop-blur">
+            <Card className="border-0 shadow-sm bg-white">
               <CardHeader>
                 <h2 className="text-xl font-bold">Order History</h2>
               </CardHeader>
@@ -1207,14 +1218,14 @@ const TradingPage: React.FC = () => {
                   {orderHistory.slice(0, 10).map((order) => (
                     <div
                       key={order.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
+                      className="flex items-center justify-between p-3 bg-slate-50 rounded-md border border-slate-200 hover:bg-slate-100 transition"
                     >
                       <div className="flex items-center gap-4">
                         <span
                           className={`px-2 py-1 rounded text-xs font-semibold ${
                             order.action === "Buy"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-rose-100 text-rose-800"
                           }`}
                         >
                           {order.action}
