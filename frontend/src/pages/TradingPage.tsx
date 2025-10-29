@@ -673,6 +673,18 @@ const TradingPage: React.FC = () => {
 
       setOrderHistory((prev) => [orderRecord, ...prev]);
 
+      // Refresh dependent data after order so UI (monitor, netPos, equities, pnls) updates
+      try {
+        const [acc, pos] = await Promise.all([
+          getAccounts(user_id),
+          getPositions(user_id),
+        ]);
+        if (acc) setAccounts(acc);
+        if (pos) setPositions(pos);
+      } catch (e) {
+        // Silent fail; SSE/next poll will catch up
+      }
+
       // Reset form
       setOrderQuantity("1");
       setLimitPrice("");
@@ -1017,157 +1029,10 @@ const TradingPage: React.FC = () => {
                 }`}
               >
                 {isConnectedToPnL ? "PnL: Live" : "PnL: Offline"}
-              </div>
+            </div>
             </div>
 
-            {/* Trading Toolbar */}
-            <div className="rounded-md bg-slate-900 text-slate-100 p-2 md:p-2.5 shadow-sm border border-slate-800">
-              <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Symbol</span>
-                <input
-                  value={pendingSymbol}
-                  onChange={(e) => setPendingSymbol(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol); }}
-                  placeholder="NQZ5"
-                  className="h-8 w-28 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                <button
-                  onClick={() => setSymbol(pendingSymbol)}
-                  disabled={!pendingSymbol}
-                  className={`h-8 px-3 rounded text-sm font-medium ${pendingSymbol ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-700 cursor-not-allowed'} text-white`}
-                >
-                  Select
-                </button>
-              </div>
-              <div className="w-px h-6 bg-slate-700" />
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Qty</span>
-                <input
-                  value={orderQuantity}
-                  onChange={(e) => setOrderQuantity(e.target.value)}
-                  type="number"
-                  min={1}
-                  className="h-8 w-16 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div className="w-px h-6 bg-slate-700" />
-              {/* Group select */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Group</span>
-                <select
-                  value={selectedGroup?.id || ""}
-                  onChange={(e) => {
-                    const group = groups.find((g) => g.id === e.target.value);
-                    setSelectedGroup(group || null);
-                  }}
-                  className="h-8 min-w-[160px] rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">Select group</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>{g.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="w-px h-6 bg-slate-700" />
-              {/* Order type and price */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Type</span>
-                <select
-                  value={orderType}
-                  onChange={(e) => setOrderType(e.target.value as any)}
-                  className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="market">Market</option>
-                  <option value="limit">Limit</option>
-                </select>
-                {orderType === "limit" && (
-                  <>
-                    <span className="text-xs text-slate-400">Price</span>
-                    <input
-                      value={limitPrice}
-                      onChange={(e) => setLimitPrice(e.target.value)}
-                      type="number"
-                      step="0.01"
-                      className="h-8 w-24 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </>
-                )}
-              </div>
-              {orderType === "limit" && (
-                <>
-                  <div className="w-px h-6 bg-slate-700" />
-                  {/* SL/TP */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400">SL/TP</span>
-                    <select
-                      value={slTpOption}
-                      onChange={(e) => setSlTpOption(e.target.value as any)}
-                      className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="none">None</option>
-                      <option value="default1">Default1 (10/10)</option>
-                      <option value="default2">Default2 (20/20)</option>
-                      <option value="custom">Custom</option>
-                    </select>
-                    {slTpOption === "custom" && (
-                      <>
-                        <span className="text-xs text-slate-400">SL</span>
-                        <input
-                          value={customSL}
-                          onChange={(e) => setCustomSL(e.target.value)}
-                          type="number"
-                          step="0.01"
-                          className="h-8 w-20 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <span className="text-xs text-slate-400">TP</span>
-                        <input
-                          value={customTP}
-                          onChange={(e) => setCustomTP(e.target.value)}
-                          type="number"
-                          step="0.01"
-                          className="h-8 w-20 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
-              {/* Compact PnL badges */}
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-400">PnL</span>
-                <span className={`${groupPnL.totalPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>${groupPnL.totalPnL.toFixed(0)}</span>
-                {symbol && (
-                  <span className={`${groupPnL.symbolPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>{symbol}: ${groupPnL.symbolPnL.toFixed(0)}</span>
-                )}
-              </div>
-              <div className="w-px h-6 bg-slate-700" />
-              {/* Group balance and symbol net */}
-              <div className="flex items-center gap-3 text-xs text-slate-300">
-                <span>Bal ${groupBalance.toFixed(0)}</span>
-                {symbol && (
-                  <span>Net {groupSymbolNet.netPos} @ {groupSymbolNet.avgNetPrice ? groupSymbolNet.avgNetPrice.toFixed(2) : 0}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => executeOrder("Buy")}
-                  disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
-                  className="h-8 px-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold"
-                  title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
-                >
-                  {orderType === 'limit' ? 'Buy Limit' : 'Buy Mkt'}
-                </button>
-                <button
-                  onClick={() => executeOrder("Sell")}
-                  disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
-                  className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold"
-                  title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
-                >
-                  {orderType === 'limit' ? 'Sell Limit' : 'Sell Mkt'}
-                </button>
-              </div>
-            </div>
+            {/* Toolbar removed: keeping only chart and real-time price */}
 
             {/* Real-time Price Display */}
             {symbol && (
@@ -1209,25 +1074,7 @@ const TradingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Equity per Sub-Broker */}
-            {selectedGroup && Object.keys(subBrokerEquities).length > 0 && (
-              <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
-                <div className="text-xs font-semibold mb-1.5 text-slate-300">Equity per Sub-Broker</div>
-                <div className="flex items-center gap-2 md:gap-4 flex-wrap text-xs">
-                  {Object.values(subBrokerEquities).map((equity) => (
-                    <div key={equity.accountId} className="flex items-center gap-2 bg-slate-700/50 px-2 py-1 rounded">
-                      <span className="text-slate-400">{equity.nickname}:</span>
-                      <span className={`font-semibold ${equity.equity >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        ${equity.equity.toFixed(2)}
-                      </span>
-                      <span className="text-slate-500 text-[10px]">
-                        (Bal: ${equity.balance.toFixed(2)}, PnL: ${equity.unrealizedPnL >= 0 ? '+' : ''}${equity.unrealizedPnL.toFixed(2)})
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Equity per Sub-Broker removed per request */}
           </div>
 
           {/* Real-time Price Chart using Lightweight Charts
@@ -1293,7 +1140,7 @@ const TradingPage: React.FC = () => {
               </CardContent>
             </Card>
           )} */}
-
+          
           {/* Chart - majority of the page */}
           <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '400px' }}>
             <SymbolsMonitor initialSymbol={symbol} compact height={undefined} />
@@ -1301,118 +1148,7 @@ const TradingPage: React.FC = () => {
           
           {/* Reduced panels removed to maximize chart area */}
 
-          {/* Order History */}
-          {orderHistory.length > 0 && (
-            <Card className="flex-shrink-0 border-0 shadow-sm bg-white">
-              <CardHeader>
-                <h2 className="text-base font-semibold">Order History</h2>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {orderHistory.slice(0, 10).map((order) => (
-                    <div
-                      key={order.id}
-                      className="flex items-center justify-between p-2.5 bg-slate-50 rounded-md border border-slate-200 hover:bg-slate-100 transition"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                            order.action === "Buy"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-rose-100 text-rose-800"
-                          }`}
-                        >
-                          {order.action}
-                        </span>
-                        <span className="font-medium text-sm">
-                          {order.quantity} contracts
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {order.orderType}
-                        </span>
-                        {order.limitPrice && (
-                          <span className="text-xs text-gray-500">
-                            @ ${order.limitPrice}
-                          </span>
-                        )}
-                        {order.sl > 0 && (
-                          <span className="text-xs text-red-500">
-                            SL: ${order.sl}
-                          </span>
-                        )}
-                        {order.tp > 0 && (
-                          <span className="text-xs text-green-500">
-                            TP: ${order.tp}
-                          </span>
-                        )}
-                        <span className="text-xs text-gray-500">
-                          Group: {order.groupName}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[11px] ${
-                            order.status === "Pending"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : order.status === "Executed"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                        <span className="text-[11px] text-gray-500">
-                          {new Date(order.timestamp).toLocaleTimeString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            )}
-          </div>
-          
-          {/* Group Position Monitor (like Dashboard) */}
-          {selectedGroup && (
-            <Card className="flex-shrink-0 border-0 shadow-sm bg-white">
-              <CardHeader>
-                <h2 className="text-base font-semibold">Group Position Monitor</h2>
-              </CardHeader>
-              <CardContent>
-                {groupMonitorRows.length === 0 ? (
-                  <div className="text-slate-500 text-sm">No open positions for this group.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-slate-600">
-                        <tr>
-                          <th className="text-left font-semibold px-3 py-2">Group Name</th>
-                          <th className="text-right font-semibold px-3 py-2">Open Position</th>
-                          <th className="text-left font-semibold px-3 py-2">Symbol</th>
-                          <th className="text-right font-semibold px-3 py-2">Open PnL</th>
-                          <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
-                          <th className="text-right font-semibold px-3 py-2">Total Accounts</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {groupMonitorRows.map((row, idx) => (
-                          <tr key={`${row.groupName}-${row.symbol}-${idx}`} className="border-b last:border-0">
-                            <td className="px-3 py-2">{row.groupName}</td>
-                            <td className="px-3 py-2 text-right">{row.openPositions}</td>
-                            <td className="px-3 py-2">{row.symbol}</td>
-                            <td className={`px-3 py-2 text-right ${row.openPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${row.openPnL.toFixed(2)}</td>
-                            <td className={`px-3 py-2 text-right ${row.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${row.realizedPnL.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right">{row.totalAccounts}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          {/* Group Position Monitor removed per request */}
           <LoadingModal isOpen={isOrdering || isPageLoading} message={isOrdering ? "Submitting order..." : "Loading..."} />
         </main>
         <Footer />

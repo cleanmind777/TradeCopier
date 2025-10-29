@@ -59,6 +59,20 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
     }
   }, [compact, symbolInput]);
 
+  // In compact mode, when symbol changes while connected, reconnect to load historical + stream for new symbol
+  useEffect(() => {
+    if (!compact || !symbolInput) return;
+    if (isConnected && !isConnecting) {
+      handleDisconnect();
+      // slight delay to allow cleanup
+      setTimeout(() => {
+        if (!isConnected && !isConnecting) {
+          handleConnect();
+        }
+      }, 0);
+    }
+  }, [symbolInput]);
+
   // Helper function to get current minute timestamp
   const getCurrentMinuteTimestamp = (): number => {
     const now = new Date();
