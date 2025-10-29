@@ -933,28 +933,29 @@ const TradingPage: React.FC = () => {
   // }, []);
 
   return (
-    <div className="flex bg-slate-50 min-h-screen">
+    <div className="flex bg-slate-50 h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <Header />
-        <main className="flex-1 p-4 md:p-5 space-y-4 md:space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">Trading</h1>
-              <p className="text-slate-500 text-xs md:text-sm">Manage positions, place orders, and monitor group performance</p>
+        <main className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 md:p-5">
+          <div className="flex-shrink-0 space-y-4 md:space-y-5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">Trading</h1>
+                <p className="text-slate-500 text-xs md:text-sm">Manage positions, place orders, and monitor group performance</p>
+              </div>
+              <div
+                className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-sm ${
+                  isConnectedToPnL ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+                }`}
+              >
+                {isConnectedToPnL ? "PnL: Live" : "PnL: Offline"}
+              </div>
             </div>
-            <div
-              className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-sm ${
-                isConnectedToPnL ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
-              }`}
-            >
-              {isConnectedToPnL ? "PnL: Live" : "PnL: Offline"}
-            </div>
-          </div>
 
-          {/* Trading Toolbar */}
-          <div className="rounded-md bg-slate-900 text-slate-100 p-2.5 shadow-sm border border-slate-800">
-            <div className="flex items-center gap-2 flex-wrap">
+            {/* Trading Toolbar */}
+            <div className="rounded-md bg-slate-900 text-slate-100 p-2 md:p-2.5 shadow-sm border border-slate-800">
+              <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-slate-400">Symbol</span>
                 <input
@@ -1100,6 +1101,66 @@ const TradingPage: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {/* Real-time Price Display */}
+            {symbol && (
+              <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
+                <div className="flex items-center gap-3 md:gap-6 text-xs flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Bid:</span>
+                    <span className="font-mono font-semibold text-red-400">
+                      {currentPrice.bid?.toFixed(2) || "—"}
+                    </span>
+                    {currentPrice.bidSize !== undefined && (
+                      <span className="text-slate-400">({currentPrice.bidSize})</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Ask:</span>
+                    <span className="font-mono font-semibold text-emerald-400">
+                      {currentPrice.ask?.toFixed(2) || "—"}
+                    </span>
+                    {currentPrice.askSize !== undefined && (
+                      <span className="text-slate-400">({currentPrice.askSize})</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Last:</span>
+                    <span className="font-mono font-semibold">
+                      {currentPrice.last?.toFixed(2) || "—"}
+                    </span>
+                  </div>
+                  {currentPrice.bid && currentPrice.ask && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">Spread:</span>
+                      <span className="font-mono">
+                        {(currentPrice.ask - currentPrice.bid).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Equity per Sub-Broker */}
+            {selectedGroup && Object.keys(subBrokerEquities).length > 0 && (
+              <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
+                <div className="text-xs font-semibold mb-1.5 text-slate-300">Equity per Sub-Broker</div>
+                <div className="flex items-center gap-2 md:gap-4 flex-wrap text-xs">
+                  {Object.values(subBrokerEquities).map((equity) => (
+                    <div key={equity.accountId} className="flex items-center gap-2 bg-slate-700/50 px-2 py-1 rounded">
+                      <span className="text-slate-400">{equity.nickname}:</span>
+                      <span className={`font-semibold ${equity.equity >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        ${equity.equity.toFixed(2)}
+                      </span>
+                      <span className="text-slate-500 text-[10px]">
+                        (Bal: ${equity.balance.toFixed(2)}, PnL: ${equity.unrealizedPnL >= 0 ? '+' : ''}${equity.unrealizedPnL.toFixed(2)})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Real-time Price Chart using Lightweight Charts
@@ -1165,77 +1226,17 @@ const TradingPage: React.FC = () => {
               </CardContent>
             </Card>
           )} */}
-          
-          {/* Real-time Price Display */}
-          {symbol && (
-            <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
-              <div className="flex items-center gap-6 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Bid:</span>
-                  <span className="font-mono font-semibold text-red-400">
-                    {currentPrice.bid?.toFixed(2) || "—"}
-                  </span>
-                  {currentPrice.bidSize !== undefined && (
-                    <span className="text-slate-400">({currentPrice.bidSize})</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Ask:</span>
-                  <span className="font-mono font-semibold text-emerald-400">
-                    {currentPrice.ask?.toFixed(2) || "—"}
-                  </span>
-                  {currentPrice.askSize !== undefined && (
-                    <span className="text-slate-400">({currentPrice.askSize})</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Last:</span>
-                  <span className="font-mono font-semibold">
-                    {currentPrice.last?.toFixed(2) || "—"}
-                  </span>
-                </div>
-                {currentPrice.bid && currentPrice.ask && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-400">Spread:</span>
-                    <span className="font-mono">
-                      {(currentPrice.ask - currentPrice.bid).toFixed(2)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Equity per Sub-Broker */}
-          {selectedGroup && Object.keys(subBrokerEquities).length > 0 && (
-            <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
-              <div className="text-xs font-semibold mb-1.5 text-slate-300">Equity per Sub-Broker</div>
-              <div className="flex items-center gap-4 flex-wrap text-xs">
-                {Object.values(subBrokerEquities).map((equity) => (
-                  <div key={equity.accountId} className="flex items-center gap-2 bg-slate-700/50 px-2 py-1 rounded">
-                    <span className="text-slate-400">{equity.nickname}:</span>
-                    <span className={`font-semibold ${equity.equity >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      ${equity.equity.toFixed(2)}
-                    </span>
-                    <span className="text-slate-500 text-[10px]">
-                      (Bal: ${equity.balance.toFixed(2)}, PnL: ${equity.unrealizedPnL >= 0 ? '+' : ''}${equity.unrealizedPnL.toFixed(2)})
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Chart - majority of the page */}
-          <div className="rounded-md border border-slate-200 overflow-hidden" style={{ height: 'calc(100vh - 340px)' }}>
-            <SymbolsMonitor initialSymbol={symbol} compact height={Math.max(400, window.innerHeight - 360)} />
+          <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '400px' }}>
+            <SymbolsMonitor initialSymbol={symbol} compact height={undefined} />
           </div>
           
           {/* Reduced panels removed to maximize chart area */}
 
           {/* Order History */}
           {orderHistory.length > 0 && (
-            <Card className="border-0 shadow-sm bg-white">
+            <Card className="flex-shrink-0 border-0 shadow-sm bg-white">
               <CardHeader>
                 <h2 className="text-base font-semibold">Order History</h2>
               </CardHeader>
@@ -1302,7 +1303,8 @@ const TradingPage: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-          )}
+            )}
+          </div>
           <LoadingModal isOpen={isOrdering || isPageLoading} message={isOrdering ? "Submitting order..." : "Loading..."} />
         </main>
         <Footer />

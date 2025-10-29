@@ -310,6 +310,11 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
 
     console.log(`Initializing chart for ${symbol}`, container.clientWidth, container.clientHeight);
 
+    // Use container height if height prop is undefined, otherwise use the prop or default
+    const chartHeight = compact 
+      ? (height !== undefined ? height : container.clientHeight || 400)
+      : 300;
+
     const chart = createChart(container, {
       layout: {
         background: { type: ColorType.Solid, color: compact ? '#0f172a' : 'white' },
@@ -320,7 +325,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
         horzLines: { color: compact ? '#1f2937' : '#e0e0e0' },
       },
       width: container.clientWidth,
-      height: compact ? height : 300,
+      height: chartHeight,
       crosshair: {
         mode: 1, // Normal crosshair mode
       },
@@ -435,16 +440,37 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
     // Don't auto-fit content initially - let user control zoom
     // chart.timeScale().fitContent();
 
-    // Handle resize
+    // Handle resize - use ResizeObserver for more accurate container size tracking
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height: containerHeight } = entry.contentRect;
+        if (width > 0 && containerHeight > 0) {
+          const newHeight = compact 
+            ? (height !== undefined ? height : containerHeight)
+            : 300;
+          chart.applyOptions({
+            width,
+            height: newHeight,
+          });
+        }
+      }
+    });
+
+    resizeObserver.observe(container);
+
+    // Also handle window resize as fallback
     const handleResize = () => {
-      chart.applyOptions({
-        width: container.clientWidth,
-      });
+      if (container.clientWidth > 0) {
+        chart.applyOptions({
+          width: container.clientWidth,
+        });
+      }
     };
 
     window.addEventListener('resize', handleResize);
 
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
     };
   };
@@ -536,8 +562,8 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
 
       {/* Price Display */}
       {isConnected && symbols.length > 0 && (
-        <div className={compact ? "w-full h-full" : "bg-white rounded-lg shadow-md p-6 space-y-6"}>
-          <div className="flex items-center justify-between mb-4">
+        <div className={compact ? "w-full h-full flex flex-col min-h-0" : "bg-white rounded-lg shadow-md p-6 space-y-6"}>
+          <div className={`flex items-center justify-between ${compact ? "mb-2 flex-shrink-0" : "mb-4"}`}>
             {!compact && <h3 className="text-xl font-bold text-slate-800">Live Prices</h3>}
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
@@ -594,7 +620,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
             return (
               <div
                 key={symbol}
-                className={compact ? "w-full h-full" : "border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow"}
+                className={compact ? "w-full h-full flex flex-col min-h-0 flex-1" : "border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow"}
               >
                 {!compact && (
                   <h4 className="text-lg font-semibold text-slate-800 mb-3">
@@ -642,15 +668,15 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
                     </div>)}
 
                     {/* Chart */}
-                    <div className="mt-4">
+                    <div className={compact ? "flex-1 min-h-0 flex flex-col" : "mt-4"}>
                       <div
                         ref={(el: HTMLDivElement | null) => {
                           if (el && !chartRefs.current[symbol]) {
                             initializeChart(symbol, el);
                           }
                         }}
-                        className={compact ? "w-full overflow-hidden rounded-md" : "w-full h-[300px] rounded-lg overflow-hidden"}
-                        style={compact ? { height: `${height}px` } : undefined}
+                        className={compact ? (height !== undefined ? "w-full overflow-hidden rounded-md" : "w-full h-full flex-1 min-h-0 overflow-hidden rounded-md") : "w-full h-[300px] rounded-lg overflow-hidden"}
+                        style={compact && height !== undefined ? { height: `${height}px` } : undefined}
                       />
                       {!compact && (
                         <div className="text-xs text-slate-400 mt-2">
