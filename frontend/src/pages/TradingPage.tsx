@@ -25,6 +25,7 @@ import {
   TradovatePositionListResponse,
 } from "../types/broker";
 import { getHistoricalChart } from "../api/databentoApi";
+import LoadingModal from "../components/ui/LoadingModal";
 
 const TradingPage: React.FC = () => {
   // Trading state
@@ -59,6 +60,7 @@ const TradingPage: React.FC = () => {
     netPos: number;
     avgNetPrice: number;
   }>({ netPos: 0, avgNetPrice: 0 });
+  const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
 
   // Offline PnL fallback
   const offlinePnlIntervalRef = useRef<number | null>(null);
@@ -187,12 +189,14 @@ const TradingPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       if (!user_id) return;
+      setIsPageLoading(true);
       const [acc, pos] = await Promise.all([
         getAccounts(user_id),
         getPositions(user_id),
       ]);
       if (acc) setAccounts(acc);
       if (pos) setPositions(pos);
+      setIsPageLoading(false);
     };
     load();
   }, [user_id]);
@@ -836,6 +840,57 @@ const TradingPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Trading Toolbar */}
+          <div className="rounded-md bg-slate-900 text-slate-100 p-2.5 shadow-sm border border-slate-800">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Symbol</span>
+                <input
+                  value={pendingSymbol}
+                  onChange={(e) => setPendingSymbol(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol); }}
+                  placeholder="NQ.FUT"
+                  className="h-8 w-28 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <button
+                  onClick={() => setSymbol(pendingSymbol)}
+                  disabled={!pendingSymbol}
+                  className={`h-8 px-3 rounded text-sm font-medium ${pendingSymbol ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-700 cursor-not-allowed'} text-white`}
+                >
+                  Select
+                </button>
+              </div>
+              <div className="w-px h-6 bg-slate-700" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Qty</span>
+                <input
+                  value={orderQuantity}
+                  onChange={(e) => setOrderQuantity(e.target.value)}
+                  type="number"
+                  min={1}
+                  className="h-8 w-16 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="w-px h-6 bg-slate-700" />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => executeOrder("Buy")}
+                  disabled={isOrdering || !selectedGroup}
+                  className="h-8 px-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold"
+                >
+                  Buy Mkt
+                </button>
+                <button
+                  onClick={() => executeOrder("Sell")}
+                  disabled={isOrdering || !selectedGroup}
+                  className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold"
+                >
+                  Sell Mkt
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Real-time Price Chart using Lightweight Charts
           <Card>
             <CardHeader>
@@ -1283,6 +1338,7 @@ const TradingPage: React.FC = () => {
               </CardContent>
             </Card>
           )}
+          <LoadingModal isOpen={isOrdering || isPageLoading} message={isOrdering ? "Submitting order..." : "Loading..."} />
         </main>
         <Footer />
       </div>
