@@ -60,11 +60,11 @@ const TradingPage: React.FC = () => {
   const offlinePnlIntervalRef = useRef<number | null>(null);
 
   // SL/TP state
-  const [slTpOption] = useState<
+  const [slTpOption, setSlTpOption] = useState<
     "none" | "default1" | "default2" | "custom"
   >("none");
-  const [customSL] = useState<string>("");
-  const [customTP] = useState<string>("");
+  const [customSL, setCustomSL] = useState<string>("");
+  const [customTP, setCustomTP] = useState<string>("");
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const user = localStorage.getItem("user");
@@ -884,6 +884,69 @@ const TradingPage: React.FC = () => {
                 </select>
               </div>
               <div className="w-px h-6 bg-slate-700" />
+              {/* Order type and price */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400">Type</span>
+                <select
+                  value={orderType}
+                  onChange={(e) => setOrderType(e.target.value as any)}
+                  className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="market">Market</option>
+                  <option value="limit">Limit</option>
+                </select>
+                {orderType === "limit" && (
+                  <>
+                    <span className="text-xs text-slate-400">Price</span>
+                    <input
+                      value={limitPrice}
+                      onChange={(e) => setLimitPrice(e.target.value)}
+                      type="number"
+                      step="0.01"
+                      className="h-8 w-24 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </>
+                )}
+              </div>
+              {orderType === "limit" && (
+                <>
+                  <div className="w-px h-6 bg-slate-700" />
+                  {/* SL/TP */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">SL/TP</span>
+                    <select
+                      value={slTpOption}
+                      onChange={(e) => setSlTpOption(e.target.value as any)}
+                      className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="none">None</option>
+                      <option value="default1">Default1 (10/10)</option>
+                      <option value="default2">Default2 (20/20)</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    {slTpOption === "custom" && (
+                      <>
+                        <span className="text-xs text-slate-400">SL</span>
+                        <input
+                          value={customSL}
+                          onChange={(e) => setCustomSL(e.target.value)}
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-20 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-slate-400">TP</span>
+                        <input
+                          value={customTP}
+                          onChange={(e) => setCustomTP(e.target.value)}
+                          type="number"
+                          step="0.01"
+                          className="h-8 w-20 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
               {/* Compact PnL badges */}
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-slate-400">PnL</span>
