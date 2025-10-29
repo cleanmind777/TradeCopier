@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -88,6 +88,73 @@ const TradingPage: React.FC = () => {
   const eventSourceRef = useRef<EventSource | null>(null);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
+
+  // Aggregated group-position monitoring rows by symbol
+  const groupMonitorRows = useMemo(() => {
+    if (!selectedGroup) return [] as Array<{
+      groupName: string;
+      symbol: string;
+      openPositions: number;
+      openPnL: number;
+      realizedPnL: number;
+      totalAccounts: number;
+    }>;
+
+    const accountIdSet = new Set(
+      selectedGroup.sub_brokers.map((s) => parseInt(s.sub_account_id))
+    );
+
+    // Group positions by symbol for accounts in this group
+    const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
+    positions
+      .filter((p) => accountIdSet.has(p.accountId) && (p.netPos ?? 0) !== 0)
+      .forEach((p) => {
+        const sym = (p.symbol || "").toUpperCase();
+        if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
+        symbolToPositions.get(sym)!.push(p);
+      });
+
+    // Sum realized PnL across accounts in group (no per-symbol realized provided)
+    const realizedPnLTotal = accounts
+      .filter((a) => accountIdSet.has(a.accountId))
+      .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
+
+    const totalAccounts = selectedGroup.sub_brokers.length;
+
+    const rows: Array<{
+      groupName: string;
+      symbol: string;
+      openPositions: number;
+      openPnL: number;
+      realizedPnL: number;
+      totalAccounts: number;
+    }> = [];
+
+    for (const [sym, list] of symbolToPositions.entries()) {
+      // Open PnL: sum from live pnlData if available; otherwise estimate 0
+      let openPnLSum = 0;
+      list.forEach((p) => {
+        const key1 = `${p.symbol}:${p.accountId}`;
+        const live = pnlData[key1];
+        if (live && typeof live.unrealizedPnL === "number") {
+          openPnLSum += live.unrealizedPnL;
+        }
+      });
+
+      rows.push({
+        groupName: selectedGroup.name,
+        symbol: sym,
+        openPositions: list.length,
+        openPnL: openPnLSum,
+        realizedPnL: realizedPnLTotal,
+        totalAccounts,
+      });
+    }
+
+    // Sort by symbol for stable display
+    rows.sort((a, b) => a.symbol.localeCompare(b.symbol));
+    return rows;
+  }, [selectedGroup, positions, pnlData, accounts]);
 
   // Typing-only symbol entry (no dropdown)
 
@@ -1305,6 +1372,47 @@ const TradingPage: React.FC = () => {
             </Card>
             )}
           </div>
+          
+          {/* Group Position Monitor (like Dashboard) */}
+          {selectedGroup && (
+            <Card className="flex-shrink-0 border-0 shadow-sm bg-white">
+              <CardHeader>
+                <h2 className="text-base font-semibold">Group Position Monitor</h2>
+              </CardHeader>
+              <CardContent>
+                {groupMonitorRows.length === 0 ? (
+                  <div className="text-slate-500 text-sm">No open positions for this group.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="text-left font-semibold px-3 py-2">Group Name</th>
+                          <th className="text-right font-semibold px-3 py-2">Open Position</th>
+                          <th className="text-left font-semibold px-3 py-2">Symbol</th>
+                          <th className="text-right font-semibold px-3 py-2">Open PnL</th>
+                          <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
+                          <th className="text-right font-semibold px-3 py-2">Total Accounts</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groupMonitorRows.map((row, idx) => (
+                          <tr key={`${row.groupName}-${row.symbol}-${idx}`} className="border-b last:border-0">
+                            <td className="px-3 py-2">{row.groupName}</td>
+                            <td className="px-3 py-2 text-right">{row.openPositions}</td>
+                            <td className="px-3 py-2">{row.symbol}</td>
+                            <td className={`px-3 py-2 text-right ${row.openPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${row.openPnL.toFixed(2)}</td>
+                            <td className={`px-3 py-2 text-right ${row.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${row.realizedPnL.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{row.totalAccounts}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
           <LoadingModal isOpen={isOrdering || isPageLoading} message={isOrdering ? "Submitting order..." : "Loading..."} />
         </main>
         <Footer />
