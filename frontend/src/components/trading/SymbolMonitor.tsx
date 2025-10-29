@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createChart, ColorType, IChartApi, ISeriesApi, CandlestickSeries } from "lightweight-charts";
 import Button from "../ui/Button";
+import { getHistoricalChart } from "../../api/databentoApi";
 
 const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
 
@@ -163,10 +164,49 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "" }) =
     }
 
     setIsConnecting(true);
-    setConnectionStatus("Connecting...");
+    setConnectionStatus("Loading historical data...");
 
     try {
-      // First, subscribe to symbols
+      // Load historical data for each symbol
+      const endTime = new Date();
+      const startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
+      
+      const start = startTime.toISOString();
+      const end = endTime.toISOString();
+      
+      console.log(`📊 Loading historical data for ${symbolList.length} symbols`);
+      
+      for (const symbol of symbolList) {
+        try {
+          const historicalData = await getHistoricalChart(symbol, start, end, "ohlcv-1m");
+          
+          if (historicalData && historicalData.data) {
+            console.log(`✅ Loaded ${historicalData.data.length} historical candles for ${symbol}`);
+            
+            // Convert historical data to OHLCVData format
+            const historicalOhlcv = historicalData.data.map(candle => ({
+              time: Math.floor(new Date(candle.timestamp).getTime() / 1000),
+              open: candle.open,
+              high: candle.high,
+              low: candle.low,
+              close: candle.close,
+              volume: candle.volume
+            }));
+            
+            // Add to existing OHLCV history
+            setOhlcvHistory(prev => ({
+              ...prev,
+              [symbol]: historicalOhlcv
+            }));
+          }
+        } catch (error) {
+          console.error(`❌ Failed to load historical data for ${symbol}:`, error);
+        }
+      }
+      
+      // Now subscribe to real-time data
+      setConnectionStatus("Connecting to real-time stream...");
+      
       const response = await fetch(`${API_BASE}/databento/sse/current-price`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

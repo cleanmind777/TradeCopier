@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 import databento as dbt
 import asyncio
 import json
+import pandas as pd
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.dependencies.database import get_db
@@ -694,3 +695,81 @@ async def sse_pnl_stream(
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@router.get("/historical")
+async def get_historical_chart(
+    symbol: str,
+    start: str,
+    end: str,
+    schema: str = "ohlcv-1m"
+):
+    """
+    Get historical OHLCV data for a symbol
+    
+    Args:
+        symbol: Symbol to fetch data for (e.g., "ES.FUT", "NQ.FUT")
+        start: Start time in ISO format (e.g., "2022-06-06T20:50:00")
+        end: End time in ISO format (e.g., "2022-06-06T21:00:00")
+        schema: Data schema (default: "ohlcv-1m" for 1-minute candles)
+    
+    Returns:
+        Historical OHLCV data as JSON
+    """
+    try:
+        # Check if API key is available
+        if not settings.DATABENTO_KEY:
+            raise HTTPException(
+                status_code=500,
+                detail="DATABENTO_KEY environment variable not set"
+            )
+        
+        print(f"📊 Fetching historical data for {symbol} from {start} to {end}")
+        
+        # Create a historical client
+        client = dbt.Historical(key=settings.DATABENTO_KEY)
+        
+        # Request historical OHLCV data
+        historical_data = client.timeseries.get_range(
+            dataset=DATASET,
+            start=start,
+            end=end,
+            symbols=[symbol],
+            schema=schema,
+        )
+        
+        # Convert to DataFrame
+        df = historical_data.to_df().reset_index()
+        
+        # Convert DataFrame to records
+        records = []
+        for _, row in df.iterrows():
+            record = {
+                "timestamp": row.get("ts_event", ""),
+                "symbol": row.get("symbol", symbol),
+                "open": float(row.get("open", 0)),
+                "high": float(row.get("high", 0)),
+                "low": float(row.get("low", 0)),
+                "close": float(row.get("close", 0)),
+                "volume": int(row.get("volume", 0)),
+            }
+            records.append(record)
+        
+        print(f"✅ Fetched {len(records)} historical candles for {symbol}")
+        
+        return {
+            "symbol": symbol,
+            "start": start,
+            "end": end,
+            "schema": schema,
+            "count": len(records),
+            "data": records
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Error fetching historical data: {error_msg}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching historical data: {error_msg}"
+        )
