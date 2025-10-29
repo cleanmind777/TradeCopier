@@ -24,7 +24,7 @@ import {
   TradovateAccountsResponse,
   TradovatePositionListResponse,
 } from "../types/broker";
-import { getHistoricalChart, getAvailableSymbols } from "../api/databentoApi";
+import { getHistoricalChart } from "../api/databentoApi";
 
 const TradingPage: React.FC = () => {
   // Trading state
@@ -36,7 +36,6 @@ const TradingPage: React.FC = () => {
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
   const [symbol, setSymbol] = useState<string>("");
-  const [availableSymbols, setAvailableSymbols] = useState<{ symbol: string; name: string }[]>([]);
   const [pendingSymbol, setPendingSymbol] = useState<string>("");
   
   // PnL tracking state
@@ -75,16 +74,7 @@ const TradingPage: React.FC = () => {
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
 
-  // Load selectable symbols
-  useEffect(() => {
-    const loadSymbols = async () => {
-      const res = await getAvailableSymbols();
-      if (res?.futures) {
-        setAvailableSymbols(res.futures);
-      }
-    };
-    loadSymbols();
-  }, []);
+  // Typing-only symbol entry (no dropdown)
 
   // Calculate PnL for selected group and symbol
   const calculateGroupPnL = () => {
@@ -917,23 +907,7 @@ const TradingPage: React.FC = () => {
             <CardContent>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="symbol-select">Choose a symbol</Label>
-                  <select
-                    id="symbol-select"
-                    value={pendingSymbol}
-                    onChange={(e) => setPendingSymbol(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    {availableSymbols.map((s) => (
-                      <option key={s.symbol} value={s.symbol}>
-                        {s.symbol} — {s.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-sm text-gray-500">
-                    Or type a custom symbol below if needed
-                  </p>
+                  <Label htmlFor="symbol-input">Type a symbol</Label>
                   <Input
                     id="symbol-input"
                     type="text"
@@ -942,6 +916,7 @@ const TradingPage: React.FC = () => {
                     placeholder="e.g., NQ.FUT, ES.FUT, CL.FUT or NQZ5"
                     className="w-full"
                   />
+                  <p className="text-sm text-gray-500">Press Select to apply the typed symbol.</p>
                 </div>
                 <div className="flex items-end">
                   <Button
