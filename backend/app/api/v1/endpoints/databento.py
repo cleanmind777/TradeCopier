@@ -7,6 +7,7 @@ import databento as dbt
 import asyncio
 import json
 import pandas as pd
+import re
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.dependencies.database import get_db
@@ -756,14 +757,55 @@ async def get_historical_chart(
         # Create a historical client
         client = dbt.Historical(key=settings.DATABENTO_KEY)
         
-        # Request historical OHLCV data
-        historical_data = client.timeseries.get_range(
-            dataset=DATASET,
-            start=start_iso,
-            end=end_iso,
-            symbols=[symbol],
-            schema=schema,
-        )
+        # Try to request historical OHLCV data with retry logic
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                historical_data = client.timeseries.get_range(
+                    dataset=DATASET,
+                    start=start_iso,
+                    end=end_iso,
+                    symbols=[symbol],
+                    schema=schema,
+                )
+                break  # Success, exit retry loop
+                
+            except Exception as api_error:
+                error_msg = str(api_error)
+                
+                # Check if it's the specific "data_end_after_available_end" error
+                if "data_end_after_available_end" in error_msg and retry_count < max_retries - 1:
+                    retry_count += 1
+                    print(f"⚠️ Retry {retry_count}/{max_retries}: {error_msg}")
+                    
+                    # Extract the available end time from the error message if possible
+                    # Format: "data available up to '2025-10-29 05:20:00+00:00'"
+                    match = re.search(r"data available up to '([^']+)'", error_msg)
+                    if match:
+                        available_end_str = match.group(1)
+                        try:
+                            available_end = datetime.fromisoformat(available_end_str)
+                            # Set end time to 1 minute before available end
+                            end_dt = available_end - timedelta(minutes=1)
+                            end_iso = end_dt.isoformat()
+                            print(f"🔄 Adjusted end time to {end_iso} based on available data range")
+                        except:
+                            # If parsing fails, just subtract more time
+                            end_dt = end_dt - timedelta(minutes=10)
+                            end_iso = end_dt.isoformat()
+                            print(f"🔄 Fallback: Adjusted end time to {end_iso}")
+                    else:
+                        # If we can't parse the available end time, subtract more time
+                        end_dt = end_dt - timedelta(minutes=10)
+                        end_iso = end_dt.isoformat()
+                        print(f"🔄 Fallback: Adjusted end time to {end_iso}")
+                    
+                    continue  # Retry with adjusted time
+                else:
+                    # Re-raise the error if it's not the specific error or we've exhausted retries
+                    raise api_error
         
         # Convert to DataFrame
         df = historical_data.to_df().reset_index()
