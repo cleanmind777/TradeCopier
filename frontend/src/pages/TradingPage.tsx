@@ -12,6 +12,8 @@ import {
   executeLimitOrder,
   executeLimitOrderWithSLTP,
   executeMarketOrder,
+  getAccounts,
+  getPositions,
 } from "../api/brokerApi";
 import { getGroup } from "../api/groupApi";
 import { GroupInfo } from "../types/group";
@@ -19,7 +21,10 @@ import {
   MarketOrder,
   LimitOrder,
   LimitOrderWithSLTP,
+  TradovateAccountsResponse,
+  TradovatePositionListResponse,
 } from "../types/broker";
+import { getHistoricalChart } from "../api/databentoApi";
 
 const TradingPage: React.FC = () => {
   // Trading state
@@ -44,6 +49,18 @@ const TradingPage: React.FC = () => {
     symbolPnL: 0,
     lastUpdate: ""
   });
+
+  // Accounts and positions for aggregates/balance
+  const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
+  const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
+  const [groupBalance, setGroupBalance] = useState<number>(0);
+  const [groupSymbolNet, setGroupSymbolNet] = useState<{
+    netPos: number;
+    avgNetPrice: number;
+  }>({ netPos: 0, avgNetPrice: 0 });
+
+  // Offline PnL fallback
+  const offlinePnlIntervalRef = useRef<number | null>(null);
 
   // SL/TP state
   const [slTpOption, setSlTpOption] = useState<
@@ -117,6 +134,126 @@ const TradingPage: React.FC = () => {
       lastUpdate: lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : ""
     });
   };
+
+  // Helper: map symbol prefix to valuePerPoint for approximate PnL when offline
+  const getValuePerPoint = (sym: string): number => {
+    const s = (sym || "").toUpperCase();
+    if (s.startsWith("MNQ")) return 2; // Micro NASDAQ
+    if (s.startsWith("NQ")) return 20; // E-mini NASDAQ
+    if (s.startsWith("MES")) return 5; // Micro S&P
+    if (s.startsWith("ES")) return 50; // E-mini S&P
+    if (s.startsWith("MYM")) return 0.5 * 10; // Micro YM often $0.5/tick, $5/point
+    if (s.startsWith("YM")) return 5;  // E-mini Dow $5/point
+    if (s.startsWith("M2K")) return 5; // Micro Russell
+    if (s.startsWith("RTY")) return 50; // E-mini Russell
+    if (s.startsWith("MGC")) return 10; // Micro Gold $10/point
+    if (s.startsWith("GC")) return 100; // Gold $100/point
+    if (s.startsWith("MCL")) return 10; // Micro Crude
+    if (s.startsWith("CL")) return 1000 / 100; // $1000 per $1, treat per point ~ 1000
+    return 50; // default
+  };
+
+  // Derive group total balance from accounts
+  useEffect(() => {
+    if (!selectedGroup || accounts.length === 0) {
+      setGroupBalance(0);
+      return;
+    }
+    const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
+    const total = accounts
+      .filter(a => ids.has(a.accountId))
+      .reduce((sum, a) => sum + (a.amount || 0), 0);
+    setGroupBalance(total);
+  }, [selectedGroup, accounts]);
+
+  // Derive group symbol aggregates (net position and avg net price)
+  useEffect(() => {
+    if (!selectedGroup || !symbol || positions.length === 0) {
+      setGroupSymbolNet({ netPos: 0, avgNetPrice: 0 });
+      return;
+    }
+    const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
+    const filtered = positions.filter(p => ids.has(p.accountId) && p.symbol?.toUpperCase().startsWith(symbol.toUpperCase().slice(0, 2)));
+    const totalQty = filtered.reduce((sum, p) => sum + (p.netPos || 0), 0);
+    const weightedPriceNumer = filtered.reduce((sum, p) => sum + (p.netPos || 0) * (p.netPrice || 0), 0);
+    const avgPrice = totalQty !== 0 ? weightedPriceNumer / totalQty : 0;
+    setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
+  }, [selectedGroup, symbol, positions]);
+
+  // Fetch accounts and positions
+  useEffect(() => {
+    const load = async () => {
+      if (!user_id) return;
+      const [acc, pos] = await Promise.all([
+        getAccounts(user_id),
+        getPositions(user_id),
+      ]);
+      if (acc) setAccounts(acc);
+      if (pos) setPositions(pos);
+    };
+    load();
+  }, [user_id]);
+
+  // Offline PnL calculation using historical last price
+  const calculateOfflinePnL = async () => {
+    try {
+      if (!selectedGroup) return;
+      if (!symbol) return;
+      if (positions.length === 0) return;
+
+      const now = new Date();
+      const endIso = new Date(now.getTime() - 60 * 1000).toISOString();
+      const startIso = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+
+      const hist = await getHistoricalChart(symbol, startIso, endIso, "ohlcv-1m");
+      if (!hist || !hist.data || hist.data.length === 0) return;
+      const lastClose = hist.data[hist.data.length - 1].close;
+
+      const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
+      const relevant = positions.filter(p => ids.has(p.accountId) && p.netPos !== 0 && p.symbol?.toUpperCase().startsWith(symbol.toUpperCase().slice(0, 2)));
+
+      let totalPnL = 0;
+      let symbolPnL = 0;
+      for (const p of relevant) {
+        const vpp = getValuePerPoint(p.symbol || symbol);
+        const qty = p.netPos;
+        const entry = p.netPrice || 0;
+        const priceDiff = qty >= 0 ? (lastClose - entry) : (entry - lastClose);
+        const pnl = priceDiff * Math.abs(qty) * vpp;
+        totalPnL += pnl;
+        symbolPnL += pnl;
+      }
+      setGroupPnL(() => ({
+        totalPnL: Math.round(totalPnL * 100) / 100,
+        symbolPnL: Math.round(symbolPnL * 100) / 100,
+        lastUpdate: new Date().toLocaleTimeString(),
+      }));
+    } catch (e) {
+      // Silent fail to avoid UI spam
+    }
+  };
+
+  // Trigger offline PnL when SSE disconnects
+  useEffect(() => {
+    if (isConnectedToPnL) {
+      if (offlinePnlIntervalRef.current) {
+        window.clearInterval(offlinePnlIntervalRef.current);
+        offlinePnlIntervalRef.current = null;
+      }
+      return;
+    }
+    // Immediately compute once, then every 30s
+    calculateOfflinePnL();
+    offlinePnlIntervalRef.current = window.setInterval(() => {
+      calculateOfflinePnL();
+    }, 30000) as any;
+    return () => {
+      if (offlinePnlIntervalRef.current) {
+        window.clearInterval(offlinePnlIntervalRef.current);
+        offlinePnlIntervalRef.current = null;
+      }
+    };
+  }, [isConnectedToPnL, selectedGroup, symbol, positions]);
 
   // Connect to PnL SSE stream
   const connectToPnLStream = () => {
@@ -831,6 +968,20 @@ const TradingPage: React.FC = () => {
                       <div>
                         <span className="text-gray-500">Sub-brokers:</span>{" "}
                         {selectedGroup.sub_brokers.length}
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Total Balance:</span>{" "}
+                        ${groupBalance.toFixed(2)}
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Symbol Net / Avg:</span>{" "}
+                        {symbol ? (
+                          <>
+                            {groupSymbolNet.netPos} @ ${groupSymbolNet.avgNetPrice.toFixed(2)}
+                          </>
+                        ) : (
+                          <span className="text-gray-400">Select symbol</span>
+                        )}
                       </div>
                     </div>
                   </div>
