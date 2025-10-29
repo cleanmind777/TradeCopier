@@ -220,8 +220,10 @@ def change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
 async def get_positions(db: Session, user_id: UUID):
     positions_status: list[TradovatePositionListResponse] = []
     positions_for_frontend: list[TradovatePositionListForFrontend] = []
-    db_broker_accounts = db.query(BrokerAccount).filter(
-        BrokerAccount.user_id == user_id
+    db_broker_accounts = (
+        db.query(BrokerAccount)
+        .filter(BrokerAccount.user_id == user_id)
+        .all()
     )
     for db_broker_account in db_broker_accounts:
         demo_positions = get_position_list_of_demo_account(
@@ -274,8 +276,10 @@ async def get_positions(db: Session, user_id: UUID):
 async def get_orders(db: Session, user_id: UUID):
     order_status: list[TradovateOrderListResponse] = []
     order_for_frontend = []
-    db_broker_accounts = db.query(BrokerAccount).filter(
-        BrokerAccount.user_id == user_id
+    db_broker_accounts = (
+        db.query(BrokerAccount)
+        .filter(BrokerAccount.user_id == user_id)
+        .all()
     )
     for db_broker_account in db_broker_accounts:
         demo_orders = get_order_list_of_demo_account(db_broker_account.access_token)
@@ -329,8 +333,10 @@ async def get_orders(db: Session, user_id: UUID):
 async def get_accounts(db: Session, user_id: UUID):
     accounts_status: list[TradovateCashBalanceResponse] = []
     accounts_for_dashboard = []
-    db_broker_accounts = db.query(BrokerAccount).filter(
-        BrokerAccount.user_id == user_id
+    db_broker_accounts = (
+        db.query(BrokerAccount)
+        .filter(BrokerAccount.user_id == user_id)
+        .all()
     )
     for db_broker_account in db_broker_accounts:
         demo_accounts = get_cash_balances(db_broker_account.access_token, True)
