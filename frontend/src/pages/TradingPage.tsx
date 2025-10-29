@@ -11,6 +11,8 @@ import {
   executeMarketOrder,
   getAccounts,
   getPositions,
+  getOrders,
+  exitAllPostions,
 } from "../api/brokerApi";
 import { getGroup } from "../api/groupApi";
 import { GroupInfo } from "../types/group";
@@ -52,6 +54,7 @@ const TradingPage: React.FC = () => {
   // Accounts and positions for aggregates/balance
   const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
   const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [groupBalance, setGroupBalance] = useState<number>(0); // kept for future toolbar summaries
   const [groupSymbolNet, setGroupSymbolNet] = useState<{ netPos: number; avgNetPrice: number; }>({ netPos: 0, avgNetPrice: 0 });
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
@@ -88,6 +91,9 @@ const TradingPage: React.FC = () => {
   const eventSourceRef = useRef<EventSource | null>(null);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
+
+  // Monitor tabs
+  const [activeTab, setActiveTab] = useState<"positions" | "orders" | "accounts">("positions");
 
   // Aggregated group-position monitoring rows by symbol
   const groupMonitorRows = useMemo(() => {
@@ -270,16 +276,50 @@ const TradingPage: React.FC = () => {
     const load = async () => {
       if (!user_id) return;
       setIsPageLoading(true);
-      const [acc, pos] = await Promise.all([
+      const [acc, pos, ord] = await Promise.all([
         getAccounts(user_id),
         getPositions(user_id),
+        getOrders(user_id),
       ]);
       if (acc) setAccounts(acc);
       if (pos) setPositions(pos);
+      if (ord) setOrders(ord);
       setIsPageLoading(false);
     };
     load();
   }, [user_id]);
+
+  const handleFlattenAll = async () => {
+    try {
+      setIsOrdering(true);
+      const exitList = positions.map((position) => {
+        const action = position.netPos > 0 ? "Sell" : "Buy";
+        return {
+          accountId: position.accountId,
+          action,
+          symbol: position.symbol,
+          orderQty: Math.abs(position.netPos),
+          orderType: "Market",
+          isAutomated: true,
+        };
+      });
+      if (exitList.length > 0) {
+        await exitAllPostions(exitList as any);
+      }
+      const [acc, pos, ord] = await Promise.all([
+        getAccounts(user_id),
+        getPositions(user_id),
+        getOrders(user_id),
+      ]);
+      if (acc) setAccounts(acc);
+      if (pos) setPositions(pos);
+      if (ord) setOrders(ord);
+    } catch (e) {
+      console.error("Flatten all failed", e);
+    } finally {
+      setIsOrdering(false);
+    }
+  };
 
   // Offline PnL calculation using historical last price
   const calculateOfflinePnL = async () => {
@@ -675,12 +715,14 @@ const TradingPage: React.FC = () => {
 
       // Refresh dependent data after order so UI (monitor, netPos, equities, pnls) updates
       try {
-        const [acc, pos] = await Promise.all([
+        const [acc, pos, ord] = await Promise.all([
           getAccounts(user_id),
           getPositions(user_id),
+          getOrders(user_id),
         ]);
         if (acc) setAccounts(acc);
         if (pos) setPositions(pos);
+        if (ord) setOrders(ord);
       } catch (e) {
         // Silent fail; SSE/next poll will catch up
       }
@@ -1146,7 +1188,103 @@ const TradingPage: React.FC = () => {
             <SymbolsMonitor initialSymbol={symbol} compact height={undefined} />
           </div>
           
-          {/* Reduced panels removed to maximize chart area */}
+          {/* Monitor Tabs (Group Positions, Orders, Accounts) */}
+          {selectedGroup && (
+            <div className="mt-4 bg-white rounded-md border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between p-3 border-b border-slate-200">
+                <div className="flex gap-2">
+                  <button onClick={() => setActiveTab('positions')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='positions' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Positions</button>
+                  <button onClick={() => setActiveTab('orders')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='orders' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Orders</button>
+                  <button onClick={() => setActiveTab('accounts')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='accounts' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Accounts</button>
+                </div>
+                <button onClick={handleFlattenAll} disabled={isOrdering || positions.length===0} className="px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">Flatten All / Exit All & Cancel All</button>
+              </div>
+              <div className="p-3 overflow-x-auto">
+                {activeTab === 'positions' && (
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">Group Name</th>
+                        <th className="text-right font-semibold px-3 py-2">Open Position</th>
+                        <th className="text-left font-semibold px-3 py-2">Symbol</th>
+                        <th className="text-right font-semibold px-3 py-2">Open PnL</th>
+                        <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
+                        <th className="text-right font-semibold px-3 py-2">Total Accounts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupMonitorRows.map((row, idx) => (
+                        <tr key={`${row.groupName}-${row.symbol}-${idx}`} className="border-b last:border-0">
+                          <td className="px-3 py-2">{row.groupName}</td>
+                          <td className="px-3 py-2 text-right">{row.openPositions}</td>
+                          <td className="px-3 py-2">{row.symbol}</td>
+                          <td className={`px-3 py-2 text-right ${row.openPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${row.openPnL.toFixed(2)}</td>
+                          <td className={`px-3 py-2 text-right ${row.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${row.realizedPnL.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right">{row.totalAccounts}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {activeTab === 'orders' && (
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">Account</th>
+                        <th className="text-left font-semibold px-3 py-2">Display</th>
+                        <th className="text-left font-semibold px-3 py-2">Symbol</th>
+                        <th className="text-left font-semibold px-3 py-2">Action</th>
+                        <th className="text-left font-semibold px-3 py-2">Status</th>
+                        <th className="text-left font-semibold px-3 py-2">Time</th>
+                        <th className="text-right font-semibold px-3 py-2">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders
+                        .filter(o => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === o.accountId))
+                        .map((order) => (
+                        <tr key={order.id} className="border-b last:border-0">
+                          <td className="px-3 py-2">{order.accountNickname}</td>
+                          <td className="px-3 py-2">{order.accountDisplayName}</td>
+                          <td className="px-3 py-2">{order.symbol}</td>
+                          <td className="px-3 py-2">{order.action}</td>
+                          <td className="px-3 py-2">{order.ordStatus}</td>
+                          <td className="px-3 py-2">{new Date(order.timestamp).toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right">{order.price}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {activeTab === 'accounts' && (
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">Account</th>
+                        <th className="text-left font-semibold px-3 py-2">Display</th>
+                        <th className="text-right font-semibold px-3 py-2">Amount</th>
+                        <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
+                        <th className="text-right font-semibold px-3 py-2">Week PnL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accounts
+                        .filter(a => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === a.accountId))
+                        .map((account) => (
+                        <tr key={account.id} className="border-b last:border-0">
+                          <td className="px-3 py-2">{account.accountNickname}</td>
+                          <td className="px-3 py-2">{account.accountDisplayName}</td>
+                          <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
+                          <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
+                          <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Group Position Monitor removed per request */}
           <LoadingModal isOpen={isOrdering || isPageLoading} message={isOrdering ? "Submitting order..." : "Loading..."} />
