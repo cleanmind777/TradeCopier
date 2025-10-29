@@ -93,7 +93,7 @@ async def verify_otp_code(
             httponly=True,
             secure=settings.ENVIRONMENT == "production",  # Set based on environment
             samesite="lax",  # Changed to lax for better compatibility
-            max_age=1800,  # 30 minutes in seconds
+            max_age=int(settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60),  # align cookie to token expiry
         )
         response.set_cookie(
             key="refresh_token",
