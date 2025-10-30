@@ -246,9 +246,9 @@ def place_order(access_token: str, is_demo: bool, order: ExitPosition):
     print(order)
     headers = {"Authorization": f"Bearer {access_token}"}
     url = (
-        f"{TRADO_DEMO_URL}/order/placeorder"
+        f"{TRADO_DEMO_URL}/order/placeOrder"
         if is_demo
-        else f"{TRADO_LIVE_URL}/order/placeorder"
+        else f"{TRADO_LIVE_URL}/order/placeOrder"
     )
 
     try:
