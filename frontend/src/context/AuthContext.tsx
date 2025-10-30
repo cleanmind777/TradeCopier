@@ -114,6 +114,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    // Redirect to login page
+    window.location.href = '/login';
   };
 
   const value: AuthContextType = {

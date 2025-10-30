@@ -35,8 +35,8 @@ const TradingPage: React.FC = () => {
   const [limitPrice, setLimitPrice] = useState<string>("");
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
-  const [symbol, setSymbol] = useState<string>("");
-  const [pendingSymbol, setPendingSymbol] = useState<string>("");
+  const [symbol, setSymbol] = useState<string>("NQZ5");
+  const [pendingSymbol, setPendingSymbol] = useState<string>("NQZ5");
   
   // PnL tracking state
   const [pnlData, setPnlData] = useState<Record<string, any>>({});
@@ -95,9 +95,9 @@ const TradingPage: React.FC = () => {
   // Monitor tabs
   const [activeTab, setActiveTab] = useState<"positions" | "orders" | "accounts">("positions");
 
-  // Aggregated group-position monitoring rows by symbol
+  // Aggregated group-position monitoring rows by symbol for ALL groups and ALL symbols
   const groupMonitorRows = useMemo(() => {
-    if (!selectedGroup) return [] as Array<{
+    if (groups.length === 0 || positions.length === 0) return [] as Array<{
       groupName: string;
       symbol: string;
       openPositions: number;
@@ -105,27 +105,6 @@ const TradingPage: React.FC = () => {
       realizedPnL: number;
       totalAccounts: number;
     }>;
-
-    const accountIdSet = new Set(
-      selectedGroup.sub_brokers.map((s) => parseInt(s.sub_account_id))
-    );
-
-    // Group positions by symbol for accounts in this group
-    const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
-    positions
-      .filter((p) => accountIdSet.has(p.accountId) && (p.netPos ?? 0) !== 0)
-      .forEach((p) => {
-        const sym = (p.symbol || "").toUpperCase();
-        if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
-        symbolToPositions.get(sym)!.push(p);
-      });
-
-    // Sum realized PnL across accounts in group (no per-symbol realized provided)
-    const realizedPnLTotal = accounts
-      .filter((a) => accountIdSet.has(a.accountId))
-      .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
-
-    const totalAccounts = selectedGroup.sub_brokers.length;
 
     const rows: Array<{
       groupName: string;
@@ -136,31 +115,64 @@ const TradingPage: React.FC = () => {
       totalAccounts: number;
     }> = [];
 
-    for (const [sym, list] of symbolToPositions.entries()) {
-      // Open PnL: sum from live pnlData if available; otherwise estimate 0
-      let openPnLSum = 0;
-      list.forEach((p) => {
-        const key1 = `${p.symbol}:${p.accountId}`;
-        const live = pnlData[key1];
-        if (live && typeof live.unrealizedPnL === "number") {
-          openPnLSum += live.unrealizedPnL;
-        }
-      });
+    // Loop through ALL groups
+    for (const group of groups) {
+      const accountIdSet = new Set(
+        group.sub_brokers.map((s) => parseInt(s.sub_account_id))
+      );
 
-      rows.push({
-        groupName: selectedGroup.name,
-        symbol: sym,
-        openPositions: list.length,
-        openPnL: openPnLSum,
-        realizedPnL: realizedPnLTotal,
-        totalAccounts,
-      });
+      // Group positions by symbol for accounts in this group
+      const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
+      positions
+        .filter((p) => accountIdSet.has(p.accountId) && (p.netPos ?? 0) !== 0)
+        .forEach((p) => {
+          const sym = (p.symbol || "").toUpperCase();
+          if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
+          symbolToPositions.get(sym)!.push(p);
+        });
+
+      // Sum realized PnL across accounts in group
+      const realizedPnLTotal = accounts
+        .filter((a) => accountIdSet.has(a.accountId))
+        .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
+
+      const totalAccounts = group.sub_brokers.length;
+
+      // For each symbol in this group
+      for (const [sym, list] of symbolToPositions.entries()) {
+        // Open Position: total net position (sum of netPos values)
+        const totalNetPos = list.reduce((sum, p) => sum + (p.netPos || 0), 0);
+
+        // Open PnL: sum from live pnlData if available
+        let openPnLSum = 0;
+        list.forEach((p) => {
+          const key1 = `${p.symbol}:${p.accountId}`;
+          const live = pnlData[key1];
+          if (live && typeof live.unrealizedPnL === "number") {
+            openPnLSum += live.unrealizedPnL;
+          }
+        });
+
+        rows.push({
+          groupName: group.name,
+          symbol: sym,
+          openPositions: totalNetPos, // Total net position for this group/symbol
+          openPnL: openPnLSum,
+          realizedPnL: realizedPnLTotal,
+          totalAccounts,
+        });
+      }
     }
 
-    // Sort by symbol for stable display
-    rows.sort((a, b) => a.symbol.localeCompare(b.symbol));
+    // Sort by group name, then symbol for stable display
+    rows.sort((a, b) => {
+      if (a.groupName !== b.groupName) {
+        return a.groupName.localeCompare(b.groupName);
+      }
+      return a.symbol.localeCompare(b.symbol);
+    });
     return rows;
-  }, [selectedGroup, positions, pnlData, accounts]);
+  }, [groups, positions, pnlData, accounts]);
 
   // Typing-only symbol entry (no dropdown)
 
@@ -1358,18 +1370,17 @@ const TradingPage: React.FC = () => {
           </div>
           
           {/* Monitor Tabs (Group Positions, Orders, Accounts) */}
-          {selectedGroup && (
-            <div className="mt-4 bg-white rounded-md border border-slate-200 shadow-sm">
-              <div className="flex items-center justify-between p-3 border-b border-slate-200">
-                <div className="flex gap-2">
-                  <button onClick={() => setActiveTab('positions')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='positions' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Positions</button>
-                  <button onClick={() => setActiveTab('orders')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='orders' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Orders</button>
-                  <button onClick={() => setActiveTab('accounts')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='accounts' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Accounts</button>
-                </div>
-                <button onClick={handleFlattenAll} disabled={isOrdering || positions.length===0} className="px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">Flatten All / Exit All & Cancel All</button>
+          <div className="mt-4 bg-white rounded-md border border-slate-200 shadow-sm">
+            <div className="flex items-center justify-between p-3 border-b border-slate-200">
+              <div className="flex gap-2">
+                <button onClick={() => setActiveTab('positions')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='positions' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Positions</button>
+                <button onClick={() => setActiveTab('orders')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='orders' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Orders</button>
+                <button onClick={() => setActiveTab('accounts')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='accounts' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Accounts</button>
               </div>
-              <div className="p-3 overflow-x-auto">
-                {activeTab === 'positions' && (
+              <button onClick={handleFlattenAll} disabled={isOrdering || positions.length===0} className="px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">Flatten All / Exit All & Cancel All</button>
+            </div>
+            <div className="p-3 overflow-x-auto">
+              {activeTab === 'positions' && (
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
@@ -1396,22 +1407,23 @@ const TradingPage: React.FC = () => {
                   </table>
                 )}
                 {activeTab === 'orders' && (
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="text-left font-semibold px-3 py-2">Account</th>
-                        <th className="text-left font-semibold px-3 py-2">Display</th>
-                        <th className="text-left font-semibold px-3 py-2">Symbol</th>
-                        <th className="text-left font-semibold px-3 py-2">Action</th>
-                        <th className="text-left font-semibold px-3 py-2">Status</th>
-                        <th className="text-left font-semibold px-3 py-2">Time</th>
-                        <th className="text-right font-semibold px-3 py-2">Price</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders
-                        .filter(o => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === o.accountId))
-                        .map((order) => (
+                  selectedGroup ? (
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-slate-600">
+                        <tr>
+                          <th className="text-left font-semibold px-3 py-2">Account</th>
+                          <th className="text-left font-semibold px-3 py-2">Display</th>
+                          <th className="text-left font-semibold px-3 py-2">Symbol</th>
+                          <th className="text-left font-semibold px-3 py-2">Action</th>
+                          <th className="text-left font-semibold px-3 py-2">Status</th>
+                          <th className="text-left font-semibold px-3 py-2">Time</th>
+                          <th className="text-right font-semibold px-3 py-2">Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {orders
+                          .filter(o => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === o.accountId))
+                          .map((order) => (
                         <tr key={order.id} className="border-b last:border-0">
                           <td className="px-3 py-2">{order.accountNickname}</td>
                           <td className="px-3 py-2">{order.accountDisplayName}</td>
@@ -1422,10 +1434,14 @@ const TradingPage: React.FC = () => {
                           <td className="px-3 py-2 text-right">{order.price}</td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="text-center py-4 text-slate-500">Please select a group to view orders</div>
+                  )
                 )}
                 {activeTab === 'accounts' && (
+                  selectedGroup ? (
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
@@ -1448,12 +1464,14 @@ const TradingPage: React.FC = () => {
                           <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
                         </tr>
                       ))}
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="text-center py-4 text-slate-500">Please select a group to view accounts</div>
+                  )
                 )}
               </div>
             </div>
-          )}
 
           {/* Group Position Monitor removed per request */}
           <LoadingModal isOpen={isOrdering || isPageLoading} message={isOrdering ? "Submitting order..." : "Loading..."} />
