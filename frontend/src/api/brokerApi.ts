@@ -239,7 +239,8 @@ export const exitAllPostions = async (exitPostionData: ExitPostion[]) => {
   } catch (error) {
     if (error instanceof AxiosError) {
       console.error("Exit Postion:", error.response?.data);
-      alert(error.response?.data.detail);
+      const detail = error.response?.data?.detail ?? error.response?.data;
+      alert(typeof detail === 'string' ? detail : JSON.stringify(detail));
     } else {
       console.error("Unexpected exit position error:", error);
     }

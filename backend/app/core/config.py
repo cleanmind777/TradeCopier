@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     # Secret key for JWT signing
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
 
-    # JWT token expiration time in minutes
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    # JWT token expiration time in minutes (default 8 hours)
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(480, env="ACCESS_TOKEN_EXPIRE_MINUTES")
 
     # Algorithm used for JWT encoding
     ALGORITHM: str = Field("HS256", env="ALGORITHM")

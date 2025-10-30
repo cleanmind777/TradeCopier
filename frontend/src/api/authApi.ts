@@ -26,7 +26,7 @@ export const signUp = async (userInfo: UserCreate): Promise<boolean> => {
 
 export const sendEmailOTP = async (email: string): Promise<boolean> => {
   try {
-    const response = await axios.post(`${API_BASE}/auth/email-otp`, { email });
+    const response = await axios.post(`${API_BASE}/auth/email-otp`, { email }, { withCredentials: true });
     return true;
   } catch (error) {
     if (error instanceof AxiosError) {
@@ -44,10 +44,11 @@ export const verifyEmailOTP = async (
   otp: string
 ): Promise<User | boolean> => {
   try {
-    const response = await axios.post(`${API_BASE}/auth/verify-email-otp`, {
-      email,
-      otp,
-    });
+    const response = await axios.post(
+      `${API_BASE}/auth/verify-email-otp`,
+      { email, otp },
+      { withCredentials: true }
+    );
     return response.data;
   } catch (error) {
     if (error instanceof AxiosError) {

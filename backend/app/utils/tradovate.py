@@ -62,17 +62,25 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
 
 def get_renew_token(access_token: str) -> Tokens | None:
     headers = {"Authorization": f"Bearer {access_token}"}
-    url = f"{TRADO_DEMO_URL}/auth/renewaccesstoken"
-    response = requests.get(url, headers=headers)
+    # Try DEMO first
+    url_demo = f"{TRADO_DEMO_URL}/auth/renewaccesstoken"
+    response = requests.get(url_demo, headers=headers)
+    data = None
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
-            print(data)
         except ValueError:
-            # Log error or handle malformed JSON
-            return None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
+            data = None
+    if data is None:
+        # Fallback: try LIVE
+        url_live = f"{TRADO_LIVE_URL}/auth/renewaccesstoken"
+        response = requests.get(url_live, headers=headers)
+        if response.status_code == 200 and response.content:
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+    if not data:
         return None
     tokens = Tokens(
         access_token=data["accessToken"], md_access_token=data["mdAccessToken"]
@@ -240,33 +248,59 @@ def get_cash_balances(access_token: str, is_demo: bool):
     return data
 
 
-def place_order(access_token: str, is_demo: bool, order: ExitPosition):
+def place_order(access_token: str, is_demo: bool, order):
     print(access_token)
     print(is_demo)
     print(order)
     headers = {"Authorization": f"Bearer {access_token}"}
-    url = (
-        f"{TRADO_DEMO_URL}/order/placeorder"
-        if is_demo
-        else f"{TRADO_LIVE_URL}/order/placeorder"
-    )
+    def make_url(demo: bool) -> str:
+        return f"{TRADO_DEMO_URL}/order/placeOrder" if demo else f"{TRADO_LIVE_URL}/order/placeOrder"
+    url = make_url(is_demo)
 
     try:
-        response = requests.post(url, headers=headers, json=order.dict())
-        if response.status_code == 200 and response.content:
+        # order is expected to be a dict with accountId, accountSpec, symbol, orderQty, orderType, action, isAutomated
+        payload = order if isinstance(order, dict) else order.dict()
+        response = requests.post(url, headers=headers, json=payload)
+        print(response.status_code)
+        if response.status_code in (200, 201):
+            if not response.content:
+                return True
             try:
                 data = response.json()
                 print(data)
                 return data
             except ValueError:
                 # Handle malformed JSON
-                return None
-        else:
-            # Handle non-200 response
-            return None
+                return True
+        # If unauthorized, retry once against the opposite venue in case is_demo flag is stale
+        if response.status_code == 401:
+            alt_url = make_url(not is_demo)
+            response2 = requests.post(alt_url, headers=headers, json=payload)
+            if response2.status_code in (200, 201):
+                if not response2.content:
+                    return True
+                try:
+                    data2 = response2.json()
+                    print(data2)
+                    return data2
+                except ValueError:
+                    return True
+            try:
+                body2 = response2.json()
+            except ValueError:
+                body2 = response2.text
+            print(f"Exit order failed (retry): {response2.status_code} - {body2}")
+            return {"error": True, "status": response2.status_code, "body": body2}
+        # Handle non-200 response
+        try:
+            body = response.json()
+        except ValueError:
+            body = response.text
+        print(f"Exit order failed: {response.status_code} - {body}")
+        return {"error": True, "status": response.status_code, "body": body}
     except requests.RequestException as e:
         # Log or handle request error
-        return None
+        return {"error": True, "exception": str(e)}
 
 
 async def get_order_version_depends(id: int, access_token: str, is_demo: bool):

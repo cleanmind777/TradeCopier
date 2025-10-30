@@ -1,40 +1,32 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
-import Button from "../components/ui/Button";
-import Input from "../components/ui/Input";
-import Label from "../components/ui/Label";
 import SymbolsMonitor from "../components/trading/SymbolMonitor";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
 import {
-  getWebSocketToken,
   executeLimitOrder,
   executeLimitOrderWithSLTP,
   executeMarketOrder,
+  getAccounts,
+  getPositions,
+  getOrders,
+  exitAllPostions,
 } from "../api/brokerApi";
 import { getGroup } from "../api/groupApi";
-import { createChart, ColorType } from "lightweight-charts";
 import { GroupInfo } from "../types/group";
 import {
   MarketOrder,
   LimitOrder,
   LimitOrderWithSLTP,
-  SLTP,
+  TradovateAccountsResponse,
+  TradovatePositionListResponse,
 } from "../types/broker";
+import { getHistoricalChart } from "../api/databentoApi";
+import LoadingModal from "../components/ui/LoadingModal";
 
 const TradingPage: React.FC = () => {
-  const [marketData, setMarketData] = useState<{
-    bid: number | null;
-    ask: number | null;
-    last: number | null;
-    timestamp: string;
-  } | null>(null);
-  const [connectionStatus, setConnectionStatus] =
-    useState<string>("Connected");
-  const [candleCount, setCandleCount] = useState<number>(0);
-
   // Trading state
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<GroupInfo | null>(null);
@@ -43,7 +35,51 @@ const TradingPage: React.FC = () => {
   const [limitPrice, setLimitPrice] = useState<string>("");
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
-  const [symbol, setSymbol] = useState<string>("");
+  const [symbol, setSymbol] = useState<string>("NQZ5");
+  const [pendingSymbol, setPendingSymbol] = useState<string>("NQZ5");
+  
+  // PnL tracking state
+  const [pnlData, setPnlData] = useState<Record<string, any>>({});
+  const [isConnectedToPnL, setIsConnectedToPnL] = useState<boolean>(false);
+  const [groupPnL, setGroupPnL] = useState<{
+    totalPnL: number;
+    symbolPnL: number;
+    lastUpdate: string;
+  }>({
+    totalPnL: 0,
+    symbolPnL: 0,
+    lastUpdate: ""
+  });
+
+  // Accounts and positions for aggregates/balance
+  const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
+  const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [groupBalance, setGroupBalance] = useState<number>(0); // kept for future toolbar summaries
+  const [groupSymbolNet, setGroupSymbolNet] = useState<{ netPos: number; avgNetPrice: number; }>({ netPos: 0, avgNetPrice: 0 });
+  const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
+
+  // Real-time price data (bid, ask, last, sizes)
+  const [currentPrice, setCurrentPrice] = useState<{
+    bid?: number;
+    ask?: number;
+    last?: number;
+    bidSize?: number;
+    askSize?: number;
+  }>({});
+  const priceEventSourceRef = useRef<EventSource | null>(null);
+
+  // Equity per sub-broker (balance + unrealizedPnL)
+  const [subBrokerEquities, setSubBrokerEquities] = useState<Record<string, {
+    accountId: string;
+    nickname: string;
+    balance: number;
+    unrealizedPnL: number;
+    equity: number;
+  }>>({});
+
+  // Offline PnL fallback
+  const offlinePnlIntervalRef = useRef<number | null>(null);
 
   // SL/TP state
   const [slTpOption, setSlTpOption] = useState<
@@ -52,16 +88,563 @@ const TradingPage: React.FC = () => {
   const [customSL, setCustomSL] = useState<string>("");
   const [customTP, setCustomTP] = useState<string>("");
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const user = localStorage.getItem("user");
   const user_id = user ? JSON.parse(user).id : null;
 
-  // Lightweight Charts refs
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null); // Using any to avoid complex type issues
-  const lineSeriesRef = useRef<any>(null); // Using any to avoid complex type issues
-  const lastUpdateTimeRef = useRef<number>(0); // Track last update time
+  // Monitor tabs
+  const [activeTab, setActiveTab] = useState<"positions" | "orders" | "accounts">("positions");
+
+  // Aggregated group-position monitoring rows by symbol for ALL groups and ALL symbols
+  const groupMonitorRows = useMemo(() => {
+    if (positions.length === 0) return [] as Array<{
+      groupName: string;
+      symbol: string;
+      openPositions: number;
+      openPnL: number;
+      realizedPnL: number;
+      totalAccounts: number;
+    }>;
+
+    const rows: Array<{
+      groupName: string;
+      symbol: string;
+      openPositions: number;
+      openPnL: number;
+      realizedPnL: number;
+      totalAccounts: number;
+    }> = [];
+
+    if (groups.length === 0) {
+      // Fallback: no groups loaded; aggregate ALL positions by symbol under a single "All" group
+      const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
+      positions.forEach((p) => {
+        const sym = (p.symbol || "").toUpperCase();
+        if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
+        symbolToPositions.get(sym)!.push(p);
+      });
+
+      const realizedPnLTotal = accounts.reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
+
+      for (const [sym, list] of symbolToPositions.entries()) {
+        const totalNetPos = list.reduce((sum, p) => sum + (p.netPos || 0), 0);
+        let openPnLSum = 0;
+        list.forEach((p) => {
+          const key1 = `${p.symbol}:${p.accountId}`;
+          const live = pnlData[key1];
+          if (live && typeof live.unrealizedPnL === "number") {
+            openPnLSum += live.unrealizedPnL;
+          }
+        });
+
+        // Count unique accounts that have a non-zero position for this symbol
+        const accountsWithPositions = new Set<number>();
+        list.forEach((p) => {
+          if ((p.netPos || 0) !== 0) accountsWithPositions.add(p.accountId);
+        });
+
+        rows.push({
+          groupName: "All",
+          symbol: sym,
+          openPositions: totalNetPos,
+          openPnL: openPnLSum,
+          realizedPnL: realizedPnLTotal,
+          totalAccounts: accountsWithPositions.size,
+        });
+      }
+    } else {
+      // Loop through ALL groups
+      for (const group of groups) {
+        const accountIdSet = new Set(
+          group.sub_brokers.map((s) => parseInt(s.sub_account_id))
+        );
+
+        // Group positions by symbol for accounts in this group
+        const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
+        positions
+          .filter((p) => accountIdSet.has(Number(p.accountId)))
+          .forEach((p) => {
+            const sym = (p.symbol || "").toUpperCase();
+            if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
+            symbolToPositions.get(sym)!.push(p);
+          });
+
+        // Sum realized PnL across accounts in group
+        const realizedPnLTotal = accounts
+          .filter((a) => accountIdSet.has(Number(a.accountId)))
+          .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
+
+        // For each symbol in this group
+        for (const [sym, list] of symbolToPositions.entries()) {
+          // Open Position: total net position (sum of netPos values)
+          const totalNetPos = list.reduce((sum, p) => sum + (Number(p.netPos) || 0), 0);
+
+          // Open PnL: sum from live pnlData if available
+          let openPnLSum = 0;
+          list.forEach((p) => {
+            const key1 = `${p.symbol}:${p.accountId}`;
+            const live = pnlData[key1];
+            if (live && typeof live.unrealizedPnL === "number") {
+              openPnLSum += live.unrealizedPnL;
+            }
+          });
+
+          // Count unique accounts in this group that have a non-zero position for this symbol
+          const accountsWithPositions = new Set<number>();
+          list.forEach((p) => {
+            if ((Number(p.netPos) || 0) !== 0) accountsWithPositions.add(Number(p.accountId));
+          });
+
+          rows.push({
+            groupName: group.name,
+            symbol: sym,
+            openPositions: totalNetPos, // Total net position for this group/symbol
+            openPnL: openPnLSum,
+            realizedPnL: realizedPnLTotal,
+            totalAccounts: accountsWithPositions.size,
+          });
+        }
+      }
+    }
+
+    // Sort by group name, then symbol for stable display
+    rows.sort((a, b) => {
+      if (a.groupName !== b.groupName) {
+        return a.groupName.localeCompare(b.groupName);
+      }
+      return a.symbol.localeCompare(b.symbol);
+    });
+    return rows;
+  }, [groups, positions, pnlData, accounts]);
+
+  // Typing-only symbol entry (no dropdown)
+
+  // Calculate PnL for selected group and symbol
+  const calculateGroupPnL = () => {
+    if (!selectedGroup) {
+      setGroupPnL({
+        totalPnL: 0,
+        symbolPnL: 0,
+        lastUpdate: ""
+      });
+      return;
+    }
+
+    let totalPnL = 0;
+    let symbolPnL = 0;
+    let lastUpdate = "";
+
+    // Get sub-broker account IDs from selected group
+    const groupAccountIds = selectedGroup.sub_brokers.map(sub => sub.sub_account_id);
+    
+    console.log("🔍 Calculating PnL for group:", selectedGroup.name);
+    console.log("📊 Group account IDs:", groupAccountIds);
+    console.log("📈 Available PnL data keys:", Object.keys(pnlData));
+
+    // Calculate PnL for all positions in the group
+    Object.values(pnlData).forEach((data: any) => {
+      const accountIdStr = data.accountId?.toString();
+      const accountIdNum = data.accountId;
+      
+      // Check if this account ID matches any in the group (handle both string and number formats)
+      const isAccountInGroup = groupAccountIds.some(groupAccountId => 
+        groupAccountId === accountIdStr || 
+        groupAccountId === accountIdNum?.toString() ||
+        parseInt(groupAccountId) === accountIdNum
+      );
+      
+      if (isAccountInGroup) {
+        const pnl = data.unrealizedPnL || 0;
+        totalPnL += pnl;
+        
+        console.log(`💰 Account ${accountIdStr} (${data.symbol}): $${pnl}`);
+        
+        // If symbol matches, add to symbol-specific PnL
+        if (symbol && data.symbol === symbol) {
+          symbolPnL += pnl;
+          console.log(`🎯 Symbol ${symbol} PnL: $${pnl}`);
+        }
+        
+        // Track the latest update time
+        if (data.timestamp && (!lastUpdate || data.timestamp > lastUpdate)) {
+          lastUpdate = data.timestamp;
+        }
+      }
+    });
+
+    console.log(`📊 Total Group PnL: $${totalPnL}, Symbol PnL: $${symbolPnL}`);
+
+    setGroupPnL({
+      totalPnL: Math.round(totalPnL * 100) / 100, // Round to 2 decimal places
+      symbolPnL: Math.round(symbolPnL * 100) / 100,
+      lastUpdate: lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : ""
+    });
+  };
+
+  // Helper: map symbol prefix to valuePerPoint for approximate PnL when offline
+  const getValuePerPoint = (sym: string): number => {
+    const s = (sym || "").toUpperCase();
+    if (s.startsWith("MNQ")) return 2; // Micro NASDAQ
+    if (s.startsWith("NQ")) return 20; // E-mini NASDAQ
+    if (s.startsWith("MES")) return 5; // Micro S&P
+    if (s.startsWith("ES")) return 50; // E-mini S&P
+    if (s.startsWith("MYM")) return 0.5 * 10; // Micro YM often $0.5/tick, $5/point
+    if (s.startsWith("YM")) return 5;  // E-mini Dow $5/point
+    if (s.startsWith("M2K")) return 5; // Micro Russell
+    if (s.startsWith("RTY")) return 50; // E-mini Russell
+    if (s.startsWith("MGC")) return 10; // Micro Gold $10/point
+    if (s.startsWith("GC")) return 100; // Gold $100/point
+    if (s.startsWith("MCL")) return 10; // Micro Crude
+    if (s.startsWith("CL")) return 1000 / 100; // $1000 per $1, treat per point ~ 1000
+    return 50; // default
+  };
+
+  // Derive group total balance from accounts
+  useEffect(() => {
+    if (!selectedGroup || accounts.length === 0) {
+      setGroupBalance(0);
+      return;
+    }
+    const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
+    const total = accounts
+      .filter(a => ids.has(a.accountId))
+      .reduce((sum, a) => sum + (a.amount || 0), 0);
+    setGroupBalance(total);
+  }, [selectedGroup, accounts]);
+
+  // Derive group symbol aggregates (net position and avg net price)
+  useEffect(() => {
+    if (!selectedGroup || !symbol || positions.length === 0) {
+      setGroupSymbolNet({ netPos: 0, avgNetPrice: 0 });
+      return;
+    }
+    const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
+    const filtered = positions.filter(p => ids.has(p.accountId) && p.symbol?.toUpperCase().startsWith(symbol.toUpperCase().slice(0, 2)));
+    const totalQty = filtered.reduce((sum, p) => sum + (p.netPos || 0), 0);
+    const weightedPriceNumer = filtered.reduce((sum, p) => sum + (p.netPos || 0) * (p.netPrice || 0), 0);
+    const avgPrice = totalQty !== 0 ? weightedPriceNumer / totalQty : 0;
+    setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
+  }, [selectedGroup, symbol, positions]);
+
+  // Fetch accounts and positions
+  useEffect(() => {
+    const load = async () => {
+      if (!user_id) return;
+      setIsPageLoading(true);
+      const [acc, pos, ord] = await Promise.all([
+        getAccounts(user_id),
+        getPositions(user_id),
+        getOrders(user_id),
+      ]);
+      if (acc) setAccounts(acc);
+      if (pos) setPositions(pos);
+      if (ord) setOrders(ord);
+      setIsPageLoading(false);
+    };
+    load();
+  }, [user_id]);
+
+  const handleFlattenAll = async () => {
+    try {
+      setIsOrdering(true);
+      const exitList = positions
+        .filter((p) => (Number(p.netPos) || 0) !== 0)
+        .map((position) => {
+        const action = position.netPos > 0 ? "Sell" : "Buy";
+        return {
+          accountId: position.accountId,
+          action,
+          symbol: position.symbol,
+          orderQty: Math.abs(position.netPos),
+          orderType: "Market",
+          isAutomated: true,
+        };
+      });
+      if (exitList.length > 0) {
+        await exitAllPostions(exitList as any);
+      }
+      const [acc, pos, ord] = await Promise.all([
+        getAccounts(user_id),
+        getPositions(user_id),
+        getOrders(user_id),
+      ]);
+      if (acc) setAccounts(acc);
+      if (pos) setPositions(pos);
+      if (ord) setOrders(ord);
+      // Reconnect PnL SSE to ensure fresh stream after exits
+      connectToPnLStream();
+      // Normalize unrealized PnL to zero for accounts that are now flat to refresh equities immediately
+      try {
+        const netByAccount: Record<number, number> = {};
+        (pos || []).forEach((p: any) => {
+          const acc = Number(p.accountId);
+          netByAccount[acc] = (netByAccount[acc] || 0) + (Number(p.netPos) || 0);
+        });
+        const flatAccounts = new Set<number>(
+          Object.entries(netByAccount)
+            .filter(([, net]) => (Number(net) || 0) === 0)
+            .map(([acc]) => Number(acc))
+        );
+        if (flatAccounts.size > 0) {
+          setPnlData((prev) => {
+            const next = { ...prev } as Record<string, any>;
+            Object.entries(prev).forEach(([key, value]: [string, any]) => {
+              if (value && flatAccounts.has(Number(value.accountId))) {
+                next[key] = { ...value, unrealizedPnL: 0 };
+              }
+            });
+            return next;
+          });
+        }
+      } catch {}
+    } catch (e) {
+      console.error("Flatten all failed", e);
+    } finally {
+      setIsOrdering(false);
+    }
+  };
+
+  // Offline PnL calculation using historical last price
+  const calculateOfflinePnL = async () => {
+    try {
+      if (!selectedGroup) return;
+      if (!symbol) return;
+      if (positions.length === 0) return;
+
+      const now = new Date();
+      const endIso = new Date(now.getTime() - 60 * 1000).toISOString();
+      const startIso = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+
+      const hist = await getHistoricalChart(symbol, startIso, endIso, "ohlcv-1m");
+      if (!hist || !hist.data || hist.data.length === 0) return;
+      const lastClose = hist.data[hist.data.length - 1].close;
+
+      const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
+      const relevant = positions.filter(p => ids.has(p.accountId) && p.netPos !== 0 && p.symbol?.toUpperCase().startsWith(symbol.toUpperCase().slice(0, 2)));
+
+      let totalPnL = 0;
+      let symbolPnL = 0;
+      for (const p of relevant) {
+        const vpp = getValuePerPoint(p.symbol || symbol);
+        const qty = p.netPos;
+        const entry = p.netPrice || 0;
+        const priceDiff = qty >= 0 ? (lastClose - entry) : (entry - lastClose);
+        const pnl = priceDiff * Math.abs(qty) * vpp;
+        totalPnL += pnl;
+        symbolPnL += pnl;
+      }
+      setGroupPnL(() => ({
+        totalPnL: Math.round(totalPnL * 100) / 100,
+        symbolPnL: Math.round(symbolPnL * 100) / 100,
+        lastUpdate: new Date().toLocaleTimeString(),
+      }));
+    } catch (e) {
+      // Silent fail to avoid UI spam
+    }
+  };
+
+  // Trigger offline PnL when SSE disconnects
+  useEffect(() => {
+    if (isConnectedToPnL) {
+      if (offlinePnlIntervalRef.current) {
+        window.clearInterval(offlinePnlIntervalRef.current);
+        offlinePnlIntervalRef.current = null;
+      }
+      return;
+    }
+    // Immediately compute once, then every 30s
+    calculateOfflinePnL();
+    offlinePnlIntervalRef.current = window.setInterval(() => {
+      calculateOfflinePnL();
+    }, 30000) as any;
+    return () => {
+      if (offlinePnlIntervalRef.current) {
+        window.clearInterval(offlinePnlIntervalRef.current);
+        offlinePnlIntervalRef.current = null;
+      }
+    };
+  }, [isConnectedToPnL, selectedGroup, symbol, positions]);
+
+  // Connect to PnL SSE stream
+  const connectToPnLStream = () => {
+    if (!user_id) return;
+
+    // Close existing connection
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+    const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
+    eventSourceRef.current = eventSource;
+
+    eventSource.onopen = () => {
+      console.log("Connected to PnL stream for Trading Page");
+      setIsConnectedToPnL(true);
+    };
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        
+        // Check for status messages
+        if (data.status === "connected") {
+          console.log("✅ PnL stream connected:", data);
+          return;
+        }
+
+        // Check for errors
+        if (data.error) {
+          console.error("❌ PnL stream error:", data);
+          return;
+        }
+
+        // Update PnL data; key by symbol+account to avoid overwriting
+        if (data.symbol && data.unrealizedPnL !== undefined) {
+          const key = data.positionKey || `${data.symbol}:${data.accountId}`;
+          console.log(`📊 Received PnL data:`, {
+            key,
+            symbol: data.symbol,
+            accountId: data.accountId,
+            unrealizedPnL: data.unrealizedPnL,
+            netPos: data.netPos,
+            entryPrice: data.entryPrice,
+            currentPrice: data.currentPrice
+          });
+          
+          setPnlData(prev => ({
+            ...prev,
+            [key]: data
+          }));
+        }
+      } catch (error) {
+        console.error("Error parsing PnL data:", error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error("PnL SSE error:", error);
+      setIsConnectedToPnL(false);
+    };
+  };
+
+  // Subscribe to real-time price stream when symbol changes
+  useEffect(() => {
+    if (!symbol) {
+      if (priceEventSourceRef.current) {
+        priceEventSourceRef.current.close();
+        priceEventSourceRef.current = null;
+      }
+      setCurrentPrice({});
+      return;
+    }
+
+    const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+    
+    // Subscribe to symbol
+    fetch(`${API_BASE}/databento/sse/current-price`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbols: [symbol] }),
+    }).catch(console.error);
+
+    // Connect to SSE stream
+    const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
+    priceEventSourceRef.current = es;
+
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.status === "connected" || data.test || data.error) return;
+        
+        if (data.symbol === symbol) {
+          setCurrentPrice({
+            bid: data.bid_price,
+            ask: data.ask_price,
+            last: data.last_price || (data.bid_price && data.ask_price ? (data.bid_price + data.ask_price) / 2 : undefined),
+            bidSize: data.bid_size,
+            askSize: data.ask_size,
+          });
+        }
+      } catch (err) {
+        console.error("Error parsing price data:", err);
+      }
+    };
+
+    es.onerror = () => {
+      console.error("Price SSE error");
+      es.close();
+    };
+
+    return () => {
+      if (priceEventSourceRef.current) {
+        priceEventSourceRef.current.close();
+        priceEventSourceRef.current = null;
+      }
+    };
+  }, [symbol]);
+
+  // Calculate equity per sub-broker (balance + unrealizedPnL) for ALL accounts from ALL groups
+  useEffect(() => {
+    if (groups.length === 0 || accounts.length === 0) {
+      setSubBrokerEquities({});
+      return;
+    }
+
+    const equities: Record<string, {
+      accountId: string;
+      nickname: string;
+      balance: number;
+      unrealizedPnL: number;
+      equity: number;
+    }> = {};
+
+    // Iterate through all groups to get all sub-brokers
+    groups.forEach(group => {
+      group.sub_brokers.forEach(subBroker => {
+        const accountId = subBroker.sub_account_id;
+        const account = accounts.find(a => a.accountId.toString() === accountId);
+        const balance = account?.amount || 0;
+        
+        // Sum unrealizedPnL for this account across all positions
+        let unrealizedPnL = 0;
+        Object.values(pnlData).forEach((data: any) => {
+          const dataAccountId = data.accountId?.toString();
+          if (dataAccountId === accountId) {
+            unrealizedPnL += data.unrealizedPnL || 0;
+          }
+        });
+
+        const equity = balance + unrealizedPnL;
+        
+        equities[accountId] = {
+          accountId,
+          nickname: subBroker.nickname || subBroker.sub_account_name || `Account ${accountId}`,
+          balance,
+          unrealizedPnL,
+          equity,
+        };
+      });
+    });
+
+    setSubBrokerEquities(equities);
+  }, [groups, accounts, pnlData]);
+
+  // Update PnL calculations when data changes
+  useEffect(() => {
+    calculateGroupPnL();
+  }, [pnlData, selectedGroup, symbol]);
+
+  // Connect to PnL stream when component mounts
+  useEffect(() => {
+    connectToPnLStream();
+    
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+    };
+  }, [user_id]);
 
   // Load user groups
   const loadGroups = async () => {
@@ -215,6 +798,20 @@ const TradingPage: React.FC = () => {
       };
 
       setOrderHistory((prev) => [orderRecord, ...prev]);
+
+      // Refresh dependent data after order so UI (monitor, netPos, equities, pnls) updates
+      try {
+        const [acc, pos, ord] = await Promise.all([
+          getAccounts(user_id),
+          getPositions(user_id),
+          getOrders(user_id),
+        ]);
+        if (acc) setAccounts(acc);
+        if (pos) setPositions(pos);
+        if (ord) setOrders(ord);
+      } catch (e) {
+        // Silent fail; SSE/next poll will catch up
+      }
 
       // Reset form
       setOrderQuantity("1");
@@ -543,24 +1140,248 @@ const TradingPage: React.FC = () => {
   // }, []);
 
   return (
-    <div className="flex bg-gradient-to-b from-slate-50 to-slate-100 min-h-screen">
+    <div className="flex bg-slate-50 h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <Header />
-        <main className="flex-1 p-8 space-y-8">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Trading Dashboard</h1>
-            <div
-              className={`px-4 py-2 rounded-md ${
-                connectionStatus === "Connected"
-                  ? "bg-green-100 text-green-800"
-                  : connectionStatus === "Connecting..."
-                  ? "bg-yellow-100 text-yellow-800"
-                  : "bg-red-100 text-red-800"
-              }`}
-            >
-              Status: {connectionStatus}
+        <main className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 md:p-5">
+          <div className="flex-shrink-0 space-y-4 md:space-y-5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">Trading</h1>
+                <p className="text-slate-500 text-xs md:text-sm">Manage positions, place orders, and monitor group performance</p>
+              </div>
+              <div
+                className={`px-3 py-1.5 rounded-full text-sm font-medium shadow-sm ${
+                  isConnectedToPnL ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
+                }`}
+              >
+                {isConnectedToPnL ? "PnL: Live" : "PnL: Offline"}
             </div>
+            </div>
+
+            {/* Trading Toolbar */}
+            <div className="rounded-md bg-slate-900 text-slate-100 p-2 md:p-2.5 shadow-sm border border-slate-800">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Symbol select */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Symbol</span>
+                  <input
+                    value={pendingSymbol}
+                    onChange={(e) => setPendingSymbol(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol); }}
+                    placeholder="NQZ5"
+                    className="h-8 w-28 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button
+                    onClick={() => setSymbol(pendingSymbol)}
+                    disabled={!pendingSymbol}
+                    className={`h-8 px-3 rounded text-sm font-medium ${pendingSymbol ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-700 cursor-not-allowed'} text-white`}
+                  >
+                    Select
+                  </button>
+                </div>
+                <div className="w-px h-6 bg-slate-700" />
+                {/* Qty */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Qty</span>
+                  <input
+                    value={orderQuantity}
+                    onChange={(e) => setOrderQuantity(e.target.value)}
+                    type="number"
+                    min={1}
+                    className="h-8 w-16 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="w-px h-6 bg-slate-700" />
+                {/* Group select */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Group</span>
+                  <select
+                    value={selectedGroup?.id || ""}
+                    onChange={(e) => {
+                      const group = groups.find((g) => g.id === e.target.value);
+                      setSelectedGroup(group || null);
+                    }}
+                    className="h-8 min-w-[160px] rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Select group</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-px h-6 bg-slate-700" />
+                {/* Order type and price */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">Type</span>
+                  <select
+                    value={orderType}
+                    onChange={(e) => setOrderType(e.target.value as any)}
+                    className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="market">Market</option>
+                    <option value="limit">Limit</option>
+                  </select>
+                  {orderType === "limit" && (
+                    <>
+                      <span className="text-xs text-slate-400">Price</span>
+                      <input
+                        value={limitPrice}
+                        onChange={(e) => setLimitPrice(e.target.value)}
+                        type="number"
+                        step="0.01"
+                        className="h-8 w-24 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    </>
+                  )}
+                </div>
+                {orderType === "limit" && (
+                  <>
+                    <div className="w-px h-6 bg-slate-700" />
+                    {/* SL/TP */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">SL/TP</span>
+                      <select
+                        value={slTpOption}
+                        onChange={(e) => setSlTpOption(e.target.value as any)}
+                        className="h-8 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="none">None</option>
+                        <option value="default1">Default1 (10/10)</option>
+                        <option value="default2">Default2 (20/20)</option>
+                        <option value="custom">Custom</option>
+                      </select>
+                      {slTpOption === "custom" && (
+                        <>
+                          <span className="text-xs text-slate-400">SL</span>
+                          <input
+                            value={customSL}
+                            onChange={(e) => setCustomSL(e.target.value)}
+                            type="number"
+                            step="0.01"
+                            className="h-8 w-20 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <span className="text-xs text-slate-400">TP</span>
+                          <input
+                            value={customTP}
+                            onChange={(e) => setCustomTP(e.target.value)}
+                            type="number"
+                            step="0.01"
+                            className="h-8 w-20 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+                {/* Compact PnL & Net badges */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-400">PnL</span>
+                  <span className={`${groupPnL.totalPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>${groupPnL.totalPnL.toFixed(0)}</span>
+                  {symbol && (
+                    <span className={`${groupPnL.symbolPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>{symbol}: ${groupPnL.symbolPnL.toFixed(0)}</span>
+                  )}
+                </div>
+                <div className="w-px h-6 bg-slate-700" />
+                {/* Group balance and symbol net */}
+                <div className="flex items-center gap-3 text-xs text-slate-300">
+                  <span>Bal ${groupBalance.toFixed(0)}</span>
+                  {symbol && (
+                    <span>Net {groupSymbolNet.netPos} @ {groupSymbolNet.avgNetPrice ? groupSymbolNet.avgNetPrice.toFixed(2) : 0}</span>
+                  )}
+                </div>
+                {/* Action buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => executeOrder("Buy")}
+                    disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
+                    className="h-8 px-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold"
+                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
+                  >
+                    {orderType === 'limit' ? 'Buy Limit' : 'Buy Mkt'}
+                  </button>
+                  <button
+                    onClick={() => executeOrder("Sell")}
+                    disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
+                    className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold"
+                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
+                  >
+                    {orderType === 'limit' ? 'Sell Limit' : 'Sell Mkt'}
+                  </button>
+                </div>
+                {/* push following controls to the far right */}
+                <div className="flex-1" />
+                <button
+                  onClick={handleFlattenAll}
+                  disabled={isOrdering || positions.every(p => (Number(p.netPos) || 0) === 0)}
+                  className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold disabled:opacity-50"
+                  aria-label="Flatten All / Exit All & Cancel All"
+                >
+                  Flatten / Exit & Cancel
+                </button>
+              </div>
+            </div>
+
+            {/* Real-time Price Display */}
+            {symbol && (
+              <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
+                <div className="flex items-center gap-3 md:gap-6 text-xs flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Bid:</span>
+                    <span className="font-mono font-semibold text-red-400">
+                      {currentPrice.bid?.toFixed(2) || "—"}
+                    </span>
+                    {currentPrice.bidSize !== undefined && (
+                      <span className="text-slate-400">({currentPrice.bidSize})</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Ask:</span>
+                    <span className="font-mono font-semibold text-emerald-400">
+                      {currentPrice.ask?.toFixed(2) || "—"}
+                    </span>
+                    {currentPrice.askSize !== undefined && (
+                      <span className="text-slate-400">({currentPrice.askSize})</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400">Last:</span>
+                    <span className="font-mono font-semibold">
+                      {currentPrice.last?.toFixed(2) || "—"}
+                    </span>
+                  </div>
+                  {currentPrice.bid && currentPrice.ask && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400">Spread:</span>
+                      <span className="font-mono">
+                        {(currentPrice.ask - currentPrice.bid).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Equity per Sub-Broker - Show all accounts from all groups */}
+            {Object.keys(subBrokerEquities).length > 0 && (
+              <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
+                <div className="text-xs font-semibold mb-1.5 text-slate-300">Equity per Sub-Broker</div>
+                <div className="flex items-center gap-2 md:gap-4 flex-wrap text-xs">
+                  {Object.values(subBrokerEquities).map((equity) => (
+                    <div key={equity.accountId} className="flex items-center gap-2 bg-slate-700/50 px-2 py-1 rounded">
+                      <span className="text-slate-400">{equity.nickname}:</span>
+                      <span className={`font-semibold ${equity.equity >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        ${equity.equity.toFixed(2)}
+                      </span>
+                      <span className="text-slate-500 text-[10px]">
+                        (Bal: ${equity.balance.toFixed(2)}, PnL: ${equity.unrealizedPnL >= 0 ? '+' : ''}${equity.unrealizedPnL.toFixed(2)})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Real-time Price Chart using Lightweight Charts
@@ -627,298 +1448,122 @@ const TradingPage: React.FC = () => {
             </Card>
           )} */}
           
-          {/* Shared Symbol Input */}
-          <Card>
-            <CardHeader>
-              <h2 className="text-xl font-bold">Symbol Selection</h2>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Label htmlFor="symbol">Symbol</Label>
-                <Input
-                  id="symbol"
-                  type="text"
-                  value={symbol}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setSymbol(e.target.value)
-                  }
-                  placeholder="Enter symbol (e.g., NQZ5, MNQZ5)"
-                  className="w-full"
-                />
-                <p className="text-sm text-gray-500">
-                  This symbol will be used for monitoring and placing orders
-                </p>
+          {/* Chart - majority of the page */}
+          <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '400px' }}>
+            <SymbolsMonitor initialSymbol={symbol} compact height={undefined} />
               </div>
-            </CardContent>
-          </Card>
-
-          <SymbolsMonitor initialSymbol={symbol} />
           
-          {/* Trading Interface */}
-          <Card>
-            <CardHeader>
-              <h2 className="text-xl font-bold">Trading Interface</h2>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Group Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="group-select">Select Group</Label>
-                <select
-                  id="group-select"
-                  value={selectedGroup?.id || ""}
-                  onChange={(e) => {
-                    const group = groups.find((g) => g.id === e.target.value);
-                    setSelectedGroup(group || null);
-                  }}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={groups.length === 0}
-                >
-                  <option value="">
-                    {groups.length === 0
-                      ? "No groups available"
-                      : "Select a group"}
-                  </option>
-                  {groups.map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.name} ({group.sub_brokers.length} sub-brokers)
-                    </option>
-                  ))}
-                </select>
+          {/* Monitor Tabs (Group Positions, Orders, Accounts) */}
+          <div className="mt-4 bg-white rounded-md border border-slate-200 shadow-sm">
+            <div className="flex items-center justify-between p-3 border-b border-slate-200">
+              <div className="flex gap-2">
+                <button onClick={() => setActiveTab('positions')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='positions' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Positions</button>
+                <button onClick={() => setActiveTab('orders')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='orders' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Orders</button>
+                <button onClick={() => setActiveTab('accounts')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='accounts' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Accounts</button>
               </div>
-
-              {selectedGroup && (
-                <>
-                  {/* Group Info */}
-                  <div className="bg-gray-50 p-4 rounded-md">
-                    <h3 className="font-semibold mb-2">Group Details</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-500">Name:</span>{" "}
-                        {selectedGroup.name}
                       </div>
-                      <div>
-                        <span className="text-gray-500">Sub-brokers:</span>{" "}
-                        {selectedGroup.sub_brokers.length}
+            <div className="p-3 overflow-x-auto">
+              {activeTab === 'positions' && (
+                groupMonitorRows.length > 0 ? (
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">Group Name</th>
+                        <th className="text-right font-semibold px-3 py-2">Open Position</th>
+                        <th className="text-left font-semibold px-3 py-2">Symbol</th>
+                        <th className="text-right font-semibold px-3 py-2">Open PnL</th>
+                        <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
+                        <th className="text-right font-semibold px-3 py-2">Total Accounts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupMonitorRows.map((row, idx) => (
+                        <tr key={`${row.groupName}-${row.symbol}-${idx}`} className="border-b last:border-0">
+                          <td className="px-3 py-2">{row.groupName}</td>
+                          <td className="px-3 py-2 text-right">{row.openPositions}</td>
+                          <td className="px-3 py-2">{row.symbol}</td>
+                          <td className={`px-3 py-2 text-right ${row.openPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${row.openPnL.toFixed(2)}</td>
+                          <td className={`px-3 py-2 text-right ${row.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${row.realizedPnL.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right">{row.totalAccounts}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="text-center py-4 text-slate-500">
+                    {groups.length === 0 ? "Loading groups..." : positions.length === 0 ? "No open positions found" : "No positions match the selected criteria"}
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Order Form */}
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Quantity */}
-                      <div className="space-y-2">
-                        <Label htmlFor="quantity">Quantity</Label>
-                        <Input
-                          id="quantity"
-                          type="number"
-                          value={orderQuantity}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                            setOrderQuantity(e.target.value)
-                          }
-                          min="1"
-                          placeholder="Enter quantity"
-                        />
-                      </div>
-
-                      {/* Order Type */}
-                      <div className="space-y-2">
-                        <Label htmlFor="order-type">Order Type</Label>
-                        <select
-                          id="order-type"
-                          value={orderType}
-                          onChange={(e) =>
-                            setOrderType(e.target.value as "market" | "limit")
-                          }
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="market">Market Order</option>
-                          <option value="limit">Limit Order</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {orderType === "limit" && (
-                      <>
-                        {/* Limit Price */}
-                        <div className="space-y-2">
-                          <Label htmlFor="limit-price">Limit Price</Label>
-                          <Input
-                            id="limit-price"
-                            type="number"
-                            step="0.01"
-                            value={limitPrice}
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>
-                            ) => setLimitPrice(e.target.value)}
-                            placeholder="Enter limit price"
-                          />
-                        </div>
-                        {/* SL/TP Configuration */}
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="sl-tp-option">
-                              Stop Loss / Take Profit
-                            </Label>
-                            <select
-                              id="sl-tp-option"
-                              value={slTpOption}
-                              onChange={(e) =>
-                                setSlTpOption(
-                                  e.target.value as
-                                    | "none"
-                                    | "default1"
-                                    | "default2"
-                                    | "custom"
-                                )
-                              }
-                              className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              <option value="none">None</option>
-                              <option value="default1">
-                                Default1 (SL: 10, TP: 10)
-                              </option>
-                              <option value="default2">
-                                Default2 (SL: 20, TP: 20)
-                              </option>
-                              <option value="custom">Custom</option>
-                            </select>
-                          </div>
-
-                          {/* Custom SL/TP Input Fields */}
-                          {slTpOption === "custom" && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="custom-sl">
-                                  Custom Stop Loss
-                                </Label>
-                                <Input
-                                  id="custom-sl"
-                                  type="number"
-                                  step="0.01"
-                                  value={customSL}
-                                  onChange={(
-                                    e: React.ChangeEvent<HTMLInputElement>
-                                  ) => setCustomSL(e.target.value)}
-                                  placeholder="Enter SL value"
-                                  min="0"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor="custom-tp">
-                                  Custom Take Profit
-                                </Label>
-                                <Input
-                                  id="custom-tp"
-                                  type="number"
-                                  step="0.01"
-                                  value={customTP}
-                                  onChange={(
-                                    e: React.ChangeEvent<HTMLInputElement>
-                                  ) => setCustomTP(e.target.value)}
-                                  placeholder="Enter TP value"
-                                  min="0"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-4">
-                      <Button
-                        onClick={() => executeOrder("Buy")}
-                        disabled={isOrdering || !selectedGroup}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        {isOrdering ? "Executing..." : "BUY"}
-                      </Button>
-                      <Button
-                        onClick={() => executeOrder("Sell")}
-                        disabled={isOrdering || !selectedGroup}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                      >
-                        {isOrdering ? "Executing..." : "SELL"}
-                      </Button>
-                    </div>
-                  </div>
-                </>
+                )
               )}
-            </CardContent>
-          </Card>
+                {activeTab === 'orders' && (
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">Account</th>
+                        <th className="text-left font-semibold px-3 py-2">Display</th>
+                        <th className="text-left font-semibold px-3 py-2">Symbol</th>
+                        <th className="text-left font-semibold px-3 py-2">Action</th>
+                        <th className="text-left font-semibold px-3 py-2">Status</th>
+                        <th className="text-left font-semibold px-3 py-2">Time</th>
+                        <th className="text-right font-semibold px-3 py-2">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.length > 0 ? (
+                        orders.map((order) => (
+                          <tr key={order.id} className="border-b last:border-0">
+                            <td className="px-3 py-2">{order.accountNickname}</td>
+                            <td className="px-3 py-2">{order.accountDisplayName}</td>
+                            <td className="px-3 py-2">{order.symbol}</td>
+                            <td className="px-3 py-2">{order.action}</td>
+                            <td className="px-3 py-2">{order.ordStatus}</td>
+                            <td className="px-3 py-2">{new Date(order.timestamp).toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right">{order.price}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="px-3 py-4 text-center text-slate-500">No orders found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+                {activeTab === 'accounts' && (
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">Account</th>
+                        <th className="text-left font-semibold px-3 py-2">Display</th>
+                        <th className="text-right font-semibold px-3 py-2">Amount</th>
+                        <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
+                        <th className="text-right font-semibold px-3 py-2">Week PnL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accounts.length > 0 ? (
+                        accounts.map((account) => (
+                          <tr key={account.id} className="border-b last:border-0">
+                            <td className="px-3 py-2">{account.accountNickname}</td>
+                            <td className="px-3 py-2">{account.accountDisplayName}</td>
+                            <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
+                            <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
+                            <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-4 text-center text-slate-500">No accounts found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+                      </div>
+                      </div>
 
-          {/* Order History */}
-          {orderHistory.length > 0 && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-xl font-bold">Order History</h2>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {orderHistory.slice(0, 10).map((order) => (
-                    <div
-                      key={order.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
-                    >
-                      <div className="flex items-center gap-4">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            order.action === "Buy"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {order.action}
-                        </span>
-                        <span className="font-medium">
-                          {order.quantity} contracts
-                        </span>
-                        <span className="text-sm text-gray-500">
-                          {order.orderType}
-                        </span>
-                        {order.limitPrice && (
-                          <span className="text-sm text-gray-500">
-                            @ ${order.limitPrice}
-                          </span>
-                        )}
-                        {order.sl > 0 && (
-                          <span className="text-sm text-red-500">
-                            SL: ${order.sl}
-                          </span>
-                        )}
-                        {order.tp > 0 && (
-                          <span className="text-sm text-green-500">
-                            TP: ${order.tp}
-                          </span>
-                        )}
-                        <span className="text-sm text-gray-500">
-                          Group: {order.groupName}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span
-                          className={`px-2 py-1 rounded text-xs ${
-                            order.status === "Pending"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : order.status === "Executed"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {order.status}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(order.timestamp).toLocaleTimeString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Group Position Monitor removed per request */}
+          <LoadingModal isOpen={isOrdering || isPageLoading} message={isOrdering ? "Submitting order..." : "Loading..."} />
         </main>
         <Footer />
       </div>

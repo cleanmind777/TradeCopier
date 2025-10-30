@@ -84,7 +84,9 @@ async def exit_Position(
 ):
     response = exit_position(db, exit_position_data)
     if response is None:
-        raise HTTPException(status_code=404, detail="Positions not found")
+        raise HTTPException(status_code=400, detail="Exit order failed")
+    if isinstance(response, dict) and response.get("error"):
+        raise HTTPException(status_code=502, detail=response)
     return response
 
 
@@ -92,11 +94,18 @@ async def exit_Position(
 async def exit_Position(
     exit_positions_data: list[ExitPosition], db: Session = Depends(get_db)
 ):
+    if not exit_positions_data:
+        raise HTTPException(status_code=404, detail="Positions not found")
+    errors: list[dict] = []
     for exit_position_data in exit_positions_data:
         response = exit_position(db, exit_position_data)
-    if response is None:
-        raise HTTPException(status_code=404, detail="Positions not found")
-    return True
+        if response is None:
+            errors.append({"error": "Exit order failed", "accountId": exit_position_data.accountId, "symbol": exit_position_data.symbol})
+        elif isinstance(response, dict) and response.get("error"):
+            errors.append(response)
+    if errors:
+        raise HTTPException(status_code=502, detail={"errors": errors})
+    return {"success": True}
 
 
 @router.get("/orders", status_code=status.HTTP_200_OK)

@@ -6,10 +6,14 @@ from typing import AsyncGenerator
 import databento as dbt
 import asyncio
 import json
+import pandas as pd
+import re
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.dependencies.database import get_db
 from app.services.broker_service import get_positions
+from app.utils.tradovate import get_contract_item, get_contract_maturity_item, get_product_item
+from app.models.broker_account import BrokerAccount, SubBrokerAccount
 from uuid import UUID
 
 router = APIRouter()
@@ -424,8 +428,70 @@ async def stream_pnl_data(
         # Store position data for PnL calculation grouped by symbol
         # Some users may have multiple positions for the same symbol across accounts
         symbol_to_positions: dict[str, list[dict]] = {}
+        contract_details_cache: dict[int, dict] = {}  # Cache contract details by contractId
+        
         for pos in positions:
             if pos.netPos != 0:
+                # Get contract details if not cached
+                if pos.contractId not in contract_details_cache:
+                    try:
+                        # Get broker account for this position
+                        db_sub_broker_account = (
+                            db.query(SubBrokerAccount)
+                            .filter(SubBrokerAccount.sub_account_id == str(pos.accountId))
+                            .first()
+                        )
+                        
+                        if db_sub_broker_account:
+                            db_broker_account = (
+                                db.query(BrokerAccount)
+                                .filter(BrokerAccount.user_broker_id == db_sub_broker_account.user_broker_id)
+                                .first()
+                            )
+                            
+                            if db_broker_account:
+                                # Get contract item details
+                                contract_item = await get_contract_item(
+                                    pos.contractId, db_broker_account.access_token, is_demo=True
+                                )
+                                
+                                if contract_item:
+                                    # Get product details for multiplier
+                                    contract_maturity = await get_contract_maturity_item(
+                                        contract_item["contractMaturityId"], db_broker_account.access_token, is_demo=True
+                                    )
+                                    
+                                    if contract_maturity:
+                                        product_item = await get_product_item(
+                                            contract_maturity["productId"], db_broker_account.access_token, is_demo=True
+                                        )
+                                        
+                                        if product_item:
+                                            contract_details_cache[pos.contractId] = {
+                                                "valuePerPoint": product_item.get("valuePerPoint", 50),  # Default ES multiplier
+                                                "tickSize": product_item.get("tickSize", 0.25),  # Default ES tick size
+                                                "symbol": contract_item.get("name", pos.symbol)
+                                            }
+                                            print(f"📊 Contract {pos.contractId} details: {contract_details_cache[pos.contractId]}")
+                                        else:
+                                            print(f"⚠️ Could not get product details for contract {pos.contractId}")
+                                    else:
+                                        print(f"⚠️ Could not get contract maturity for contract {pos.contractId}")
+                                else:
+                                    print(f"⚠️ Could not get contract item for contract {pos.contractId}")
+                            else:
+                                print(f"⚠️ Could not find broker account for sub-broker {pos.accountId}")
+                        else:
+                            print(f"⚠️ Could not find sub-broker account for account {pos.accountId}")
+                    except Exception as e:
+                        print(f"❌ Error fetching contract details for {pos.contractId}: {e}")
+                        # Use default values if we can't fetch contract details
+                        contract_details_cache[pos.contractId] = {
+                            "valuePerPoint": 50,  # Default ES multiplier
+                            "tickSize": 0.25,  # Default ES tick size
+                            "symbol": pos.symbol
+                        }
+                
                 symbol_to_positions.setdefault(pos.symbol, []).append({
                     "accountId": pos.accountId,
                     "accountNickname": pos.accountNickname,
@@ -434,6 +500,11 @@ async def stream_pnl_data(
                     "netPrice": pos.netPrice,
                     "contractId": pos.contractId,
                     "symbol": pos.symbol,
+                    "contractDetails": contract_details_cache.get(pos.contractId, {
+                        "valuePerPoint": 50,
+                        "tickSize": 0.25,
+                        "symbol": pos.symbol
+                    })
                 })
         
         # Initialize DataBento Live client
@@ -531,6 +602,9 @@ async def stream_pnl_data(
                         for position in symbol_to_positions[symbol]:
                             netPos = position["netPos"]
                             netPrice = position["netPrice"]
+                            contractDetails = position["contractDetails"]
+                            valuePerPoint = contractDetails["valuePerPoint"]
+                            tickSize = contractDetails["tickSize"]
 
                             # Determine which price to use based on position direction
                             # Long positions: use BID (what you'd get if you sell now)
@@ -539,12 +613,16 @@ async def stream_pnl_data(
                                 current_price = bid_price if bid_price is not None else ask_price
                                 if current_price is None:
                                     continue
-                                unrealized_pnl = (current_price - netPrice) * netPos * 10 * 2
+                                # PnL = (Current Price - Entry Price) * Quantity * Contract Multiplier
+                                price_diff = current_price - netPrice
+                                unrealized_pnl = price_diff * netPos * valuePerPoint
                             else:  # Short position
                                 current_price = ask_price if ask_price is not None else bid_price
                                 if current_price is None:
                                     continue
-                                unrealized_pnl = (netPrice - current_price) * abs(netPos) * 10 * 2
+                                # PnL = (Entry Price - Current Price) * Quantity * Contract Multiplier
+                                price_diff = netPrice - current_price
+                                unrealized_pnl = price_diff * abs(netPos) * valuePerPoint
 
                             pnl_data = {
                                 "symbol": symbol,
@@ -557,13 +635,17 @@ async def stream_pnl_data(
                                 "unrealizedPnL": round(unrealized_pnl, 2),
                                 "bidPrice": bid_price,
                                 "askPrice": ask_price,
+                                "valuePerPoint": valuePerPoint,
+                                "tickSize": tickSize,
+                                "priceDiff": round(price_diff, 4),
                                 "timestamp": datetime.now().isoformat(),
                                 "positionKey": f"{symbol}:{position['accountId']}"
                             }
 
                             print(
                                 f"💰 PnL for {symbol} (acct {position['accountId']}): "
-                                f"${unrealized_pnl:.2f} (Qty: {netPos}, Entry: ${netPrice}, Current: ${current_price})"
+                                f"${unrealized_pnl:.2f} (Qty: {netPos}, Entry: ${netPrice}, Current: ${current_price}, "
+                                f"Multiplier: {valuePerPoint}, Price Diff: ${price_diff:.4f})"
                             )
                             yield f"data: {json.dumps(pnl_data)}\n\n"
                 
@@ -614,3 +696,149 @@ async def sse_pnl_stream(
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@router.get("/historical")
+async def get_historical_chart(
+    symbol: str,
+    start: str,
+    end: str,
+    schema: str = "ohlcv-1m"
+):
+    """
+    Get historical OHLCV data for a symbol
+    
+    Args:
+        symbol: Symbol to fetch data for (e.g., "ES.FUT", "NQ.FUT")
+        start: Start time in ISO format (e.g., "2022-06-06T20:50:00")
+        end: End time in ISO format (e.g., "2022-06-06T21:00:00")
+        schema: Data schema (default: "ohlcv-1m" for 1-minute candles)
+    
+    Returns:
+        Historical OHLCV data as JSON
+    """
+    try:
+        # Check if API key is available
+        if not settings.DATABENTO_KEY:
+            raise HTTPException(
+                status_code=500,
+                detail="DATABENTO_KEY environment variable not set"
+            )
+        
+        # Parse and adjust times to ensure they're within available data range
+        from datetime import datetime, timezone, timedelta
+        
+        # Parse input times
+        start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+        end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+        
+        # DataBento typically has data available up to a few minutes ago
+        # Adjust end time to be 5 minutes before current time to be safe
+        current_time = datetime.now(timezone.utc)
+        safe_end_time = current_time - timedelta(minutes=5)
+        
+        # Use the earlier of: requested end time or safe end time
+        if end_dt > safe_end_time:
+            end_dt = safe_end_time
+            print(f"⚠️ Adjusted end time to {end_dt.isoformat()} to stay within available data range")
+        
+        # Ensure start time is not after end time
+        if start_dt >= end_dt:
+            # If start is after or equal to end, go back 1 hour from end
+            start_dt = end_dt - timedelta(hours=1)
+            print(f"⚠️ Adjusted start time to {start_dt.isoformat()} to ensure valid range")
+        
+        # Convert back to ISO strings for the API call
+        start_iso = start_dt.isoformat()
+        end_iso = end_dt.isoformat()
+        
+        print(f"📊 Fetching historical data for {symbol} from {start_iso} to {end_iso}")
+        
+        # Create a historical client
+        client = dbt.Historical(key=settings.DATABENTO_KEY)
+        
+        # Try to request historical OHLCV data with retry logic
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                historical_data = client.timeseries.get_range(
+                    dataset=DATASET,
+                    start=start_iso,
+                    end=end_iso,
+                    symbols=[symbol],
+                    schema=schema,
+                )
+                break  # Success, exit retry loop
+                
+            except Exception as api_error:
+                error_msg = str(api_error)
+                
+                # Check if it's the specific "data_end_after_available_end" error
+                if "data_end_after_available_end" in error_msg and retry_count < max_retries - 1:
+                    retry_count += 1
+                    print(f"⚠️ Retry {retry_count}/{max_retries}: {error_msg}")
+                    
+                    # Extract the available end time from the error message if possible
+                    # Format: "data available up to '2025-10-29 05:20:00+00:00'"
+                    match = re.search(r"data available up to '([^']+)'", error_msg)
+                    if match:
+                        available_end_str = match.group(1)
+                        try:
+                            available_end = datetime.fromisoformat(available_end_str)
+                            # Set end time to 1 minute before available end
+                            end_dt = available_end - timedelta(minutes=1)
+                            end_iso = end_dt.isoformat()
+                            print(f"🔄 Adjusted end time to {end_iso} based on available data range")
+                        except:
+                            # If parsing fails, just subtract more time
+                            end_dt = end_dt - timedelta(minutes=10)
+                            end_iso = end_dt.isoformat()
+                            print(f"🔄 Fallback: Adjusted end time to {end_iso}")
+                    else:
+                        # If we can't parse the available end time, subtract more time
+                        end_dt = end_dt - timedelta(minutes=10)
+                        end_iso = end_dt.isoformat()
+                        print(f"🔄 Fallback: Adjusted end time to {end_iso}")
+                    
+                    continue  # Retry with adjusted time
+                else:
+                    # Re-raise the error if it's not the specific error or we've exhausted retries
+                    raise api_error
+        
+        # Convert to DataFrame
+        df = historical_data.to_df().reset_index()
+        
+        # Convert DataFrame to records
+        records = []
+        for _, row in df.iterrows():
+            record = {
+                "timestamp": row.get("ts_event", ""),
+                "symbol": row.get("symbol", symbol),
+                "open": float(row.get("open", 0)),
+                "high": float(row.get("high", 0)),
+                "low": float(row.get("low", 0)),
+                "close": float(row.get("close", 0)),
+                "volume": int(row.get("volume", 0)),
+            }
+            records.append(record)
+        
+        print(f"✅ Fetched {len(records)} historical candles for {symbol}")
+        
+        return {
+            "symbol": symbol,
+            "start": start_iso,
+            "end": end_iso,
+            "schema": schema,
+            "count": len(records),
+            "data": records
+        }
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Error fetching historical data: {error_msg}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching historical data: {error_msg}"
+        )
