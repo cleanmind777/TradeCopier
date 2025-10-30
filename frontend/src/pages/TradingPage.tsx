@@ -707,6 +707,35 @@ const TradingPage: React.FC = () => {
     calculateGroupPnL();
   }, [pnlData, selectedGroup, symbol]);
 
+  // Reset PnL to 0 when all positions in selected group are flat
+  useEffect(() => {
+    if (!selectedGroup || !positions || positions.length === 0) {
+      return;
+    }
+
+    // Get sub-broker account IDs from selected group
+    const groupAccountIds = new Set(
+      selectedGroup.sub_brokers.map(sub => sub.sub_account_id.toString())
+    );
+
+    // Check if all positions for this group are flat
+    const groupPositions = positions.filter((p: any) => 
+      groupAccountIds.has(p.accountId?.toString())
+    );
+
+    const allFlat = groupPositions.length === 0 || 
+      groupPositions.every((p: any) => Number(p.netPos) === 0);
+
+    if (allFlat) {
+      console.log("✅ All positions flat - resetting toolbar PnL to 0");
+      setGroupPnL({
+        totalPnL: 0,
+        symbolPnL: 0,
+        lastUpdate: new Date().toLocaleTimeString()
+      });
+    }
+  }, [positions, selectedGroup]);
+
   // Connect to PnL stream when component mounts
   useEffect(() => {
     connectToPnLStream();
