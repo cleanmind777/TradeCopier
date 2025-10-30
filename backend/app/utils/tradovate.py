@@ -276,9 +276,6 @@ async def get_cash_balances(access_token: str, is_demo: bool):
 
 
 def place_order(access_token: str, is_demo: bool, order):
-    print(access_token)
-    print(is_demo)
-    print(order)
     headers = {"Authorization": f"Bearer {access_token}"}
     def make_url(demo: bool) -> str:
         return f"{TRADO_DEMO_URL}/order/placeOrder" if demo else f"{TRADO_LIVE_URL}/order/placeOrder"
@@ -288,13 +285,11 @@ def place_order(access_token: str, is_demo: bool, order):
         # order is expected to be a dict with accountId, accountSpec, symbol, orderQty, orderType, action, isAutomated
         payload = order if isinstance(order, dict) else order.dict()
         response = requests.post(url, headers=headers, json=payload)
-        print(response.status_code)
         if response.status_code in (200, 201):
             if not response.content:
                 return True
             try:
                 data = response.json()
-                print(data)
                 return data
             except ValueError:
                 # Handle malformed JSON
@@ -308,7 +303,6 @@ def place_order(access_token: str, is_demo: bool, order):
                     return True
                 try:
                     data2 = response2.json()
-                    print(data2)
                     return data2
                 except ValueError:
                     return True
@@ -316,14 +310,12 @@ def place_order(access_token: str, is_demo: bool, order):
                 body2 = response2.json()
             except ValueError:
                 body2 = response2.text
-            print(f"Exit order failed (retry): {response2.status_code} - {body2}")
             return {"error": True, "status": response2.status_code, "body": body2}
         # Handle non-200 response
         try:
             body = response.json()
         except ValueError:
             body = response.text
-        print(f"Exit order failed: {response.status_code} - {body}")
         return {"error": True, "status": response.status_code, "body": body}
     except requests.RequestException as e:
         # Log or handle request error
@@ -359,7 +351,6 @@ async def tradovate_execute_market_order(
         url = f"{TRADO_DEMO_URL}/order/placeOrder"
     else:
         url = f"{TRADO_LIVE_URL}/order/placeOrder"
-    print("Market Order: ", order)
     if hasattr(order, 'dict'):
         order_dict = order.dict()
     else:
@@ -368,14 +359,12 @@ async def tradovate_execute_market_order(
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
-            print("Data: ", data)
         except ValueError:
             # Log error or handle malformed JSON
             data = None
     else:
         # Log error or handle non-200 statuses and empty responses gracefully
         data = None
-    print(response.status_code)
     return data
 
 async def tradovate_execute_limit_order(
@@ -388,7 +377,6 @@ async def tradovate_execute_limit_order(
         url = f"{TRADO_DEMO_URL}/order/placeOrder"
     else:
         url = f"{TRADO_LIVE_URL}/order/placeOrder"
-    print("Limit Order: ", order)
     if hasattr(order, 'dict'):
         order_dict = order.dict()
     else:
@@ -397,14 +385,12 @@ async def tradovate_execute_limit_order(
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
-            print("Data: ", data)
         except ValueError:
             # Log error or handle malformed JSON
             data = None
     else:
         # Log error or handle non-200 statuses and empty responses gracefully
         data = None
-    print(response.status_code)
     return data
 
 async def tradovate_execute_limit_order_with_sltp(
@@ -417,7 +403,6 @@ async def tradovate_execute_limit_order_with_sltp(
         url = f"{TRADO_DEMO_URL}/order/placeoso"
     else:
         url = f"{TRADO_LIVE_URL}/order/placeoso"
-    print("Limit Order with SLTP: ", order)
     if hasattr(order, 'dict'):
         order_dict = order.dict()
     else:
@@ -426,12 +411,10 @@ async def tradovate_execute_limit_order_with_sltp(
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
-            print("Data: ", data)
         except ValueError:
             # Log error or handle malformed JSON
             data = None
     else:
         # Log error or handle non-200 statuses and empty responses gracefully
         data = None
-    print(response.status_code)
     return data

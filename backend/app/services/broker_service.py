@@ -67,6 +67,8 @@ from app.utils.tradovate import (
     tradovate_execute_market_order
 )
 import asyncio
+from app.utils.cache import cache_get_json, cache_set_json
+from app.core.config import settings
 from app.db.repositories.broker_repository import (
     user_add_broker,
     user_get_brokers,
@@ -225,6 +227,10 @@ def change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
 
 
 async def get_positions(db: Session, user_id: UUID):
+    cache_key = f"user:{user_id}:positions"
+    cached = await cache_get_json(cache_key)
+    if cached is not None:
+        return cached
     positions_status: list[TradovatePositionListResponse] = []
     positions_for_frontend: list[TradovatePositionListForFrontend] = []
     db_broker_accounts = (
@@ -244,43 +250,41 @@ async def get_positions(db: Session, user_id: UUID):
             if res:
                 positions_status.extend(res)
     if positions_status != []:
+        account_ids = {str(p["accountId"]) for p in positions_status}
+        sub_accounts = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.sub_account_id.in_(list(account_ids)))
+            .all()
+        )
+        sub_map = {s.sub_account_id: s for s in sub_accounts}
         for position in positions_status:
-            print("Position: ", position)
-            db_sub_broker_account = (
-                db.query(SubBrokerAccount)
-                .filter(SubBrokerAccount.sub_account_id == str(position["accountId"]))
-                .first()
+            sba = sub_map.get(str(position["accountId"]))
+            if not sba or not sba.is_active or position.get("netPos", 0) == 0:
+                continue
+            p = TradovatePositionListForFrontend(
+                id=position["id"],
+                accountId=position["accountId"],
+                contractId=position["contractId"],
+                accountNickname=sba.nickname,
+                symbol=sba.symbol,
+                netPos=position["netPos"],
+                netPrice=position.get("netPrice", 0),
+                bought=position["bought"],
+                boughtValue=position["boughtValue"],
+                sold=position["sold"],
+                soldValue=position["soldValue"],
+                accountDisplayName=sba.sub_account_name,
             )
-
-            if db_sub_broker_account.is_active and position["netPos"] != 0:
-                contract_item = await get_contract_item(
-                    position["contractId"], db_broker_account.access_token, is_demo=True
-                )
-
-                p = TradovatePositionListForFrontend(
-                    id=position["id"],
-                    accountId=position["accountId"],
-                    contractId=position["contractId"],
-                    accountNickname=(
-                        db_sub_broker_account.nickname
-                        if db_sub_broker_account
-                        else None
-                    ),
-                    symbol=contract_item["name"],
-                    netPos=position["netPos"],
-                    netPrice=position["netPrice"] if "netPrice" in position else 0,
-                    bought=position["bought"],
-                    boughtValue=position["boughtValue"],
-                    sold=position["sold"],
-                    soldValue=position["soldValue"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name,
-                )
-
-                positions_for_frontend.append(p)
+            positions_for_frontend.append(p)
+    await cache_set_json(cache_key, [p.dict() for p in positions_for_frontend], settings.CACHE_TTL_SECONDS)
     return positions_for_frontend
 
 
 async def get_orders(db: Session, user_id: UUID):
+    cache_key = f"user:{user_id}:orders"
+    cached = await cache_get_json(cache_key)
+    if cached is not None:
+        return cached
     order_status: list[TradovateOrderListResponse] = []
     order_for_frontend = []
     db_broker_accounts = (
@@ -299,48 +303,43 @@ async def get_orders(db: Session, user_id: UUID):
             if res:
                 order_status.extend(res)
     if order_status != []:
+        account_ids = {str(o["accountId"]) for o in order_status}
+        sub_accounts = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.sub_account_id.in_(list(account_ids)))
+            .all()
+        )
+        sub_map = {s.sub_account_id: s for s in sub_accounts}
         for order in order_status:
-            db_sub_broker_account = (
-                db.query(SubBrokerAccount)
-                .filter(SubBrokerAccount.sub_account_id == str(order["accountId"]))
-                .first()
+            sba = sub_map.get(str(order["accountId"]))
+            if not sba or not sba.is_active:
+                continue
+            o = TradovateOrderForFrontend(
+                id=order["id"],
+                accountId=order["accountId"],
+                accountNickname=sba.nickname,
+                price=getattr(sba, "auto_price", 0) or 0,
+                contractId=order["contractId"],
+                timestamp=order["timestamp"],
+                action=order["action"],
+                ordStatus=order["ordStatus"],
+                executionProviderId=order.get("executionProviderId"),
+                archived=order["archived"],
+                external=order["external"],
+                admin=order["admin"],
+                symbol=sba.symbol,
+                accountDisplayName=sba.sub_account_name,
             )
-            if db_sub_broker_account.is_active:
-                contract_item = await get_contract_item(
-                    order["contractId"], db_broker_account.access_token, is_demo=True
-                )
-                order_version = await get_order_version_depends(
-                    order["id"], db_broker_account.access_token, is_demo=True
-                )
-                if order_version is not None:
-                    price = order_version.get("price", 0)
-                else:
-                    price = 0
-                o = TradovateOrderForFrontend(
-                    id=order["id"],
-                    accountId=order["accountId"],
-                    accountNickname=(
-                        db_sub_broker_account.nickname
-                        if db_sub_broker_account
-                        else None
-                    ),
-                    price=price,
-                    contractId=order["contractId"],
-                    timestamp=order["timestamp"],
-                    action=order["action"],
-                    ordStatus=order["ordStatus"],
-                    execution_provider_id=order.get("executionProviderId"),
-                    archived=order["archived"],
-                    external=order["external"],
-                    admin=order["admin"],
-                    symbol=contract_item["name"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name,
-                )
-                order_for_frontend.append(o)
+            order_for_frontend.append(o)
+    await cache_set_json(cache_key, [o.dict() for o in order_for_frontend], settings.CACHE_TTL_SECONDS)
     return order_for_frontend
 
 
 async def get_accounts(db: Session, user_id: UUID):
+    cache_key = f"user:{user_id}:accounts"
+    cached = await cache_get_json(cache_key)
+    if cached is not None:
+        return cached
     accounts_status: list[TradovateCashBalanceResponse] = []
     accounts_for_dashboard = []
     db_broker_accounts = (
@@ -359,31 +358,32 @@ async def get_accounts(db: Session, user_id: UUID):
             if res:
                 accounts_status.extend(res)
     if accounts_status != []:
+        account_ids = {str(a["accountId"]) for a in accounts_status}
+        sub_accounts = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.sub_account_id.in_(list(account_ids)))
+            .all()
+        )
+        sub_map = {s.sub_account_id: s for s in sub_accounts}
         for account in accounts_status:
-            db_sub_broker_account = (
-                db.query(SubBrokerAccount)
-                .filter(SubBrokerAccount.sub_account_id == str(account["accountId"]))
-                .first()
+            sba = sub_map.get(str(account["accountId"]))
+            if not sba or not sba.is_active:
+                continue
+            a = TradovateAccountsForFrontend(
+                id=account["id"],
+                accountId=account["accountId"],
+                accountNickname=sba.nickname,
+                timestamp=account["timestamp"],
+                currencyId=account["currencyId"],
+                amount=account["amount"],
+                realizedPnL=account["realizedPnL"],
+                weekRealizedPnL=account["weekRealizedPnL"],
+                archived=account["archived"],
+                amountSOD=account["amountSOD"],
+                accountDisplayName=sba.sub_account_name,
             )
-            if db_sub_broker_account.is_active:
-                a = TradovateAccountsForFrontend(
-                    id=account["id"],
-                    accountId=account["accountId"],
-                    accountNickname=(
-                        db_sub_broker_account.nickname
-                        if db_sub_broker_account
-                        else None
-                    ),
-                    timestamp=account["timestamp"],
-                    currencyId=account["currencyId"],
-                    amount=account["amount"],
-                    realizedPnL=account["realizedPnL"],
-                    weekRealizedPnL=account["weekRealizedPnL"],
-                    archived=account["archived"],
-                    amountSOD=account["amountSOD"],
-                    accountDisplayName=db_sub_broker_account.sub_account_name,
-                )
-                accounts_for_dashboard.append(a)
+            accounts_for_dashboard.append(a)
+    await cache_set_json(cache_key, [a.dict() for a in accounts_for_dashboard], settings.CACHE_TTL_SECONDS)
     return accounts_for_dashboard
 
 
