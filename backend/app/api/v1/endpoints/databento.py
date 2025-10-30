@@ -530,18 +530,18 @@ async def stream_pnl_data(
                             if db_broker_account:
                                 # Get contract item details
                                 contract_item = await get_contract_item(
-                                    pos.contractId, db_broker_account.access_token, is_demo=True
+                                    pos.contractId, db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
                                 )
                                 
                                 if contract_item:
                                     # Get product details for multiplier
                                     contract_maturity = await get_contract_maturity_item(
-                                        contract_item["contractMaturityId"], db_broker_account.access_token, is_demo=True
+                                        contract_item["contractMaturityId"], db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
                                     )
                                     
                                     if contract_maturity:
                                         product_item = await get_product_item(
-                                            contract_maturity["productId"], db_broker_account.access_token, is_demo=True
+                                            contract_maturity["productId"], db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
                                         )
                                         
                                         if product_item:
@@ -635,46 +635,44 @@ async def stream_pnl_data(
                         continue
                     
                     elif record_type in ["MBP1Msg", "MBPMsg", "TradeMsg"]:
-                        # Extract price data
+                        # Extract price data robustly
                         instrument_id = getattr(record, 'instrument_id', None)
-                        symbol = symbol_mapping.get(instrument_id, None)
-                        
+                        symbol = symbol_mapping.get(instrument_id, None) or getattr(record, 'stype_in_symbol', None)
                         if not symbol or symbol not in symbol_to_positions:
                             continue
-                        
-                        # Get current price (mid-price)
+
                         bid_price = None
                         ask_price = None
-                        
+                        last_price = None
+
                         if hasattr(record, 'levels'):
                             levels_data = record.levels
-                            
                             if isinstance(levels_data, list) and len(levels_data) > 0:
                                 level = levels_data[0]
-                            elif hasattr(levels_data, 'bid_px'):
+                            elif hasattr(levels_data, 'bid_px') or hasattr(levels_data, 'ask_px'):
                                 level = levels_data
                             else:
                                 level = None
-                            
                             if level is not None:
                                 if hasattr(level, 'pretty_bid_px'):
                                     bid_price = float(level.pretty_bid_px)
                                 elif hasattr(level, 'bid_px'):
                                     bid_price = float(level.bid_px)
-                                
                                 if hasattr(level, 'pretty_ask_px'):
                                     ask_price = float(level.pretty_ask_px)
                                 elif hasattr(level, 'ask_px'):
                                     ask_price = float(level.ask_px)
-                        
-                        # Validate we have at least one price
-                        if bid_price is None and ask_price is None:
+
+                        if record_type == 'TradeMsg':
+                            if hasattr(record, 'pretty_px'):
+                                last_price = float(record.pretty_px)
+                            elif hasattr(record, 'px'):
+                                last_price = float(record.px)
+
+                        if bid_price is None and ask_price is None and last_price is None:
                             continue
                         
-                        latest_prices[symbol] = {
-                            "bid": bid_price,
-                            "ask": ask_price
-                        }
+                        latest_prices[symbol] = {"bid": bid_price, "ask": ask_price, "last": last_price}
 
                         # Calculate and emit PnL for all positions under this symbol
                         for position in symbol_to_positions[symbol]:
@@ -688,14 +686,14 @@ async def stream_pnl_data(
                             # Long positions: use BID (what you'd get if you sell now)
                             # Short positions: use ASK (what you'd pay if you buy back now)
                             if netPos > 0:  # Long position
-                                current_price = bid_price if bid_price is not None else ask_price
+                                current_price = bid_price if bid_price is not None else (last_price if last_price is not None else ask_price)
                                 if current_price is None:
                                     continue
                                 # PnL = (Current Price - Entry Price) * Quantity * Contract Multiplier
                                 price_diff = current_price - netPrice
                                 unrealized_pnl = price_diff * netPos * valuePerPoint
                             else:  # Short position
-                                current_price = ask_price if ask_price is not None else bid_price
+                                current_price = ask_price if ask_price is not None else (last_price if last_price is not None else bid_price)
                                 if current_price is None:
                                     continue
                                 # PnL = (Entry Price - Current Price) * Quantity * Contract Multiplier
@@ -713,6 +711,7 @@ async def stream_pnl_data(
                                 "unrealizedPnL": round(unrealized_pnl, 2),
                                 "bidPrice": bid_price,
                                 "askPrice": ask_price,
+                                "lastPrice": last_price,
                                 "valuePerPoint": valuePerPoint,
                                 "tickSize": tickSize,
                                 "priceDiff": round(price_diff, 4),
