@@ -136,7 +136,7 @@ const DashboardPage: React.FC = () => {
       fetch(`${API_BASE}/databento/market-status?symbols=${encodeURIComponent(symbols)}`)
         .then(r => r.json())
         .then((status) => {
-          if (!status.open) {
+          if (!status.open && status.reason === 'missing_api_key') {
             setIsPnlIdle(true);
             const newPnl: any = {};
             positions.forEach(p => {

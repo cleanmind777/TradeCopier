@@ -562,7 +562,10 @@ const TradingPage: React.FC = () => {
               last: last.close,
             });
           }
-          return; // do not start SSE when closed
+          // Still attempt SSE unless API key is missing
+          if (statusJson.reason === 'missing_api_key') {
+            return;
+          }
         }
       } catch {}
       try {

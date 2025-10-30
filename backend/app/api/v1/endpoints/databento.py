@@ -28,14 +28,14 @@ symbol_mapping = {}
 DATASET = "GLBX.MDP3"
 SCHEMA = "mbp-1"
 async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
-    """Heuristic market status using recent historical data presence within last 10 minutes."""
+    """Heuristic market status using recent historical data presence within last 60 minutes."""
     try:
         if not settings.DATABENTO_KEY:
             return (False, "missing_api_key")
         from datetime import datetime as dt, timezone, timedelta
         client = dbt.Historical(key=settings.DATABENTO_KEY)
         end = dt.now(timezone.utc)
-        start = end - timedelta(minutes=15)
+        start = end - timedelta(minutes=60)
         # request a tiny range; if any symbol returns rows in last 10 minutes, consider open
         result = client.timeseries.get_range(
             dataset=DATASET,
@@ -54,7 +54,7 @@ async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
             max_ts = None
         if not max_ts:
             return (False, "no_timestamp")
-        if (end - max_ts) <= timedelta(minutes=10):
+        if (end - max_ts) <= timedelta(minutes=30):
             return (True, "recent_data")
         return (False, "stale_data")
     except Exception:

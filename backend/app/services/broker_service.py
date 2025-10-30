@@ -264,11 +264,7 @@ async def get_positions(db: Session, user_id: UUID):
             if not sba:
                 continue
             unique_keys.add((sba.is_demo, pos["contractId"]))
-        fetch_tasks = [
-            get_contract_item(contract_id, next((ba.access_token for ba in db.query(BrokerAccount).filter(BrokerAccount.id == sba.broker_account_id)), None) if False else "", is_demo)
-            for (is_demo, contract_id) in unique_keys
-        ]
-        # Above access token retrieval is not needed for cached endpoints; we will reuse any token from the user's accounts
+        # Pick first available token per venue
         # pick first available token per venue
         tokens = {True: None, False: None}
         for ba in db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all():
