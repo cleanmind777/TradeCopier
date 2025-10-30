@@ -348,7 +348,8 @@ async def sse_price_stream(request: Request):
     open_flag, reason = await is_market_open(symbols)
     if not open_flag:
         async def closed_stream():
-            yield f"data: {json.dumps({\"status\": \"market_closed\", \"reason\": reason})}\n\n"
+            payload = {"status": "market_closed", "reason": reason}
+            yield f"data: {json.dumps(payload)}\n\n"
         return StreamingResponse(
             closed_stream(),
             media_type="text/event-stream",
@@ -754,7 +755,8 @@ async def sse_pnl_stream(
         open_flag, reason = await is_market_open(symbols)
         if not open_flag:
             async def closed_stream():
-                yield f"data: {json.dumps({\"status\": \"market_closed\", \"reason\": reason})}\n\n"
+                payload = {"status": "market_closed", "reason": reason}
+                yield f"data: {json.dumps(payload)}\n\n"
             return StreamingResponse(
                 closed_stream(),
                 media_type="text/event-stream",
