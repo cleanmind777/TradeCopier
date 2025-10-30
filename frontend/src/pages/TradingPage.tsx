@@ -162,7 +162,7 @@ const TradingPage: React.FC = () => {
         // Group positions by symbol for accounts in this group
         const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
         positions
-          .filter((p) => accountIdSet.has(p.accountId))
+          .filter((p) => accountIdSet.has(Number(p.accountId)))
           .forEach((p) => {
             const sym = (p.symbol || "").toUpperCase();
             if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
@@ -171,13 +171,13 @@ const TradingPage: React.FC = () => {
 
         // Sum realized PnL across accounts in group
         const realizedPnLTotal = accounts
-          .filter((a) => accountIdSet.has(a.accountId))
+          .filter((a) => accountIdSet.has(Number(a.accountId)))
           .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
 
         // For each symbol in this group
         for (const [sym, list] of symbolToPositions.entries()) {
           // Open Position: total net position (sum of netPos values)
-          const totalNetPos = list.reduce((sum, p) => sum + (p.netPos || 0), 0);
+          const totalNetPos = list.reduce((sum, p) => sum + (Number(p.netPos) || 0), 0);
 
           // Open PnL: sum from live pnlData if available
           let openPnLSum = 0;
@@ -192,7 +192,7 @@ const TradingPage: React.FC = () => {
           // Count unique accounts in this group that have a non-zero position for this symbol
           const accountsWithPositions = new Set<number>();
           list.forEach((p) => {
-            if ((p.netPos || 0) !== 0) accountsWithPositions.add(p.accountId);
+            if ((Number(p.netPos) || 0) !== 0) accountsWithPositions.add(Number(p.accountId));
           });
 
           rows.push({
