@@ -203,10 +203,16 @@ async def refresh_new_token(db: Session):
     db_broker_accounts = result.scalars().all()
     if len(db_broker_accounts) != 0 and db_broker_accounts:
         for broker in db_broker_accounts:
-            new_tokens = get_renew_token(broker.access_token)
-            await user_refresh_token(db, broker.id, new_tokens)
-            new_websocket_tokens = get_renew_token(broker.websocket_access_token)
-            await user_refresh_websocket_token(db, broker.id, new_websocket_tokens)
+            # Refresh REST tokens
+            if broker.access_token:
+                new_tokens = get_renew_token(broker.access_token)
+                if new_tokens:
+                    await user_refresh_token(db, broker.id, new_tokens)
+            # Refresh WebSocket tokens
+            if getattr(broker, "websocket_access_token", None):
+                new_websocket_tokens = get_renew_token(broker.websocket_access_token)
+                if new_websocket_tokens:
+                    await user_refresh_websocket_token(db, broker.id, new_websocket_tokens)
 
 
 def change_broker(db: Session, broker_change: BrokerChange):
