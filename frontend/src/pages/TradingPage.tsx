@@ -528,7 +528,7 @@ const TradingPage: React.FC = () => {
     };
   };
 
-  // Subscribe to real-time price stream when symbol changes
+  // Subscribe to real-time price stream when symbol changes, but defer
   useEffect(() => {
     if (!symbol) {
       if (priceEventSourceRef.current) {
@@ -541,42 +541,49 @@ const TradingPage: React.FC = () => {
 
     const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
     
-    // Subscribe to symbol
-    fetch(`${API_BASE}/databento/sse/current-price`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbols: [symbol] }),
-    }).catch(console.error);
-
-    // Connect to SSE stream
-    const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
-    priceEventSourceRef.current = es;
-
-    es.onmessage = (e) => {
+    const start = async () => {
       try {
-        const data = JSON.parse(e.data);
-        if (data.status === "connected" || data.test || data.error) return;
-        
-        if (data.symbol === symbol) {
-          setCurrentPrice({
-            bid: data.bid_price,
-            ask: data.ask_price,
-            last: data.last_price || (data.bid_price && data.ask_price ? (data.bid_price + data.ask_price) / 2 : undefined),
-            bidSize: data.bid_size,
-            askSize: data.ask_size,
-          });
-        }
-      } catch (err) {
-        console.error("Error parsing price data:", err);
-      }
+        await fetch(`${API_BASE}/databento/sse/current-price`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbols: [symbol] }),
+        });
+      } catch {}
+
+      const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
+      priceEventSourceRef.current = es;
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.status === "connected" || data.test || data.error) return;
+          if (data.symbol === symbol) {
+            setCurrentPrice({
+              bid: data.bid_price,
+              ask: data.ask_price,
+              last: data.last_price || (data.bid_price && data.ask_price ? (data.bid_price + data.ask_price) / 2 : undefined),
+              bidSize: data.bid_size,
+              askSize: data.ask_size,
+            });
+          }
+        } catch {}
+      };
+
+      es.onerror = () => {
+        es.close();
+      };
     };
 
-    es.onerror = () => {
-      console.error("Price SSE error");
-      es.close();
-    };
+    const idleCb = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: any) => number);
+    let timeoutId: number | undefined;
+    if (typeof idleCb === "function") {
+      idleCb(start, { timeout: 1000 });
+    } else {
+      timeoutId = window.setTimeout(start, 250);
+    }
 
     return () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
       if (priceEventSourceRef.current) {
         priceEventSourceRef.current.close();
         priceEventSourceRef.current = null;

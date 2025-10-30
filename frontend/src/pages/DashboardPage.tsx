@@ -122,63 +122,55 @@ const DashboardPage: React.FC = () => {
     loadData();
   }, [user_id]);
 
-  // Connect to real-time PnL SSE stream
+  // Connect to real-time PnL SSE stream AFTER initial data has rendered
   useEffect(() => {
-    if (!user_id || positions.length === 0) {
+    if (!user_id || positions.length === 0 || isInitialLoad) {
       return;
     }
 
-    const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-    const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
-    eventSourceRef.current = eventSource;
+    const start = () => {
+      const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+      const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
+      eventSourceRef.current = eventSource;
 
-    eventSource.onopen = () => {
-      console.log("Connected to PnL stream");
-      setIsConnectedToPnL(true);
+      eventSource.onopen = () => {
+        setIsConnectedToPnL(true);
+      };
+
+      eventSource.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.status === "connected" || data.error) return;
+          if (data.symbol && data.unrealizedPnL !== undefined) {
+            const key = data.positionKey || `${data.symbol}:${data.accountId}`;
+            setPnlData(prev => ({ ...prev, [key]: data }));
+          }
+        } catch {}
+      };
+
+      eventSource.onerror = () => {
+        setIsConnectedToPnL(false);
+        eventSource.close();
+      };
     };
 
-    eventSource.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        
-        // Check for status messages
-        if (data.status === "connected") {
-          console.log("PnL stream connected:", data);
-          return;
-        }
-
-        // Check for errors
-        if (data.error) {
-          console.error("PnL stream error:", data);
-          return;
-        }
-
-        // Update PnL data; key by symbol+account to avoid overwriting
-        if (data.symbol && data.unrealizedPnL !== undefined) {
-          const key = data.positionKey || `${data.symbol}:${data.accountId}`;
-          setPnlData(prev => ({
-            ...prev,
-            [key]: data
-          }));
-        }
-      } catch (error) {
-        console.error("Error parsing PnL data:", error);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error("PnL SSE error:", error);
-      setIsConnectedToPnL(false);
-    };
+    const idleCb = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: any) => number);
+    let timeoutId: number | undefined;
+    if (typeof idleCb === "function") {
+      idleCb(start, { timeout: 1000 });
+    } else {
+      timeoutId = window.setTimeout(start, 250);
+    }
 
     return () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
       setIsConnectedToPnL(false);
     };
-  }, [user_id, positions.length]);
+  }, [user_id, positions.length, isInitialLoad]);
 
   // General sorting utility for array of objects
   const sortData = <T,>(
