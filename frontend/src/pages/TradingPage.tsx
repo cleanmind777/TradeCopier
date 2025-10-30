@@ -544,6 +544,27 @@ const TradingPage: React.FC = () => {
     const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
     
     const start = async () => {
+      // Quick market status check first
+      try {
+        const statusRes = await fetch(`${API_BASE}/databento/market-status?symbols=${encodeURIComponent(symbol)}`);
+        const statusJson = await statusRes.json();
+        if (!statusJson.open) {
+          setIsPriceIdle(true);
+          // Load last historical candle to populate price snapshot
+          const now = new Date();
+          const startIso = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+          const endIso = now.toISOString();
+          const hRes = await fetch(`${API_BASE}/databento/historical?symbol=${encodeURIComponent(symbol)}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&schema=ohlcv-1m`);
+          const hJson = await hRes.json();
+          const last = hJson?.data?.[hJson.data.length - 1];
+          if (last) {
+            setCurrentPrice({
+              last: last.close,
+            });
+          }
+          return; // do not start SSE when closed
+        }
+      } catch {}
       try {
         await fetch(`${API_BASE}/databento/sse/current-price`, {
           method: "POST",

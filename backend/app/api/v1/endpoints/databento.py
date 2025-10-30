@@ -27,6 +27,48 @@ symbol_mapping = {}
 # Configuration constants
 DATASET = "GLBX.MDP3"
 SCHEMA = "mbp-1"
+async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
+    """Heuristic market status using recent historical data presence within last 10 minutes."""
+    try:
+        if not settings.DATABENTO_KEY:
+            return (False, "missing_api_key")
+        from datetime import datetime as dt, timezone, timedelta
+        client = dbt.Historical(key=settings.DATABENTO_KEY)
+        end = dt.now(timezone.utc)
+        start = end - timedelta(minutes=15)
+        # request a tiny range; if any symbol returns rows in last 10 minutes, consider open
+        result = client.timeseries.get_range(
+            dataset=DATASET,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            symbols=symbols,
+            schema="ohlcv-1m",
+        )
+        df = result.to_df()
+        if df.empty:
+            return (False, "no_recent_data")
+        # check max ts_event is within 10 minutes
+        try:
+            max_ts = df.index.get_level_values("ts_event").max()
+        except Exception:
+            max_ts = None
+        if not max_ts:
+            return (False, "no_timestamp")
+        if (end - max_ts) <= timedelta(minutes=10):
+            return (True, "recent_data")
+        return (False, "stale_data")
+    except Exception:
+        # On errors, do not block; assume closed so frontend can fallback fast
+        return (False, "error_checking")
+
+
+@router.get("/market-status")
+async def market_status(symbols: str):
+    """Check if market appears open for given comma-separated symbols."""
+    syms = [s.strip() for s in symbols.split(",") if s.strip()]
+    open_flag, reason = await is_market_open(syms)
+    return {"open": open_flag, "reason": reason, "symbols": syms, "timestamp": datetime.now().isoformat()}
+
 
 
 async def stream_price_data(
@@ -300,6 +342,21 @@ async def sse_price_stream(request: Request):
         raise HTTPException(
             status_code=400, 
             detail="No symbols subscribed. Please POST to /sse/current-price first with a symbols list."
+        )
+
+    # Check market status quickly to avoid slow connects when closed
+    open_flag, reason = await is_market_open(symbols)
+    if not open_flag:
+        async def closed_stream():
+            yield f"data: {json.dumps({\"status\": \"market_closed\", \"reason\": reason})}\n\n"
+        return StreamingResponse(
+            closed_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
         )
 
     return StreamingResponse(
@@ -687,6 +744,27 @@ async def sse_pnl_stream(
     Returns:
         Server-Sent Events stream with real-time PnL data
     """
+    # Derive symbols from positions for quick market status check
+    try:
+        positions = await get_positions(db, user_id)
+        symbols = list({p.symbol for p in positions if getattr(p, "netPos", 0) != 0}) or []
+    except Exception:
+        symbols = []
+    if symbols:
+        open_flag, reason = await is_market_open(symbols)
+        if not open_flag:
+            async def closed_stream():
+                yield f"data: {json.dumps({\"status\": \"market_closed\", \"reason\": reason})}\n\n"
+            return StreamingResponse(
+                closed_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                }
+            )
+
     return StreamingResponse(
         stream_pnl_data(user_id, request, db),
         media_type="text/event-stream",
