@@ -267,7 +267,12 @@ def place_order(access_token: str, is_demo: bool, order):
                 return True
         else:
             # Handle non-200 response
-            return None
+            try:
+                body = response.json()
+            except ValueError:
+                body = response.text
+            print(f"Exit order failed: {response.status_code} - {body}")
+            return {"error": True, "status": response.status_code, "body": body}
     except requests.RequestException as e:
         # Log or handle request error
         return None

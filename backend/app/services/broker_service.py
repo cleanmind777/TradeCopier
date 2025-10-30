@@ -390,11 +390,15 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
         .filter(SubBrokerAccount.sub_account_id == str(exit_position_data.accountId))
         .first()
     )
+    if db_sub_broker is None:
+        return {"error": "Sub broker account not found", "accountId": exit_position_data.accountId}
     db_broker = (
         db.query(BrokerAccount)
         .filter(BrokerAccount.id == db_sub_broker.broker_account_id)
         .first()
     )
+    if db_broker is None:
+        return {"error": "Broker account not found", "broker_account_id": db_sub_broker.broker_account_id}
     access_token = db_broker.access_token
     # Build full payload including accountSpec as required by provider
     order_payload = {
