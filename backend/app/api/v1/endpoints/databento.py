@@ -27,39 +27,59 @@ symbol_mapping = {}
 # Configuration constants
 DATASET = "GLBX.MDP3"
 SCHEMA = "mbp-1"
+def _root_symbol_variants(symbol: str) -> list[str]:
+    # Try to derive root like ES.FUT from ESZ5, NQZ5, etc.
+    s = (symbol or "").upper()
+    # Extract leading letters
+    i = 0
+    while i < len(s) and s[i].isalpha():
+        i += 1
+    root = s[:i]
+    variants = [s]
+    if root:
+        variants.append(f"{root}.FUT")
+    return list(dict.fromkeys(variants))
+
+
 async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
-    """Heuristic market status using recent historical data presence within last 60 minutes."""
+    """Heuristic market status using recent historical data presence; permissive to avoid false negatives."""
     try:
         if not settings.DATABENTO_KEY:
             return (False, "missing_api_key")
         from datetime import datetime as dt, timezone, timedelta
         client = dbt.Historical(key=settings.DATABENTO_KEY)
         end = dt.now(timezone.utc)
-        start = end - timedelta(minutes=60)
-        # request a tiny range; if any symbol returns rows in last 10 minutes, consider open
+        start = end - timedelta(minutes=90)
+        # Build variant list per symbol
+        all_variants: list[str] = []
+        for sym in symbols:
+            all_variants.extend(_root_symbol_variants(sym))
+        all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+        if not all_variants:
+            return (True, "no_symbols")
+        # Query minimal range; if any data within 60 minutes, treat open
         result = client.timeseries.get_range(
             dataset=DATASET,
             start=start.isoformat(),
             end=end.isoformat(),
-            symbols=symbols,
+            symbols=all_variants,
             schema="ohlcv-1m",
         )
         df = result.to_df()
         if df.empty:
-            return (False, "no_recent_data")
-        # check max ts_event is within 10 minutes
+            return (True, "permissive_no_data")
         try:
             max_ts = df.index.get_level_values("ts_event").max()
         except Exception:
             max_ts = None
         if not max_ts:
-            return (False, "no_timestamp")
-        if (end - max_ts) <= timedelta(minutes=30):
+            return (True, "permissive_no_ts")
+        if (end - max_ts) <= timedelta(minutes=60):
             return (True, "recent_data")
-        return (False, "stale_data")
+        return (True, "permissive_stale")
     except Exception:
-        # On errors, do not block; assume closed so frontend can fallback fast
-        return (False, "error_checking")
+        # Be permissive to avoid blocking live
+        return (True, "error_checking_permissive")
 
 
 @router.get("/market-status")
@@ -346,7 +366,7 @@ async def sse_price_stream(request: Request):
 
     # Check market status quickly to avoid slow connects when closed
     open_flag, reason = await is_market_open(symbols)
-    if not open_flag:
+    if not open_flag and reason == "missing_api_key":
         async def closed_stream():
             payload = {"status": "market_closed", "reason": reason}
             yield f"data: {json.dumps(payload)}\n\n"
@@ -753,7 +773,7 @@ async def sse_pnl_stream(
         symbols = []
     if symbols:
         open_flag, reason = await is_market_open(symbols)
-        if not open_flag:
+        if not open_flag and reason == "missing_api_key":
             async def closed_stream():
                 payload = {"status": "market_closed", "reason": reason}
                 yield f"data: {json.dumps(payload)}\n\n"
