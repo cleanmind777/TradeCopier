@@ -1381,6 +1381,7 @@ const TradingPage: React.FC = () => {
             </div>
             <div className="p-3 overflow-x-auto">
               {activeTab === 'positions' && (
+                groupMonitorRows.length > 0 ? (
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
@@ -1405,7 +1406,12 @@ const TradingPage: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
-                )}
+                ) : (
+                  <div className="text-center py-4 text-slate-500">
+                    {groups.length === 0 ? "Loading groups..." : positions.length === 0 ? "No open positions found" : "No positions match the selected criteria"}
+                  </div>
+                )
+              )}
                 {activeTab === 'orders' && (
                   selectedGroup ? (
                     <table className="w-full text-sm">
@@ -1423,17 +1429,25 @@ const TradingPage: React.FC = () => {
                       <tbody>
                         {orders
                           .filter(o => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === o.accountId))
-                          .map((order) => (
-                        <tr key={order.id} className="border-b last:border-0">
-                          <td className="px-3 py-2">{order.accountNickname}</td>
-                          <td className="px-3 py-2">{order.accountDisplayName}</td>
-                          <td className="px-3 py-2">{order.symbol}</td>
-                          <td className="px-3 py-2">{order.action}</td>
-                          <td className="px-3 py-2">{order.ordStatus}</td>
-                          <td className="px-3 py-2">{new Date(order.timestamp).toLocaleString()}</td>
-                          <td className="px-3 py-2 text-right">{order.price}</td>
-                        </tr>
-                      ))}
+                          .length > 0 ? (
+                          orders
+                            .filter(o => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === o.accountId))
+                            .map((order) => (
+                              <tr key={order.id} className="border-b last:border-0">
+                                <td className="px-3 py-2">{order.accountNickname}</td>
+                                <td className="px-3 py-2">{order.accountDisplayName}</td>
+                                <td className="px-3 py-2">{order.symbol}</td>
+                                <td className="px-3 py-2">{order.action}</td>
+                                <td className="px-3 py-2">{order.ordStatus}</td>
+                                <td className="px-3 py-2">{new Date(order.timestamp).toLocaleString()}</td>
+                                <td className="px-3 py-2 text-right">{order.price}</td>
+                              </tr>
+                            ))
+                        ) : (
+                          <tr>
+                            <td colSpan={7} className="px-3 py-4 text-center text-slate-500">No orders found for this group</td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   ) : (
@@ -1452,18 +1466,26 @@ const TradingPage: React.FC = () => {
                         <th className="text-right font-semibold px-3 py-2">Week PnL</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {accounts
-                        .filter(a => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === a.accountId))
-                        .map((account) => (
-                        <tr key={account.id} className="border-b last:border-0">
-                          <td className="px-3 py-2">{account.accountNickname}</td>
-                          <td className="px-3 py-2">{account.accountDisplayName}</td>
-                          <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
-                          <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
-                          <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
-                        </tr>
-                      ))}
+                      <tbody>
+                        {accounts
+                          .filter(a => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === a.accountId))
+                          .length > 0 ? (
+                          accounts
+                            .filter(a => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === a.accountId))
+                            .map((account) => (
+                              <tr key={account.id} className="border-b last:border-0">
+                                <td className="px-3 py-2">{account.accountNickname}</td>
+                                <td className="px-3 py-2">{account.accountDisplayName}</td>
+                                <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
+                                <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
+                                <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
+                              </tr>
+                            ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="px-3 py-4 text-center text-slate-500">No accounts found for this group</td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   ) : (
