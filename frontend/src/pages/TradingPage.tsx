@@ -68,6 +68,8 @@ const TradingPage: React.FC = () => {
     askSize?: number;
   }>({});
   const priceEventSourceRef = useRef<EventSource | null>(null);
+  const [isPriceIdle, setIsPriceIdle] = useState<boolean>(false);
+  const lastPriceTsRef = useRef<number>(0);
 
   // Equity per sub-broker (balance + unrealizedPnL)
   const [subBrokerEquities, setSubBrokerEquities] = useState<Record<string, {
@@ -528,7 +530,7 @@ const TradingPage: React.FC = () => {
     };
   };
 
-  // Subscribe to real-time price stream when symbol changes
+  // Subscribe to real-time price stream when symbol changes, but defer
   useEffect(() => {
     if (!symbol) {
       if (priceEventSourceRef.current) {
@@ -541,42 +543,86 @@ const TradingPage: React.FC = () => {
 
     const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
     
-    // Subscribe to symbol
-    fetch(`${API_BASE}/databento/sse/current-price`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbols: [symbol] }),
-    }).catch(console.error);
-
-    // Connect to SSE stream
-    const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
-    priceEventSourceRef.current = es;
-
-    es.onmessage = (e) => {
+    const start = async () => {
+      // Quick market status check first
       try {
-        const data = JSON.parse(e.data);
-        if (data.status === "connected" || data.test || data.error) return;
-        
-        if (data.symbol === symbol) {
-          setCurrentPrice({
-            bid: data.bid_price,
-            ask: data.ask_price,
-            last: data.last_price || (data.bid_price && data.ask_price ? (data.bid_price + data.ask_price) / 2 : undefined),
-            bidSize: data.bid_size,
-            askSize: data.ask_size,
-          });
+        const statusRes = await fetch(`${API_BASE}/databento/market-status?symbols=${encodeURIComponent(symbol)}`);
+        const statusJson = await statusRes.json();
+        if (!statusJson.open) {
+          setIsPriceIdle(true);
+          // Load last historical candle to populate price snapshot
+          const now = new Date();
+          const startIso = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+          const endIso = now.toISOString();
+          const hRes = await fetch(`${API_BASE}/databento/historical?symbol=${encodeURIComponent(symbol)}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&schema=ohlcv-1m`);
+          const hJson = await hRes.json();
+          const last = hJson?.data?.[hJson.data.length - 1];
+          if (last) {
+            setCurrentPrice({
+              last: last.close,
+            });
+          }
+          // Still attempt SSE unless API key is missing
+          if (statusJson.reason === 'missing_api_key') {
+            return;
+          }
         }
-      } catch (err) {
-        console.error("Error parsing price data:", err);
-      }
+      } catch {}
+      try {
+        await fetch(`${API_BASE}/databento/sse/current-price`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbols: [symbol] }),
+        });
+      } catch {}
+
+      const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
+      priceEventSourceRef.current = es;
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.status === "connected" || data.test || data.error) return;
+          if (data.symbol === symbol) {
+            setCurrentPrice({
+              bid: data.bid_price,
+              ask: data.ask_price,
+              last: data.last_price || (data.bid_price && data.ask_price ? (data.bid_price + data.ask_price) / 2 : undefined),
+              bidSize: data.bid_size,
+              askSize: data.ask_size,
+            });
+            lastPriceTsRef.current = Date.now();
+            setIsPriceIdle(false);
+          }
+        } catch {}
+      };
+
+      es.onerror = () => {
+        // keep connection light; mark as idle rather than erroring UI
+        setIsPriceIdle(true);
+        es.close();
+      };
     };
 
-    es.onerror = () => {
-      console.error("Price SSE error");
-      es.close();
-    };
+    const idleCb = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: any) => number);
+    let timeoutId: number | undefined;
+    if (typeof idleCb === "function") {
+      idleCb(start, { timeout: 1000 });
+    } else {
+      timeoutId = window.setTimeout(start, 250);
+    }
+
+    // Idle detector
+    const idleInterval = window.setInterval(() => {
+      const since = Date.now() - (lastPriceTsRef.current || 0);
+      if (since > 15000) {
+        setIsPriceIdle(true);
+      }
+    }, 5000);
 
     return () => {
+      window.clearInterval(idleInterval);
+      if (timeoutId) window.clearTimeout(timeoutId);
       if (priceEventSourceRef.current) {
         priceEventSourceRef.current.close();
         priceEventSourceRef.current = null;
@@ -1449,8 +1495,8 @@ const TradingPage: React.FC = () => {
           )} */}
           
           {/* Chart - majority of the page */}
-          <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '400px' }}>
-            <SymbolsMonitor initialSymbol={symbol} compact height={undefined} />
+          <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '420px' }}>
+            <SymbolsMonitor initialSymbol={symbol} compact height={420} />
               </div>
           
           {/* Monitor Tabs (Group Positions, Orders, Accounts) */}

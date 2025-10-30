@@ -69,6 +69,8 @@ const DashboardPage: React.FC = () => {
 
   const eventSourceRef = React.useRef<EventSource | null>(null);
   const [isConnectedToPnL, setIsConnectedToPnL] = useState(false);
+  const [isPnlIdle, setIsPnlIdle] = useState(false);
+  const lastPnlTsRef = React.useRef<number>(0);
 
   const [positionsSort, setPositionsSort] = useState<SortConfig | null>(null);
   const [ordersSort, setOrdersSort] = useState<SortConfig | null>(null);
@@ -122,63 +124,93 @@ const DashboardPage: React.FC = () => {
     loadData();
   }, [user_id]);
 
-  // Connect to real-time PnL SSE stream
+  // Connect to real-time PnL SSE stream AFTER initial data has rendered
   useEffect(() => {
-    if (!user_id || positions.length === 0) {
+    if (!user_id || positions.length === 0 || isInitialLoad) {
       return;
     }
 
-    const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-    const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
-    eventSourceRef.current = eventSource;
-
-    eventSource.onopen = () => {
-      console.log("Connected to PnL stream");
-      setIsConnectedToPnL(true);
+    const start = () => {
+      const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+      const symbols = Array.from(new Set(positions.map(p => p.symbol))).join(",");
+      fetch(`${API_BASE}/databento/market-status?symbols=${encodeURIComponent(symbols)}`)
+        .then(r => r.json())
+        .then((status) => {
+          if (!status.open && status.reason === 'missing_api_key') {
+            setIsPnlIdle(true);
+            const newPnl: any = {};
+            positions.forEach(p => {
+              const key = `${p.symbol}:${p.accountId}`;
+              newPnl[key] = {
+                symbol: p.symbol,
+                accountId: p.accountId,
+                accountNickname: p.accountNickname,
+                accountDisplayName: p.accountDisplayName,
+                netPos: p.netPos,
+                entryPrice: p.netPrice,
+                currentPrice: p.netPrice,
+                unrealizedPnL: 0,
+                bidPrice: undefined,
+                askPrice: undefined,
+                timestamp: new Date().toISOString(),
+                positionKey: key,
+              };
+            });
+            setPnlData(newPnl);
+            return;
+          }
+          const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
+          eventSourceRef.current = eventSource;
+          eventSource.onopen = () => setIsConnectedToPnL(true);
+          eventSource.onmessage = (e) => {
+            try {
+              const data = JSON.parse(e.data);
+              if (data.status === "connected" || data.error) return;
+              if (data.symbol && data.unrealizedPnL !== undefined) {
+                const key = data.positionKey || `${data.symbol}:${data.accountId}`;
+                setPnlData(prev => ({ ...prev, [key]: data }));
+                lastPnlTsRef.current = Date.now();
+                setIsPnlIdle(false);
+              }
+            } catch {}
+          };
+          eventSource.onerror = () => {
+            setIsConnectedToPnL(false);
+            eventSource.close();
+          };
+        })
+        .catch(() => {
+          const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
+          eventSourceRef.current = eventSource;
+        });
     };
 
-    eventSource.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        
-        // Check for status messages
-        if (data.status === "connected") {
-          console.log("PnL stream connected:", data);
-          return;
-        }
+    const idleCb = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: any) => number);
+    let timeoutId: number | undefined;
+    if (typeof idleCb === "function") {
+      idleCb(start, { timeout: 1000 });
+    } else {
+      timeoutId = window.setTimeout(start, 250);
+    }
 
-        // Check for errors
-        if (data.error) {
-          console.error("PnL stream error:", data);
-          return;
-        }
-
-        // Update PnL data; key by symbol+account to avoid overwriting
-        if (data.symbol && data.unrealizedPnL !== undefined) {
-          const key = data.positionKey || `${data.symbol}:${data.accountId}`;
-          setPnlData(prev => ({
-            ...prev,
-            [key]: data
-          }));
-        }
-      } catch (error) {
-        console.error("Error parsing PnL data:", error);
+    // Idle detector
+    const idleInterval = window.setInterval(() => {
+      const since = Date.now() - (lastPnlTsRef.current || 0);
+      if (since > 20000) {
+        setIsPnlIdle(true);
       }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error("PnL SSE error:", error);
-      setIsConnectedToPnL(false);
-    };
+    }, 5000);
 
     return () => {
+      window.clearInterval(idleInterval);
+      if (timeoutId) window.clearTimeout(timeoutId);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
       setIsConnectedToPnL(false);
     };
-  }, [user_id, positions.length]);
+  }, [user_id, positions.length, isInitialLoad]);
 
   // General sorting utility for array of objects
   const sortData = <T,>(

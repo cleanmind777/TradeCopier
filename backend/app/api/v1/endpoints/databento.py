@@ -27,6 +27,68 @@ symbol_mapping = {}
 # Configuration constants
 DATASET = "GLBX.MDP3"
 SCHEMA = "mbp-1"
+def _root_symbol_variants(symbol: str) -> list[str]:
+    # Try to derive root like ES.FUT from ESZ5, NQZ5, etc.
+    s = (symbol or "").upper()
+    # Extract leading letters
+    i = 0
+    while i < len(s) and s[i].isalpha():
+        i += 1
+    root = s[:i]
+    variants = [s]
+    if root:
+        variants.append(f"{root}.FUT")
+    return list(dict.fromkeys(variants))
+
+
+async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
+    """Heuristic market status using recent historical data presence; permissive to avoid false negatives."""
+    try:
+        if not settings.DATABENTO_KEY:
+            return (False, "missing_api_key")
+        from datetime import datetime as dt, timezone, timedelta
+        client = dbt.Historical(key=settings.DATABENTO_KEY)
+        end = dt.now(timezone.utc)
+        start = end - timedelta(minutes=90)
+        # Build variant list per symbol
+        all_variants: list[str] = []
+        for sym in symbols:
+            all_variants.extend(_root_symbol_variants(sym))
+        all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+        if not all_variants:
+            return (True, "no_symbols")
+        # Query minimal range; if any data within 60 minutes, treat open
+        result = client.timeseries.get_range(
+            dataset=DATASET,
+            start=start.isoformat(),
+            end=end.isoformat(),
+            symbols=all_variants,
+            schema="ohlcv-1m",
+        )
+        df = result.to_df()
+        if df.empty:
+            return (True, "permissive_no_data")
+        try:
+            max_ts = df.index.get_level_values("ts_event").max()
+        except Exception:
+            max_ts = None
+        if not max_ts:
+            return (True, "permissive_no_ts")
+        if (end - max_ts) <= timedelta(minutes=60):
+            return (True, "recent_data")
+        return (True, "permissive_stale")
+    except Exception:
+        # Be permissive to avoid blocking live
+        return (True, "error_checking_permissive")
+
+
+@router.get("/market-status")
+async def market_status(symbols: str):
+    """Check if market appears open for given comma-separated symbols."""
+    syms = [s.strip() for s in symbols.split(",") if s.strip()]
+    open_flag, reason = await is_market_open(syms)
+    return {"open": open_flag, "reason": reason, "symbols": syms, "timestamp": datetime.now().isoformat()}
+
 
 
 async def stream_price_data(
@@ -302,6 +364,22 @@ async def sse_price_stream(request: Request):
             detail="No symbols subscribed. Please POST to /sse/current-price first with a symbols list."
         )
 
+    # Check market status quickly to avoid slow connects when closed
+    open_flag, reason = await is_market_open(symbols)
+    if not open_flag and reason == "missing_api_key":
+        async def closed_stream():
+            payload = {"status": "market_closed", "reason": reason}
+            yield f"data: {json.dumps(payload)}\n\n"
+        return StreamingResponse(
+            closed_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+        )
+
     return StreamingResponse(
         stream_price_data(symbols, request),
         media_type="text/event-stream",
@@ -398,7 +476,7 @@ async def stream_pnl_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
-        # Fetch user's positions
+        # Fetch user's positions (may be Pydantic models or dicts if cached)
         positions = await get_positions(db, user_id)
         
         if not positions or len(positions) == 0:
@@ -410,8 +488,14 @@ async def stream_pnl_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
+        # Helpers to read attrs from model or dict
+        def _get(p, key):
+            if isinstance(p, dict):
+                return p.get(key)
+            return getattr(p, key, None)
+
         # Extract unique symbols from positions
-        symbols = list(set([pos.symbol for pos in positions if pos.netPos != 0]))
+        symbols = list({(_get(pos, 'symbol')) for pos in positions if (_get(pos, 'netPos') or 0) != 0})
         
         if not symbols:
             error_data = {
@@ -431,14 +515,21 @@ async def stream_pnl_data(
         contract_details_cache: dict[int, dict] = {}  # Cache contract details by contractId
         
         for pos in positions:
-            if pos.netPos != 0:
+            net_pos = _get(pos, 'netPos') or 0
+            if net_pos != 0:
                 # Get contract details if not cached
-                if pos.contractId not in contract_details_cache:
+                contract_id = _get(pos, 'contractId')
+                account_id = _get(pos, 'accountId')
+                symbol_name = _get(pos, 'symbol')
+                account_nickname = _get(pos, 'accountNickname')
+                account_display = _get(pos, 'accountDisplayName')
+                net_price = _get(pos, 'netPrice') or 0
+                if contract_id not in contract_details_cache:
                     try:
                         # Get broker account for this position
                         db_sub_broker_account = (
                             db.query(SubBrokerAccount)
-                            .filter(SubBrokerAccount.sub_account_id == str(pos.accountId))
+                            .filter(SubBrokerAccount.sub_account_id == str(account_id))
                             .first()
                         )
                         
@@ -452,58 +543,58 @@ async def stream_pnl_data(
                             if db_broker_account:
                                 # Get contract item details
                                 contract_item = await get_contract_item(
-                                    pos.contractId, db_broker_account.access_token, is_demo=True
+                                    contract_id, db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
                                 )
                                 
                                 if contract_item:
                                     # Get product details for multiplier
                                     contract_maturity = await get_contract_maturity_item(
-                                        contract_item["contractMaturityId"], db_broker_account.access_token, is_demo=True
+                                        contract_item["contractMaturityId"], db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
                                     )
                                     
                                     if contract_maturity:
                                         product_item = await get_product_item(
-                                            contract_maturity["productId"], db_broker_account.access_token, is_demo=True
+                                            contract_maturity["productId"], db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
                                         )
                                         
                                         if product_item:
-                                            contract_details_cache[pos.contractId] = {
+                                            contract_details_cache[contract_id] = {
                                                 "valuePerPoint": product_item.get("valuePerPoint", 50),  # Default ES multiplier
                                                 "tickSize": product_item.get("tickSize", 0.25),  # Default ES tick size
-                                                "symbol": contract_item.get("name", pos.symbol)
+                                                "symbol": contract_item.get("name", symbol_name)
                                             }
-                                            print(f"📊 Contract {pos.contractId} details: {contract_details_cache[pos.contractId]}")
+                                            print(f"📊 Contract {contract_id} details: {contract_details_cache[contract_id]}")
                                         else:
-                                            print(f"⚠️ Could not get product details for contract {pos.contractId}")
+                                            print(f"⚠️ Could not get product details for contract {contract_id}")
                                     else:
-                                        print(f"⚠️ Could not get contract maturity for contract {pos.contractId}")
+                                        print(f"⚠️ Could not get contract maturity for contract {contract_id}")
                                 else:
-                                    print(f"⚠️ Could not get contract item for contract {pos.contractId}")
+                                    print(f"⚠️ Could not get contract item for contract {contract_id}")
                             else:
-                                print(f"⚠️ Could not find broker account for sub-broker {pos.accountId}")
+                                print(f"⚠️ Could not find broker account for sub-broker {account_id}")
                         else:
-                            print(f"⚠️ Could not find sub-broker account for account {pos.accountId}")
+                            print(f"⚠️ Could not find sub-broker account for account {account_id}")
                     except Exception as e:
-                        print(f"❌ Error fetching contract details for {pos.contractId}: {e}")
+                        print(f"❌ Error fetching contract details for {contract_id}: {e}")
                         # Use default values if we can't fetch contract details
-                        contract_details_cache[pos.contractId] = {
+                        contract_details_cache[contract_id] = {
                             "valuePerPoint": 50,  # Default ES multiplier
                             "tickSize": 0.25,  # Default ES tick size
-                            "symbol": pos.symbol
+                            "symbol": symbol_name
                         }
                 
-                symbol_to_positions.setdefault(pos.symbol, []).append({
-                    "accountId": pos.accountId,
-                    "accountNickname": pos.accountNickname,
-                    "accountDisplayName": pos.accountDisplayName,
-                    "netPos": pos.netPos,
-                    "netPrice": pos.netPrice,
-                    "contractId": pos.contractId,
-                    "symbol": pos.symbol,
-                    "contractDetails": contract_details_cache.get(pos.contractId, {
+                symbol_to_positions.setdefault(symbol_name, []).append({
+                    "accountId": account_id,
+                    "accountNickname": account_nickname,
+                    "accountDisplayName": account_display,
+                    "netPos": net_pos,
+                    "netPrice": net_price,
+                    "contractId": contract_id,
+                    "symbol": symbol_name,
+                    "contractDetails": contract_details_cache.get(contract_id, {
                         "valuePerPoint": 50,
                         "tickSize": 0.25,
-                        "symbol": pos.symbol
+                        "symbol": symbol_name
                     })
                 })
         
@@ -557,46 +648,44 @@ async def stream_pnl_data(
                         continue
                     
                     elif record_type in ["MBP1Msg", "MBPMsg", "TradeMsg"]:
-                        # Extract price data
+                        # Extract price data robustly
                         instrument_id = getattr(record, 'instrument_id', None)
-                        symbol = symbol_mapping.get(instrument_id, None)
-                        
+                        symbol = symbol_mapping.get(instrument_id, None) or getattr(record, 'stype_in_symbol', None)
                         if not symbol or symbol not in symbol_to_positions:
                             continue
-                        
-                        # Get current price (mid-price)
+
                         bid_price = None
                         ask_price = None
-                        
+                        last_price = None
+
                         if hasattr(record, 'levels'):
                             levels_data = record.levels
-                            
                             if isinstance(levels_data, list) and len(levels_data) > 0:
                                 level = levels_data[0]
-                            elif hasattr(levels_data, 'bid_px'):
+                            elif hasattr(levels_data, 'bid_px') or hasattr(levels_data, 'ask_px'):
                                 level = levels_data
                             else:
                                 level = None
-                            
                             if level is not None:
                                 if hasattr(level, 'pretty_bid_px'):
                                     bid_price = float(level.pretty_bid_px)
                                 elif hasattr(level, 'bid_px'):
                                     bid_price = float(level.bid_px)
-                                
                                 if hasattr(level, 'pretty_ask_px'):
                                     ask_price = float(level.pretty_ask_px)
                                 elif hasattr(level, 'ask_px'):
                                     ask_price = float(level.ask_px)
-                        
-                        # Validate we have at least one price
-                        if bid_price is None and ask_price is None:
+
+                        if record_type == 'TradeMsg':
+                            if hasattr(record, 'pretty_px'):
+                                last_price = float(record.pretty_px)
+                            elif hasattr(record, 'px'):
+                                last_price = float(record.px)
+
+                        if bid_price is None and ask_price is None and last_price is None:
                             continue
                         
-                        latest_prices[symbol] = {
-                            "bid": bid_price,
-                            "ask": ask_price
-                        }
+                        latest_prices[symbol] = {"bid": bid_price, "ask": ask_price, "last": last_price}
 
                         # Calculate and emit PnL for all positions under this symbol
                         for position in symbol_to_positions[symbol]:
@@ -610,14 +699,14 @@ async def stream_pnl_data(
                             # Long positions: use BID (what you'd get if you sell now)
                             # Short positions: use ASK (what you'd pay if you buy back now)
                             if netPos > 0:  # Long position
-                                current_price = bid_price if bid_price is not None else ask_price
+                                current_price = bid_price if bid_price is not None else (last_price if last_price is not None else ask_price)
                                 if current_price is None:
                                     continue
                                 # PnL = (Current Price - Entry Price) * Quantity * Contract Multiplier
                                 price_diff = current_price - netPrice
                                 unrealized_pnl = price_diff * netPos * valuePerPoint
                             else:  # Short position
-                                current_price = ask_price if ask_price is not None else bid_price
+                                current_price = ask_price if ask_price is not None else (last_price if last_price is not None else bid_price)
                                 if current_price is None:
                                     continue
                                 # PnL = (Entry Price - Current Price) * Quantity * Contract Multiplier
@@ -635,6 +724,7 @@ async def stream_pnl_data(
                                 "unrealizedPnL": round(unrealized_pnl, 2),
                                 "bidPrice": bid_price,
                                 "askPrice": ask_price,
+                                "lastPrice": last_price,
                                 "valuePerPoint": valuePerPoint,
                                 "tickSize": tickSize,
                                 "priceDiff": round(price_diff, 4),
@@ -687,6 +777,28 @@ async def sse_pnl_stream(
     Returns:
         Server-Sent Events stream with real-time PnL data
     """
+    # Derive symbols from positions for quick market status check
+    try:
+        positions = await get_positions(db, user_id)
+        symbols = list({p.symbol for p in positions if getattr(p, "netPos", 0) != 0}) or []
+    except Exception:
+        symbols = []
+    if symbols:
+        open_flag, reason = await is_market_open(symbols)
+        if not open_flag and reason == "missing_api_key":
+            async def closed_stream():
+                payload = {"status": "market_closed", "reason": reason}
+                yield f"data: {json.dumps(payload)}\n\n"
+            return StreamingResponse(
+                closed_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",
+                }
+            )
+
     return StreamingResponse(
         stream_pnl_data(user_id, request, db),
         media_type="text/event-stream",

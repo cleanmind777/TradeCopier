@@ -163,6 +163,9 @@ async def user_refresh_token(db: AsyncSession, id: int, new_tokens: Tokens):
         # handle None case
         return
 
+    if not new_tokens:
+        return
+
     db_broker_account.access_token = new_tokens.access_token
     db_broker_account.md_access_token = new_tokens.md_access_token
     await db.commit()
