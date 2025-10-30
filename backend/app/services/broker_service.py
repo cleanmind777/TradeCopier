@@ -410,7 +410,20 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
         "action": exit_position_data.action,
         "isAutomated": bool(exit_position_data.isAutomated),
     }
-    return place_order(access_token, db_sub_broker.is_demo, order_payload)
+    response = place_order(access_token, db_sub_broker.is_demo, order_payload)
+    if isinstance(response, dict) and response.get("status") == 401:
+        # Try to renew token and retry once
+        new_tokens = get_renew_token(access_token)
+        if new_tokens:
+            try:
+                db_broker.access_token = new_tokens.access_token
+                db_broker.md_access_token = new_tokens.md_access_token
+                db.commit()
+                db.refresh(db_broker)
+            except Exception:
+                db.rollback()
+            return place_order(db_broker.access_token, db_sub_broker.is_demo, order_payload)
+    return response
 
 
 def get_token_for_websocket(
