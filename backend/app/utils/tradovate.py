@@ -253,14 +253,16 @@ def place_order(access_token: str, is_demo: bool, order: ExitPosition):
 
     try:
         response = requests.post(url, headers=headers, json=order.dict())
-        if response.status_code == 200 and response.content:
+        if response.status_code in (200, 201):
+            if not response.content:
+                return True
             try:
                 data = response.json()
                 print(data)
                 return data
             except ValueError:
                 # Handle malformed JSON
-                return None
+                return True
         else:
             # Handle non-200 response
             return None
