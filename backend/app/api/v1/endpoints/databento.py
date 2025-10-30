@@ -476,7 +476,7 @@ async def stream_pnl_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
-        # Fetch user's positions
+        # Fetch user's positions (may be Pydantic models or dicts if cached)
         positions = await get_positions(db, user_id)
         
         if not positions or len(positions) == 0:
@@ -488,8 +488,14 @@ async def stream_pnl_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
+        # Helpers to read attrs from model or dict
+        def _get(p, key):
+            if isinstance(p, dict):
+                return p.get(key)
+            return getattr(p, key, None)
+
         # Extract unique symbols from positions
-        symbols = list(set([pos.symbol for pos in positions if pos.netPos != 0]))
+        symbols = list({(_get(pos, 'symbol')) for pos in positions if (_get(pos, 'netPos') or 0) != 0})
         
         if not symbols:
             error_data = {
@@ -509,14 +515,21 @@ async def stream_pnl_data(
         contract_details_cache: dict[int, dict] = {}  # Cache contract details by contractId
         
         for pos in positions:
-            if pos.netPos != 0:
+            net_pos = _get(pos, 'netPos') or 0
+            if net_pos != 0:
                 # Get contract details if not cached
-                if pos.contractId not in contract_details_cache:
+                contract_id = _get(pos, 'contractId')
+                account_id = _get(pos, 'accountId')
+                symbol_name = _get(pos, 'symbol')
+                account_nickname = _get(pos, 'accountNickname')
+                account_display = _get(pos, 'accountDisplayName')
+                net_price = _get(pos, 'netPrice') or 0
+                if contract_id not in contract_details_cache:
                     try:
                         # Get broker account for this position
                         db_sub_broker_account = (
                             db.query(SubBrokerAccount)
-                            .filter(SubBrokerAccount.sub_account_id == str(pos.accountId))
+                            .filter(SubBrokerAccount.sub_account_id == str(account_id))
                             .first()
                         )
                         
@@ -530,7 +543,7 @@ async def stream_pnl_data(
                             if db_broker_account:
                                 # Get contract item details
                                 contract_item = await get_contract_item(
-                                    pos.contractId, db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
+                                    contract_id, db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
                                 )
                                 
                                 if contract_item:
@@ -545,43 +558,43 @@ async def stream_pnl_data(
                                         )
                                         
                                         if product_item:
-                                            contract_details_cache[pos.contractId] = {
+                                            contract_details_cache[contract_id] = {
                                                 "valuePerPoint": product_item.get("valuePerPoint", 50),  # Default ES multiplier
                                                 "tickSize": product_item.get("tickSize", 0.25),  # Default ES tick size
-                                                "symbol": contract_item.get("name", pos.symbol)
+                                                "symbol": contract_item.get("name", symbol_name)
                                             }
-                                            print(f"📊 Contract {pos.contractId} details: {contract_details_cache[pos.contractId]}")
+                                            print(f"📊 Contract {contract_id} details: {contract_details_cache[contract_id]}")
                                         else:
-                                            print(f"⚠️ Could not get product details for contract {pos.contractId}")
+                                            print(f"⚠️ Could not get product details for contract {contract_id}")
                                     else:
-                                        print(f"⚠️ Could not get contract maturity for contract {pos.contractId}")
+                                        print(f"⚠️ Could not get contract maturity for contract {contract_id}")
                                 else:
-                                    print(f"⚠️ Could not get contract item for contract {pos.contractId}")
+                                    print(f"⚠️ Could not get contract item for contract {contract_id}")
                             else:
-                                print(f"⚠️ Could not find broker account for sub-broker {pos.accountId}")
+                                print(f"⚠️ Could not find broker account for sub-broker {account_id}")
                         else:
-                            print(f"⚠️ Could not find sub-broker account for account {pos.accountId}")
+                            print(f"⚠️ Could not find sub-broker account for account {account_id}")
                     except Exception as e:
-                        print(f"❌ Error fetching contract details for {pos.contractId}: {e}")
+                        print(f"❌ Error fetching contract details for {contract_id}: {e}")
                         # Use default values if we can't fetch contract details
-                        contract_details_cache[pos.contractId] = {
+                        contract_details_cache[contract_id] = {
                             "valuePerPoint": 50,  # Default ES multiplier
                             "tickSize": 0.25,  # Default ES tick size
-                            "symbol": pos.symbol
+                            "symbol": symbol_name
                         }
                 
-                symbol_to_positions.setdefault(pos.symbol, []).append({
-                    "accountId": pos.accountId,
-                    "accountNickname": pos.accountNickname,
-                    "accountDisplayName": pos.accountDisplayName,
-                    "netPos": pos.netPos,
-                    "netPrice": pos.netPrice,
-                    "contractId": pos.contractId,
-                    "symbol": pos.symbol,
-                    "contractDetails": contract_details_cache.get(pos.contractId, {
+                symbol_to_positions.setdefault(symbol_name, []).append({
+                    "accountId": account_id,
+                    "accountNickname": account_nickname,
+                    "accountDisplayName": account_display,
+                    "netPos": net_pos,
+                    "netPrice": net_price,
+                    "contractId": contract_id,
+                    "symbol": symbol_name,
+                    "contractDetails": contract_details_cache.get(contract_id, {
                         "valuePerPoint": 50,
                         "tickSize": 0.25,
-                        "symbol": pos.symbol
+                        "symbol": symbol_name
                     })
                 })
         
