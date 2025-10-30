@@ -513,9 +513,9 @@ const TradingPage: React.FC = () => {
     };
   }, [symbol]);
 
-  // Calculate equity per sub-broker (balance + unrealizedPnL)
+  // Calculate equity per sub-broker (balance + unrealizedPnL) for ALL accounts from ALL groups
   useEffect(() => {
-    if (!selectedGroup || accounts.length === 0) {
+    if (groups.length === 0 || accounts.length === 0) {
       setSubBrokerEquities({});
       return;
     }
@@ -528,33 +528,36 @@ const TradingPage: React.FC = () => {
       equity: number;
     }> = {};
 
-    selectedGroup.sub_brokers.forEach(subBroker => {
-      const accountId = subBroker.sub_account_id;
-      const account = accounts.find(a => a.accountId.toString() === accountId);
-      const balance = account?.amount || 0;
-      
-      // Sum unrealizedPnL for this account across all positions
-      let unrealizedPnL = 0;
-      Object.values(pnlData).forEach((data: any) => {
-        const dataAccountId = data.accountId?.toString();
-        if (dataAccountId === accountId) {
-          unrealizedPnL += data.unrealizedPnL || 0;
-        }
-      });
+    // Iterate through all groups to get all sub-brokers
+    groups.forEach(group => {
+      group.sub_brokers.forEach(subBroker => {
+        const accountId = subBroker.sub_account_id;
+        const account = accounts.find(a => a.accountId.toString() === accountId);
+        const balance = account?.amount || 0;
+        
+        // Sum unrealizedPnL for this account across all positions
+        let unrealizedPnL = 0;
+        Object.values(pnlData).forEach((data: any) => {
+          const dataAccountId = data.accountId?.toString();
+          if (dataAccountId === accountId) {
+            unrealizedPnL += data.unrealizedPnL || 0;
+          }
+        });
 
-      const equity = balance + unrealizedPnL;
-      
-      equities[accountId] = {
-        accountId,
-        nickname: subBroker.nickname || subBroker.sub_account_name,
-        balance,
-        unrealizedPnL,
-        equity,
-      };
+        const equity = balance + unrealizedPnL;
+        
+        equities[accountId] = {
+          accountId,
+          nickname: subBroker.nickname || subBroker.sub_account_name || `Account ${accountId}`,
+          balance,
+          unrealizedPnL,
+          equity,
+        };
+      });
     });
 
     setSubBrokerEquities(equities);
-  }, [selectedGroup, accounts, pnlData]);
+  }, [groups, accounts, pnlData]);
 
   // Update PnL calculations when data changes
   useEffect(() => {
@@ -1279,8 +1282,8 @@ const TradingPage: React.FC = () => {
               </div>
             )}
 
-            {/* Equity per Sub-Broker */}
-            {selectedGroup && Object.keys(subBrokerEquities).length > 0 && (
+            {/* Equity per Sub-Broker - Show all accounts from all groups */}
+            {Object.keys(subBrokerEquities).length > 0 && (
               <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
                 <div className="text-xs font-semibold mb-1.5 text-slate-300">Equity per Sub-Broker</div>
                 <div className="flex items-center gap-2 md:gap-4 flex-wrap text-xs">
@@ -1367,7 +1370,7 @@ const TradingPage: React.FC = () => {
           {/* Chart - majority of the page */}
           <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '400px' }}>
             <SymbolsMonitor initialSymbol={symbol} compact height={undefined} />
-          </div>
+              </div>
           
           {/* Monitor Tabs (Group Positions, Orders, Accounts) */}
           <div className="mt-4 bg-white rounded-md border border-slate-200 shadow-sm">
@@ -1378,7 +1381,7 @@ const TradingPage: React.FC = () => {
                 <button onClick={() => setActiveTab('accounts')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='accounts' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Accounts</button>
               </div>
               <button onClick={handleFlattenAll} disabled={isOrdering || positions.length===0} className="px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">Flatten All / Exit All & Cancel All</button>
-            </div>
+                      </div>
             <div className="p-3 overflow-x-auto">
               {activeTab === 'positions' && (
                 groupMonitorRows.length > 0 ? (
@@ -1409,53 +1412,44 @@ const TradingPage: React.FC = () => {
                 ) : (
                   <div className="text-center py-4 text-slate-500">
                     {groups.length === 0 ? "Loading groups..." : positions.length === 0 ? "No open positions found" : "No positions match the selected criteria"}
-                  </div>
+                      </div>
                 )
               )}
                 {activeTab === 'orders' && (
-                  selectedGroup ? (
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50 text-slate-600">
-                        <tr>
-                          <th className="text-left font-semibold px-3 py-2">Account</th>
-                          <th className="text-left font-semibold px-3 py-2">Display</th>
-                          <th className="text-left font-semibold px-3 py-2">Symbol</th>
-                          <th className="text-left font-semibold px-3 py-2">Action</th>
-                          <th className="text-left font-semibold px-3 py-2">Status</th>
-                          <th className="text-left font-semibold px-3 py-2">Time</th>
-                          <th className="text-right font-semibold px-3 py-2">Price</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orders
-                          .filter(o => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === o.accountId))
-                          .length > 0 ? (
-                          orders
-                            .filter(o => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === o.accountId))
-                            .map((order) => (
-                              <tr key={order.id} className="border-b last:border-0">
-                                <td className="px-3 py-2">{order.accountNickname}</td>
-                                <td className="px-3 py-2">{order.accountDisplayName}</td>
-                                <td className="px-3 py-2">{order.symbol}</td>
-                                <td className="px-3 py-2">{order.action}</td>
-                                <td className="px-3 py-2">{order.ordStatus}</td>
-                                <td className="px-3 py-2">{new Date(order.timestamp).toLocaleString()}</td>
-                                <td className="px-3 py-2 text-right">{order.price}</td>
-                              </tr>
-                            ))
-                        ) : (
-                          <tr>
-                            <td colSpan={7} className="px-3 py-4 text-center text-slate-500">No orders found for this group</td>
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">Account</th>
+                        <th className="text-left font-semibold px-3 py-2">Display</th>
+                        <th className="text-left font-semibold px-3 py-2">Symbol</th>
+                        <th className="text-left font-semibold px-3 py-2">Action</th>
+                        <th className="text-left font-semibold px-3 py-2">Status</th>
+                        <th className="text-left font-semibold px-3 py-2">Time</th>
+                        <th className="text-right font-semibold px-3 py-2">Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orders.length > 0 ? (
+                        orders.map((order) => (
+                          <tr key={order.id} className="border-b last:border-0">
+                            <td className="px-3 py-2">{order.accountNickname}</td>
+                            <td className="px-3 py-2">{order.accountDisplayName}</td>
+                            <td className="px-3 py-2">{order.symbol}</td>
+                            <td className="px-3 py-2">{order.action}</td>
+                            <td className="px-3 py-2">{order.ordStatus}</td>
+                            <td className="px-3 py-2">{new Date(order.timestamp).toLocaleString()}</td>
+                            <td className="px-3 py-2 text-right">{order.price}</td>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="text-center py-4 text-slate-500">Please select a group to view orders</div>
-                  )
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="px-3 py-4 text-center text-slate-500">No orders found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 )}
                 {activeTab === 'accounts' && (
-                  selectedGroup ? (
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
@@ -1466,34 +1460,27 @@ const TradingPage: React.FC = () => {
                         <th className="text-right font-semibold px-3 py-2">Week PnL</th>
                       </tr>
                     </thead>
-                      <tbody>
-                        {accounts
-                          .filter(a => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === a.accountId))
-                          .length > 0 ? (
-                          accounts
-                            .filter(a => selectedGroup.sub_brokers.some(s => parseInt(s.sub_account_id) === a.accountId))
-                            .map((account) => (
-                              <tr key={account.id} className="border-b last:border-0">
-                                <td className="px-3 py-2">{account.accountNickname}</td>
-                                <td className="px-3 py-2">{account.accountDisplayName}</td>
-                                <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
-                                <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
-                                <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
-                              </tr>
-                            ))
-                        ) : (
-                          <tr>
-                            <td colSpan={5} className="px-3 py-4 text-center text-slate-500">No accounts found for this group</td>
+                    <tbody>
+                      {accounts.length > 0 ? (
+                        accounts.map((account) => (
+                          <tr key={account.id} className="border-b last:border-0">
+                            <td className="px-3 py-2">{account.accountNickname}</td>
+                            <td className="px-3 py-2">{account.accountDisplayName}</td>
+                            <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
+                            <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
+                            <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
                           </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="text-center py-4 text-slate-500">Please select a group to view accounts</div>
-                  )
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-4 text-center text-slate-500">No accounts found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 )}
-              </div>
-            </div>
+                      </div>
+                      </div>
 
           {/* Group Position Monitor removed per request */}
           <LoadingModal isOpen={isOrdering || isPageLoading} message={isOrdering ? "Submitting order..." : "Loading..."} />
