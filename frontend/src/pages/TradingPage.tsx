@@ -400,6 +400,20 @@ const TradingPage: React.FC = () => {
             .map(([acc]) => Number(acc))
         );
         if (flatAccounts.size > 0) {
+          // Check if all group positions are flat FIRST, before updating pnlData
+          if (selectedGroup) {
+            const groupAccountIds = new Set(selectedGroup.sub_brokers.map(s => s.sub_account_id));
+            const groupNet = (pos || [])
+              .filter((p: any) => groupAccountIds.has(p.accountId.toString()))
+              .reduce((sum: number, p: any) => sum + (Number(p.netPos) || 0), 0);
+            
+            // If all group positions are flat, immediately zero toolbar PnL
+            if (groupNet === 0) {
+              setGroupPnL({ totalPnL: 0, symbolPnL: 0, lastUpdate: new Date().toLocaleTimeString() });
+            }
+          }
+
+          // Zero out PnL data for flat accounts
           setPnlData((prev) => {
             const next = { ...prev } as Record<string, any>;
             Object.entries(prev).forEach(([key, value]: [string, any]) => {
@@ -409,30 +423,6 @@ const TradingPage: React.FC = () => {
             });
             return next;
           });
-          // Immediately refresh toolbar PnL so totals reflect flatten
-          calculateGroupPnL();
-
-          // If all accounts in the selected group are flat, force toolbar PnL to 0
-          if (selectedGroup) {
-            const groupAccountIds = new Set(selectedGroup.sub_brokers.map(s => s.sub_account_id));
-            const groupNet = (pos || [])
-              .filter((p: any) => groupAccountIds.has(p.accountId.toString()))
-              .reduce((sum: number, p: any) => sum + (Number(p.netPos) || 0), 0);
-          if (groupNet === 0) {
-              setGroupPnL({ totalPnL: 0, symbolPnL: 0, lastUpdate: new Date().toLocaleTimeString() });
-            // Clear residual PnL entries for group's accounts
-            setPnlData((prev) => {
-              const next: Record<string, any> = { ...prev };
-              Object.entries(prev).forEach(([key, val]: [string, any]) => {
-                const accIdStr = val?.accountId?.toString?.() || "";
-                if (groupAccountIds.has(accIdStr)) {
-                  next[key] = { ...val, unrealizedPnL: 0, currentPrice: val?.entryPrice ?? val?.currentPrice };
-                }
-              });
-              return next;
-            });
-            }
-          }
         }
       } catch {}
     } catch (e) {
