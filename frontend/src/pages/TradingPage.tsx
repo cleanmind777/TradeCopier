@@ -124,8 +124,6 @@ const TradingPage: React.FC = () => {
         symbolToPositions.get(sym)!.push(p);
       });
 
-      const uniqueAccountIds = new Set<number>();
-      accounts.forEach((a) => uniqueAccountIds.add(a.accountId));
       const realizedPnLTotal = accounts.reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
 
       for (const [sym, list] of symbolToPositions.entries()) {
@@ -139,13 +137,19 @@ const TradingPage: React.FC = () => {
           }
         });
 
+        // Count unique accounts that have a non-zero position for this symbol
+        const accountsWithPositions = new Set<number>();
+        list.forEach((p) => {
+          if ((p.netPos || 0) !== 0) accountsWithPositions.add(p.accountId);
+        });
+
         rows.push({
           groupName: "All",
           symbol: sym,
           openPositions: totalNetPos,
           openPnL: openPnLSum,
           realizedPnL: realizedPnLTotal,
-          totalAccounts: uniqueAccountIds.size,
+          totalAccounts: accountsWithPositions.size,
         });
       }
     } else {
@@ -170,8 +174,6 @@ const TradingPage: React.FC = () => {
           .filter((a) => accountIdSet.has(a.accountId))
           .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
 
-        const totalAccounts = group.sub_brokers.length;
-
         // For each symbol in this group
         for (const [sym, list] of symbolToPositions.entries()) {
           // Open Position: total net position (sum of netPos values)
@@ -187,13 +189,19 @@ const TradingPage: React.FC = () => {
             }
           });
 
+          // Count unique accounts in this group that have a non-zero position for this symbol
+          const accountsWithPositions = new Set<number>();
+          list.forEach((p) => {
+            if ((p.netPos || 0) !== 0) accountsWithPositions.add(p.accountId);
+          });
+
           rows.push({
             groupName: group.name,
             symbol: sym,
             openPositions: totalNetPos, // Total net position for this group/symbol
             openPnL: openPnLSum,
             realizedPnL: realizedPnLTotal,
-            totalAccounts,
+            totalAccounts: accountsWithPositions.size,
           });
         }
       }
