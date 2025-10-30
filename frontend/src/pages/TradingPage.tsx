@@ -397,6 +397,8 @@ const TradingPage: React.FC = () => {
             });
             return next;
           });
+          // Immediately refresh toolbar PnL so totals reflect flatten
+          calculateGroupPnL();
         }
       } catch {}
     } catch (e) {
