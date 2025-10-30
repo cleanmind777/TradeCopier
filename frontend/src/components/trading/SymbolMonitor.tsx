@@ -231,19 +231,31 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
         }
       }
       
+      // Check market status; if closed, show historical only and skip SSE
+      try {
+        const statusRes = await fetch(`${API_BASE}/databento/market-status?symbols=${encodeURIComponent(symbolList.join(","))}`);
+        const statusJson = await statusRes.json();
+        if (statusJson && statusJson.open === false) {
+          setSymbols(symbolList);
+          setIsConnecting(false);
+          setIsConnected(false);
+          setConnectionStatus("Market closed - showing historical data");
+          return;
+        }
+      } catch {}
+
       // Now subscribe to real-time data
       setConnectionStatus("Connecting to real-time stream...");
-      
-      const response = await fetch(`${API_BASE}/databento/sse/current-price`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbols: symbolList }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to subscribe to symbols");
-      }
+      try {
+        const response = await fetch(`${API_BASE}/databento/sse/current-price`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbols: symbolList }),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to subscribe to symbols");
+        }
+      } catch {}
 
       // Then start the SSE stream
       const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
@@ -262,6 +274,15 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
           
           // Skip status messages
           if (data.status === "connected" || data.test) {
+            return;
+          }
+          if (data.status === "market_closed") {
+            setConnectionStatus("Market closed - showing historical data");
+            if (eventSourceRef.current) {
+              eventSourceRef.current.close();
+              eventSourceRef.current = null;
+            }
+            setIsConnected(false);
             return;
           }
 
@@ -345,6 +366,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
       },
       rightPriceScale: {
         borderColor: compact ? '#334155' : '#d1d4dc',
+        visible: true,
         scaleMargins: {
           top: 0.1,
           bottom: 0.1,
@@ -399,6 +421,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
       borderVisible: false,
       wickVisible: true,
       title: symbol,
+      priceScaleId: 'right',
     });
 
     chartRefs.current[symbol] = { chart, candleSeries };
@@ -438,7 +461,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
       console.log(`No initial ${timeframe} candles for ${symbol}, will update when data arrives`);
     }
 
-    // Configure time axis to show date and time
+    // Configure axes to improve visibility and responsiveness
     chart.timeScale().applyOptions({
       timeVisible: true,
       secondsVisible: false,
@@ -450,6 +473,14 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
       rightBarStaysOnScroll: false,
       shiftVisibleRangeOnNewBar: false,
     });
+    chart.priceScale('right').applyOptions({
+      borderVisible: true,
+      entireTextOnly: false,
+      visible: true,
+      alignLabels: true,
+      autoScale: true,
+      mode: 0,
+    } as any);
 
     // Don't auto-fit content initially - let user control zoom
     // chart.timeScale().fitContent();
@@ -575,7 +606,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
       )}
 
       {/* Price Display */}
-      {isConnected && symbols.length > 0 && (
+      {symbols.length > 0 && (
         <div className={compact ? "w-full h-full flex flex-col min-h-0" : "bg-white rounded-lg shadow-md p-6 space-y-6"}>
           <div className={`flex items-center justify-between ${compact ? "mb-2 flex-shrink-0" : "mb-4"}`}>
             {!compact && <h3 className="text-xl font-bold text-slate-800">Live Prices</h3>}
@@ -642,7 +673,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
                   </h4>
                 )}
                 
-                {priceData ? (
+                {(priceData || aggregatedData.length > 0) ? (
                   <div className="space-y-4">
                     {!compact && (<div className="grid grid-cols-2 gap-4">
                       <div className="flex justify-between items-center">
@@ -651,7 +682,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
                           <span className="font-mono font-semibold text-red-600 block">
                             {bid?.toFixed(2) ?? "N/A"}
                           </span>
-                          {priceData.bid_size && (
+                          {priceData?.bid_size && (
                             <span className="text-slate-500 text-xs">
                               ({priceData.bid_size})
                             </span>
@@ -664,7 +695,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
                           <span className="font-mono font-semibold text-green-600 block">
                             {ask?.toFixed(2) ?? "N/A"}
                           </span>
-                          {priceData.ask_size && (
+                          {priceData?.ask_size && (
                             <span className="text-slate-500 text-xs">
                               ({priceData.ask_size})
                             </span>
@@ -694,7 +725,7 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
                       />
                       {!compact && (
                         <div className="text-xs text-slate-400 mt-2">
-                          {timeframe} Candles: {aggregatedData.length} | 1m Base: {oneMinuteData.length} | Last update: {priceData.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "N/A"}
+                          {timeframe} Candles: {aggregatedData.length} | 1m Base: {oneMinuteData.length} | Last update: {priceData?.received_at ? new Date(priceData.received_at!).toLocaleTimeString() : "Historical"}
                         </div>
                       )}
                     </div>
