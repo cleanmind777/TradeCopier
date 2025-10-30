@@ -69,6 +69,8 @@ const DashboardPage: React.FC = () => {
 
   const eventSourceRef = React.useRef<EventSource | null>(null);
   const [isConnectedToPnL, setIsConnectedToPnL] = useState(false);
+  const [isPnlIdle, setIsPnlIdle] = useState(false);
+  const lastPnlTsRef = React.useRef<number>(0);
 
   const [positionsSort, setPositionsSort] = useState<SortConfig | null>(null);
   const [ordersSort, setOrdersSort] = useState<SortConfig | null>(null);
@@ -144,6 +146,8 @@ const DashboardPage: React.FC = () => {
           if (data.symbol && data.unrealizedPnL !== undefined) {
             const key = data.positionKey || `${data.symbol}:${data.accountId}`;
             setPnlData(prev => ({ ...prev, [key]: data }));
+            lastPnlTsRef.current = Date.now();
+            setIsPnlIdle(false);
           }
         } catch {}
       };
@@ -162,7 +166,16 @@ const DashboardPage: React.FC = () => {
       timeoutId = window.setTimeout(start, 250);
     }
 
+    // Idle detector
+    const idleInterval = window.setInterval(() => {
+      const since = Date.now() - (lastPnlTsRef.current || 0);
+      if (since > 20000) {
+        setIsPnlIdle(true);
+      }
+    }, 5000);
+
     return () => {
+      window.clearInterval(idleInterval);
       if (timeoutId) window.clearTimeout(timeoutId);
       if (eventSourceRef.current) {
         eventSourceRef.current.close();

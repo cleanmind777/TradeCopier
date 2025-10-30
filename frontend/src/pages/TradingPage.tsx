@@ -68,6 +68,8 @@ const TradingPage: React.FC = () => {
     askSize?: number;
   }>({});
   const priceEventSourceRef = useRef<EventSource | null>(null);
+  const [isPriceIdle, setIsPriceIdle] = useState<boolean>(false);
+  const lastPriceTsRef = useRef<number>(0);
 
   // Equity per sub-broker (balance + unrealizedPnL)
   const [subBrokerEquities, setSubBrokerEquities] = useState<Record<string, {
@@ -565,11 +567,15 @@ const TradingPage: React.FC = () => {
               bidSize: data.bid_size,
               askSize: data.ask_size,
             });
+            lastPriceTsRef.current = Date.now();
+            setIsPriceIdle(false);
           }
         } catch {}
       };
 
       es.onerror = () => {
+        // keep connection light; mark as idle rather than erroring UI
+        setIsPriceIdle(true);
         es.close();
       };
     };
@@ -582,7 +588,16 @@ const TradingPage: React.FC = () => {
       timeoutId = window.setTimeout(start, 250);
     }
 
+    // Idle detector
+    const idleInterval = window.setInterval(() => {
+      const since = Date.now() - (lastPriceTsRef.current || 0);
+      if (since > 15000) {
+        setIsPriceIdle(true);
+      }
+    }, 5000);
+
     return () => {
+      window.clearInterval(idleInterval);
       if (timeoutId) window.clearTimeout(timeoutId);
       if (priceEventSourceRef.current) {
         priceEventSourceRef.current.close();
