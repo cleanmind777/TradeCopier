@@ -365,9 +365,21 @@ const TradingPage: React.FC = () => {
       if (exitList.length > 0) {
         await exitAllPostions(exitList as any);
       }
+      // Wait briefly for provider to reflect flatten
+      const waitForFlatPositions = async (retries = 10, delayMs = 500) => {
+        for (let i = 0; i < retries; i++) {
+          const latest = await getPositions(user_id);
+          if (latest) {
+            const anyOpen = latest.some((p: any) => (Number(p.netPos) || 0) !== 0);
+            if (!anyOpen) return latest;
+          }
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+        return await getPositions(user_id);
+      };
       const [acc, pos, ord] = await Promise.all([
         getAccounts(user_id),
-        getPositions(user_id),
+        waitForFlatPositions(),
         getOrders(user_id),
       ]);
       if (acc) setAccounts(acc);
@@ -406,8 +418,19 @@ const TradingPage: React.FC = () => {
             const groupNet = (pos || [])
               .filter((p: any) => groupAccountIds.has(p.accountId.toString()))
               .reduce((sum: number, p: any) => sum + (Number(p.netPos) || 0), 0);
-            if (groupNet === 0) {
+          if (groupNet === 0) {
               setGroupPnL({ totalPnL: 0, symbolPnL: 0, lastUpdate: new Date().toLocaleTimeString() });
+            // Clear residual PnL entries for group's accounts
+            setPnlData((prev) => {
+              const next: Record<string, any> = { ...prev };
+              Object.entries(prev).forEach(([key, val]: [string, any]) => {
+                const accIdStr = val?.accountId?.toString?.() || "";
+                if (groupAccountIds.has(accIdStr)) {
+                  next[key] = { ...val, unrealizedPnL: 0, currentPrice: val?.entryPrice ?? val?.currentPrice };
+                }
+              });
+              return next;
+            });
             }
           }
         }
