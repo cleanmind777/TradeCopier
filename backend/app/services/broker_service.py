@@ -396,7 +396,17 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
         .first()
     )
     access_token = db_broker.access_token
-    return place_order(access_token, db_sub_broker.is_demo, exit_position_data)
+    # Build full payload including accountSpec as required by provider
+    order_payload = {
+        "accountId": int(db_sub_broker.sub_account_id),
+        "accountSpec": db_sub_broker.sub_account_name,
+        "symbol": exit_position_data.symbol,
+        "orderQty": int(exit_position_data.orderQty),
+        "orderType": exit_position_data.orderType,
+        "action": exit_position_data.action,
+        "isAutomated": bool(exit_position_data.isAutomated),
+    }
+    return place_order(access_token, db_sub_broker.is_demo, order_payload)
 
 
 def get_token_for_websocket(

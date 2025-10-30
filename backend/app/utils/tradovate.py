@@ -240,7 +240,7 @@ def get_cash_balances(access_token: str, is_demo: bool):
     return data
 
 
-def place_order(access_token: str, is_demo: bool, order: ExitPosition):
+def place_order(access_token: str, is_demo: bool, order):
     print(access_token)
     print(is_demo)
     print(order)
@@ -252,7 +252,9 @@ def place_order(access_token: str, is_demo: bool, order: ExitPosition):
     )
 
     try:
-        response = requests.post(url, headers=headers, json=order.dict())
+        # order is expected to be a dict with accountId, accountSpec, symbol, orderQty, orderType, action, isAutomated
+        payload = order if isinstance(order, dict) else order.dict()
+        response = requests.post(url, headers=headers, json=payload)
         if response.status_code in (200, 201):
             if not response.content:
                 return True
