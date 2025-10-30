@@ -399,6 +399,17 @@ const TradingPage: React.FC = () => {
           });
           // Immediately refresh toolbar PnL so totals reflect flatten
           calculateGroupPnL();
+
+          // If all accounts in the selected group are flat, force toolbar PnL to 0
+          if (selectedGroup) {
+            const groupAccountIds = new Set(selectedGroup.sub_brokers.map(s => s.sub_account_id));
+            const groupNet = (pos || [])
+              .filter((p: any) => groupAccountIds.has(p.accountId.toString()))
+              .reduce((sum: number, p: any) => sum + (Number(p.netPos) || 0), 0);
+            if (groupNet === 0) {
+              setGroupPnL({ totalPnL: 0, symbolPnL: 0, lastUpdate: new Date().toLocaleTimeString() });
+            }
+          }
         }
       } catch {}
     } catch (e) {
