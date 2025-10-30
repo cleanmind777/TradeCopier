@@ -900,6 +900,9 @@ const TradingPage: React.FC = () => {
 
       setOrderHistory((prev) => [orderRecord, ...prev]);
 
+      // Wait briefly for provider to reflect new positions
+      await new Promise((r) => setTimeout(r, 1000));
+
       // Refresh dependent data after order so UI (monitor, netPos, equities, pnls) updates
       try {
         const [acc, pos, ord] = await Promise.all([
@@ -910,6 +913,9 @@ const TradingPage: React.FC = () => {
         if (acc) setAccounts(acc);
         if (pos) setPositions(pos);
         if (ord) setOrders(ord);
+        
+        // Reconnect PnL SSE to ensure fresh stream picks up new positions
+        connectToPnLStream();
       } catch (e) {
         // Silent fail; SSE/next poll will catch up
       }
