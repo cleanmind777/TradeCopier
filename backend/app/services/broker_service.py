@@ -499,27 +499,41 @@ async def execute_market_order(db: Session, order: MarketOrder):
     db_subroker_accounts = (
         db.query(GroupBroker).filter(GroupBroker.group_id == order.group_id).all()
     )
+    errors: list[dict] = []
     for subbroker in db_subroker_accounts:
-        db_subroker_account = (
+        db_subbroker_account = (
             db.query(SubBrokerAccount).filter(SubBrokerAccount.id == subbroker.sub_broker_id).first()
         )
-        tradovate_order = TradovateMarketOrder(
-            accountId=int(db_subroker_account.sub_account_id),
-            accountSpec=db_subroker_account.sub_account_name,
-            symbol=order.symbol,
-            orderQty=int(order.quantity * subbroker.qty),
-            orderType='Market',
-            action=order.action,
-            isAutomated=True
-        )
+        if db_subbroker_account is None:
+            errors.append({"error": "SubBrokerAccount not found", "sub_broker_id": str(subbroker.sub_broker_id)})
+            continue
         db_broker_account = (
-            db.query(BrokerAccount).filter(BrokerAccount.id == db_subroker_account.broker_account_id).first()
+            db.query(BrokerAccount).filter(BrokerAccount.id == db_subbroker_account.broker_account_id).first()
         )
+        if db_broker_account is None:
+            errors.append({"error": "BrokerAccount not found", "broker_account_id": str(db_subbroker_account.broker_account_id)})
+            continue
+        try:
+            tradovate_order = TradovateMarketOrder(
+                accountId=int(db_subbroker_account.sub_account_id),
+                accountSpec=db_subbroker_account.sub_account_name,
+                symbol=order.symbol,
+                orderQty=int(order.quantity * subbroker.qty),
+                orderType='Market',
+                action=order.action,
+                isAutomated=True
+            )
+        except Exception as e:
+            errors.append({"error": f"Invalid order payload: {e}", "sub_broker_id": str(subbroker.sub_broker_id)})
+            continue
         access_token = db_broker_account.access_token
-        is_demo = db_subroker_account.is_demo
+        is_demo = db_subbroker_account.is_demo
         response = await tradovate_execute_market_order(tradovate_order, access_token, is_demo)
-    
-    return "Success"
+        if response is None or (isinstance(response, dict) and response.get("error")):
+            errors.append({"error": "Order execution failed", "sub_broker_id": str(subbroker.sub_broker_id), "response": response})
+    if errors:
+        return {"success": False, "errors": errors}
+    return {"success": True}
 
 async def execute_limit_order(db: Session, order: LimitOrder):
     db_subroker_accounts = (
