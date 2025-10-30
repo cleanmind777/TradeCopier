@@ -261,6 +261,7 @@ def place_order(access_token: str, is_demo: bool, order):
         # order is expected to be a dict with accountId, accountSpec, symbol, orderQty, orderType, action, isAutomated
         payload = order if isinstance(order, dict) else order.dict()
         response = requests.post(url, headers=headers, json=payload)
+        print(response.status_code)
         if response.status_code in (200, 201):
             if not response.content:
                 return True
