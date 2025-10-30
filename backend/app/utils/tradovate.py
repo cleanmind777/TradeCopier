@@ -62,17 +62,25 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
 
 def get_renew_token(access_token: str) -> Tokens | None:
     headers = {"Authorization": f"Bearer {access_token}"}
-    url = f"{TRADO_DEMO_URL}/auth/renewaccesstoken"
-    response = requests.get(url, headers=headers)
+    # Try DEMO first
+    url_demo = f"{TRADO_DEMO_URL}/auth/renewaccesstoken"
+    response = requests.get(url_demo, headers=headers)
+    data = None
     if response.status_code == 200 and response.content:
         try:
             data = response.json()
-            print(data)
         except ValueError:
-            # Log error or handle malformed JSON
-            return None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
+            data = None
+    if data is None:
+        # Fallback: try LIVE
+        url_live = f"{TRADO_LIVE_URL}/auth/renewaccesstoken"
+        response = requests.get(url_live, headers=headers)
+        if response.status_code == 200 and response.content:
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+    if not data:
         return None
     tokens = Tokens(
         access_token=data["accessToken"], md_access_token=data["mdAccessToken"]
