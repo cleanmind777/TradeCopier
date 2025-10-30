@@ -1309,6 +1309,8 @@ const TradingPage: React.FC = () => {
                   >
                     {orderType === 'limit' ? 'Sell Limit' : 'Sell Mkt'}
                   </button>
+                  <div className="w-px h-6 bg-slate-700" />
+                  {/* Flatten button moved to toolbar */}
                 </div>
               </div>
             </div>
@@ -1451,7 +1453,6 @@ const TradingPage: React.FC = () => {
                 <button onClick={() => setActiveTab('orders')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='orders' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Orders</button>
                 <button onClick={() => setActiveTab('accounts')} className={`px-3 py-1.5 text-sm rounded ${activeTab==='accounts' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}>Accounts</button>
               </div>
-              <button onClick={handleFlattenAll} disabled={isOrdering || positions.every(p => (Number(p.netPos) || 0) === 0)} className="px-3 py-1.5 text-sm rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50">Flatten All / Exit All & Cancel All</button>
                       </div>
             <div className="p-3 overflow-x-auto">
               {activeTab === 'positions' && (
