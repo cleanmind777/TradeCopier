@@ -257,16 +257,45 @@ async def get_positions(db: Session, user_id: UUID):
             .all()
         )
         sub_map = {s.sub_account_id: s for s in sub_accounts}
+        # Batch contract name lookups by (is_demo, contractId)
+        unique_keys = set()
+        for pos in positions_status:
+            sba = sub_map.get(str(pos["accountId"]))
+            if not sba:
+                continue
+            unique_keys.add((sba.is_demo, pos["contractId"]))
+        fetch_tasks = [
+            get_contract_item(contract_id, next((ba.access_token for ba in db.query(BrokerAccount).filter(BrokerAccount.id == sba.broker_account_id)), None) if False else "", is_demo)
+            for (is_demo, contract_id) in unique_keys
+        ]
+        # Above access token retrieval is not needed for cached endpoints; we will reuse any token from the user's accounts
+        # pick first available token per venue
+        tokens = {True: None, False: None}
+        for ba in db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all():
+            tokens[True] = tokens[True] or ba.access_token
+            tokens[False] = tokens[False] or ba.access_token
+        fetch_tasks = [get_contract_item(cid, tokens[is_demo], is_demo) for (is_demo, cid) in unique_keys]
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True) if unique_keys else []
+        key_list = list(unique_keys)
+        contract_name_map = {}
+        for idx, res in enumerate(results):
+            try:
+                key = key_list[idx]
+                if res and isinstance(res, dict):
+                    contract_name_map[key] = res.get("name")
+            except Exception:
+                continue
         for position in positions_status:
             sba = sub_map.get(str(position["accountId"]))
             if not sba or not sba.is_active or position.get("netPos", 0) == 0:
                 continue
+            name = contract_name_map.get((sba.is_demo, position["contractId"]))
             p = TradovatePositionListForFrontend(
                 id=position["id"],
                 accountId=position["accountId"],
                 contractId=position["contractId"],
                 accountNickname=sba.nickname,
-                symbol=sba.symbol,
+                symbol=name if name else str(position["contractId"]),
                 netPos=position["netPos"],
                 netPrice=position.get("netPrice", 0),
                 bought=position["bought"],
@@ -276,7 +305,7 @@ async def get_positions(db: Session, user_id: UUID):
                 accountDisplayName=sba.sub_account_name,
             )
             positions_for_frontend.append(p)
-    await cache_set_json(cache_key, [p.dict() for p in positions_for_frontend], settings.CACHE_TTL_SECONDS)
+    await cache_set_json(cache_key, [p.model_dump() for p in positions_for_frontend], settings.CACHE_TTL_SECONDS)
     return positions_for_frontend
 
 
@@ -310,15 +339,38 @@ async def get_orders(db: Session, user_id: UUID):
             .all()
         )
         sub_map = {s.sub_account_id: s for s in sub_accounts}
+        # Batch contract names by (is_demo, contractId)
+        unique_keys = set()
+        for o in order_status:
+            sba = sub_map.get(str(o["accountId"]))
+            if not sba:
+                continue
+            unique_keys.add((sba.is_demo, o["contractId"]))
+        tokens = {True: None, False: None}
+        for ba in db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all():
+            tokens[True] = tokens[True] or ba.access_token
+            tokens[False] = tokens[False] or ba.access_token
+        fetch_tasks = [get_contract_item(cid, tokens[is_demo], is_demo) for (is_demo, cid) in unique_keys]
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True) if unique_keys else []
+        key_list = list(unique_keys)
+        contract_name_map = {}
+        for idx, res in enumerate(results):
+            try:
+                key = key_list[idx]
+                if res and isinstance(res, dict):
+                    contract_name_map[key] = res.get("name")
+            except Exception:
+                continue
         for order in order_status:
             sba = sub_map.get(str(order["accountId"]))
             if not sba or not sba.is_active:
                 continue
+            name = contract_name_map.get((sba.is_demo, order["contractId"]))
             o = TradovateOrderForFrontend(
                 id=order["id"],
                 accountId=order["accountId"],
                 accountNickname=sba.nickname,
-                price=getattr(sba, "auto_price", 0) or 0,
+                price=0,
                 contractId=order["contractId"],
                 timestamp=order["timestamp"],
                 action=order["action"],
@@ -327,11 +379,11 @@ async def get_orders(db: Session, user_id: UUID):
                 archived=order["archived"],
                 external=order["external"],
                 admin=order["admin"],
-                symbol=sba.symbol,
+                symbol=name if name else str(order["contractId"]),
                 accountDisplayName=sba.sub_account_name,
             )
             order_for_frontend.append(o)
-    await cache_set_json(cache_key, [o.dict() for o in order_for_frontend], settings.CACHE_TTL_SECONDS)
+    await cache_set_json(cache_key, [o.model_dump() for o in order_for_frontend], settings.CACHE_TTL_SECONDS)
     return order_for_frontend
 
 
@@ -383,7 +435,7 @@ async def get_accounts(db: Session, user_id: UUID):
                 accountDisplayName=sba.sub_account_name,
             )
             accounts_for_dashboard.append(a)
-    await cache_set_json(cache_key, [a.dict() for a in accounts_for_dashboard], settings.CACHE_TTL_SECONDS)
+    await cache_set_json(cache_key, [a.model_dump() for a in accounts_for_dashboard], settings.CACHE_TTL_SECONDS)
     return accounts_for_dashboard
 
 
