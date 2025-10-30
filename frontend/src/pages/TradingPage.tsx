@@ -124,7 +124,7 @@ const TradingPage: React.FC = () => {
       // Group positions by symbol for accounts in this group
       const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
       positions
-        .filter((p) => accountIdSet.has(p.accountId) && (p.netPos ?? 0) !== 0)
+        .filter((p) => accountIdSet.has(p.accountId))
         .forEach((p) => {
           const sym = (p.symbol || "").toUpperCase();
           if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
