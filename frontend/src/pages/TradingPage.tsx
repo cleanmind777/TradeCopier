@@ -1309,9 +1309,17 @@ const TradingPage: React.FC = () => {
                   >
                     {orderType === 'limit' ? 'Sell Limit' : 'Sell Mkt'}
                   </button>
-                  <div className="w-px h-6 bg-slate-700" />
-                  {/* Flatten button moved to toolbar */}
                 </div>
+                {/* push following controls to the far right */}
+                <div className="flex-1" />
+                <button
+                  onClick={handleFlattenAll}
+                  disabled={isOrdering || positions.every(p => (Number(p.netPos) || 0) === 0)}
+                  className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold disabled:opacity-50"
+                  aria-label="Flatten All / Exit All & Cancel All"
+                >
+                  Flatten / Exit & Cancel
+                </button>
               </div>
             </div>
 
