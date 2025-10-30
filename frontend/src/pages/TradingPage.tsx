@@ -1492,8 +1492,8 @@ const TradingPage: React.FC = () => {
           )} */}
           
           {/* Chart - majority of the page */}
-          <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '400px' }}>
-            <SymbolsMonitor initialSymbol={symbol} compact height={undefined} />
+          <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '420px' }}>
+            <SymbolsMonitor initialSymbol={symbol} compact height={420} />
               </div>
           
           {/* Monitor Tabs (Group Positions, Orders, Accounts) */}

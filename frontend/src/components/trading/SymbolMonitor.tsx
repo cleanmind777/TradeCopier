@@ -489,9 +489,10 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height: containerHeight } = entry.contentRect;
-        if (width > 0 && containerHeight > 0) {
+        if (width > 0) {
+          const safeHeight = containerHeight > 0 ? containerHeight : (height !== undefined ? height : 400);
           const newHeight = compact 
-            ? (height !== undefined ? height : containerHeight)
+            ? (height !== undefined ? height : safeHeight)
             : 300;
           chart.applyOptions({
             width,
