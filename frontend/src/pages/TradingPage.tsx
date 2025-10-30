@@ -97,7 +97,7 @@ const TradingPage: React.FC = () => {
 
   // Aggregated group-position monitoring rows by symbol for ALL groups and ALL symbols
   const groupMonitorRows = useMemo(() => {
-    if (groups.length === 0 || positions.length === 0) return [] as Array<{
+    if (positions.length === 0) return [] as Array<{
       groupName: string;
       symbol: string;
       openPositions: number;
@@ -115,35 +115,21 @@ const TradingPage: React.FC = () => {
       totalAccounts: number;
     }> = [];
 
-    // Loop through ALL groups
-    for (const group of groups) {
-      const accountIdSet = new Set(
-        group.sub_brokers.map((s) => parseInt(s.sub_account_id))
-      );
-
-      // Group positions by symbol for accounts in this group
+    if (groups.length === 0) {
+      // Fallback: no groups loaded; aggregate ALL positions by symbol under a single "All" group
       const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
-      positions
-        .filter((p) => accountIdSet.has(p.accountId))
-        .forEach((p) => {
-          const sym = (p.symbol || "").toUpperCase();
-          if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
-          symbolToPositions.get(sym)!.push(p);
-        });
+      positions.forEach((p) => {
+        const sym = (p.symbol || "").toUpperCase();
+        if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
+        symbolToPositions.get(sym)!.push(p);
+      });
 
-      // Sum realized PnL across accounts in group
-      const realizedPnLTotal = accounts
-        .filter((a) => accountIdSet.has(a.accountId))
-        .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
+      const uniqueAccountIds = new Set<number>();
+      accounts.forEach((a) => uniqueAccountIds.add(a.accountId));
+      const realizedPnLTotal = accounts.reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
 
-      const totalAccounts = group.sub_brokers.length;
-
-      // For each symbol in this group
       for (const [sym, list] of symbolToPositions.entries()) {
-        // Open Position: total net position (sum of netPos values)
         const totalNetPos = list.reduce((sum, p) => sum + (p.netPos || 0), 0);
-
-        // Open PnL: sum from live pnlData if available
         let openPnLSum = 0;
         list.forEach((p) => {
           const key1 = `${p.symbol}:${p.accountId}`;
@@ -154,13 +140,62 @@ const TradingPage: React.FC = () => {
         });
 
         rows.push({
-          groupName: group.name,
+          groupName: "All",
           symbol: sym,
-          openPositions: totalNetPos, // Total net position for this group/symbol
+          openPositions: totalNetPos,
           openPnL: openPnLSum,
           realizedPnL: realizedPnLTotal,
-          totalAccounts,
+          totalAccounts: uniqueAccountIds.size,
         });
+      }
+    } else {
+      // Loop through ALL groups
+      for (const group of groups) {
+        const accountIdSet = new Set(
+          group.sub_brokers.map((s) => parseInt(s.sub_account_id))
+        );
+
+        // Group positions by symbol for accounts in this group
+        const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
+        positions
+          .filter((p) => accountIdSet.has(p.accountId))
+          .forEach((p) => {
+            const sym = (p.symbol || "").toUpperCase();
+            if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
+            symbolToPositions.get(sym)!.push(p);
+          });
+
+        // Sum realized PnL across accounts in group
+        const realizedPnLTotal = accounts
+          .filter((a) => accountIdSet.has(a.accountId))
+          .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
+
+        const totalAccounts = group.sub_brokers.length;
+
+        // For each symbol in this group
+        for (const [sym, list] of symbolToPositions.entries()) {
+          // Open Position: total net position (sum of netPos values)
+          const totalNetPos = list.reduce((sum, p) => sum + (p.netPos || 0), 0);
+
+          // Open PnL: sum from live pnlData if available
+          let openPnLSum = 0;
+          list.forEach((p) => {
+            const key1 = `${p.symbol}:${p.accountId}`;
+            const live = pnlData[key1];
+            if (live && typeof live.unrealizedPnL === "number") {
+              openPnLSum += live.unrealizedPnL;
+            }
+          });
+
+          rows.push({
+            groupName: group.name,
+            symbol: sym,
+            openPositions: totalNetPos, // Total net position for this group/symbol
+            openPnL: openPnLSum,
+            realizedPnL: realizedPnLTotal,
+            totalAccounts,
+          });
+        }
       }
     }
 
