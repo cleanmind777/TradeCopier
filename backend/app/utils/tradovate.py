@@ -1,4 +1,8 @@
 import requests
+import asyncio
+import time
+from typing import Any, Optional, Tuple
+import httpx
 from app.core.config import settings
 from app.schemas.tradovate import (
     TradeDate,
@@ -25,6 +29,56 @@ def get_auth_url():
     return f"{AUTH_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}"
 
 
+# Lightweight in-memory TTL cache for GET endpoints that are polled frequently
+_ttl_cache: dict[Tuple[str, str], Tuple[float, Any]] = {}
+_DEFAULT_TTL_SECONDS = 2.0
+
+
+async def _get_async_client() -> httpx.AsyncClient:
+    # Module-level singleton client for connection reuse
+    global _async_client
+    try:
+        client = _async_client  # type: ignore[name-defined]
+    except NameError:
+        _async_client = httpx.AsyncClient(
+            timeout=10.0,
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=50),
+            headers={"Connection": "keep-alive"},
+        )
+        client = _async_client
+    return client
+
+
+def _cache_get(key: Tuple[str, str]) -> Optional[Any]:
+    cached = _ttl_cache.get(key)
+    if not cached:
+        return None
+    expires_at, value = cached
+    if time.time() < expires_at:
+        return value
+    # expired
+    _ttl_cache.pop(key, None)
+    return None
+
+
+def _cache_set(key: Tuple[str, str], value: Any, ttl: float = _DEFAULT_TTL_SECONDS) -> None:
+    _ttl_cache[key] = (time.time() + ttl, value)
+
+
+async def _get_json(url: str, headers: dict[str, str], params: Optional[dict[str, Any]] = None) -> Optional[Any]:
+    client = await _get_async_client()
+    try:
+        resp = await client.get(url, headers=headers, params=params)
+        if resp.status_code == 200 and resp.content:
+            try:
+                return resp.json()
+            except ValueError:
+                return None
+        return None
+    except httpx.HTTPError:
+        return None
+
+
 async def get_account_list(access_token: str, is_demo: bool):
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -33,8 +87,13 @@ async def get_account_list(access_token: str, is_demo: bool):
         url = f"{TRADO_DEMO_URL}/account/list"
     else:
         url = f"{TRADO_LIVE_URL}/account/list"
-    response = requests.get(url, headers=headers)
-    data = response.json()
+    cache_key = ("account_list", f"{is_demo}:{access_token}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
@@ -47,16 +106,13 @@ async def get_account_balance(access_token: str, account_id: str, is_demo: bool)
         url = f"{TRADO_DEMO_URL}/cashBalance/deps"
     else:
         url = f"{TRADO_LIVE_URL}/cashBalance/deps"
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-        except ValueError:
-            # Log error or handle malformed JSON
-            data = None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        data = None
+    cache_key = ("cashBalance_deps", f"{is_demo}:{access_token}:{account_id}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers, params=params)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
@@ -88,71 +144,55 @@ def get_renew_token(access_token: str) -> Tokens | None:
     return tokens
 
 
-def get_position_list_of_live_account(access_token: str):
+async def get_position_list_of_live_account(access_token: str):
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{TRADO_LIVE_URL}/position/list"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-            print(data)
-        except ValueError:
-            # Log error or handle malformed JSON
-            return None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        return None
+    cache_key = ("position_list", f"live:{access_token}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
-def get_position_list_of_demo_account(access_token: str):
+async def get_position_list_of_demo_account(access_token: str):
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{TRADO_DEMO_URL}/position/list"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-            print(data)
-        except ValueError:
-            # Log error or handle malformed JSON
-            return None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        return None
+    cache_key = ("position_list", f"demo:{access_token}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
-def get_order_list_of_demo_account(access_token: str):
+async def get_order_list_of_demo_account(access_token: str):
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{TRADO_DEMO_URL}/order/list"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-            print(data)
-        except ValueError:
-            # Log error or handle malformed JSON
-            return None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        return None
+    cache_key = ("order_list", f"demo:{access_token}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
-def get_order_list_of_live_account(access_token: str):
+async def get_order_list_of_live_account(access_token: str):
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"{TRADO_LIVE_URL}/order/list"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-            print(data)
-        except ValueError:
-            # Log error or handle malformed JSON
-            return None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        return None
+    cache_key = ("order_list", f"live:{access_token}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
@@ -167,16 +207,13 @@ async def get_contract_item(
         url = f"{TRADO_DEMO_URL}/contract/item"
     else:
         url = f"{TRADO_LIVE_URL}/contract/item"
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-        except ValueError:
-            # Log error or handle malformed JSON
-            data = None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        data = None
+    cache_key = ("contract_item", f"{is_demo}:{access_token}:{id}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers, params=params)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
@@ -191,16 +228,13 @@ async def get_contract_maturity_item(
         url = f"{TRADO_DEMO_URL}/contractMaturity/item"
     else:
         url = f"{TRADO_LIVE_URL}/contractMaturity/item"
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-        except ValueError:
-            # Log error or handle malformed JSON
-            data = None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        data = None
+    cache_key = ("contract_maturity_item", f"{is_demo}:{access_token}:{id}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers, params=params)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
@@ -215,36 +249,29 @@ async def get_product_item(
         url = f"{TRADO_DEMO_URL}/product/item"
     else:
         url = f"{TRADO_LIVE_URL}/product/item"
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-        except ValueError:
-            # Log error or handle malformed JSON
-            data = None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        data = None
+    cache_key = ("product_item", f"{is_demo}:{access_token}:{id}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers, params=params)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
-def get_cash_balances(access_token: str, is_demo: bool):
+async def get_cash_balances(access_token: str, is_demo: bool):
     headers = {"Authorization": f"Bearer {access_token}"}
     if is_demo:
         url = f"{TRADO_DEMO_URL}/cashBalance/list"
     else:
         url = f"{TRADO_LIVE_URL}/cashBalance/list"
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-            print(data)
-        except ValueError:
-            # Log error or handle malformed JSON
-            return None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        return None
+    cache_key = ("cashBalance_list", f"{is_demo}:{access_token}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 
@@ -312,17 +339,13 @@ async def get_order_version_depends(id: int, access_token: str, is_demo: bool):
         url = f"{TRADO_DEMO_URL}/orderVersion/item"
     else:
         url = f"{TRADO_LIVE_URL}/orderVersion/item"
-    response = requests.get(url, headers=headers, params=params)
-    if response.status_code == 200 and response.content:
-        try:
-            data = response.json()
-            print("Data: ", data)
-        except ValueError:
-            # Log error or handle malformed JSON
-            data = None
-    else:
-        # Log error or handle non-200 statuses and empty responses gracefully
-        data = None
+    cache_key = ("orderVersion_item", f"{is_demo}:{access_token}:{id}")
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+    data = await _get_json(url, headers, params=params)
+    if data is not None:
+        _cache_set(cache_key, data)
     return data
 
 

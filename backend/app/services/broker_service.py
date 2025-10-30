@@ -66,6 +66,7 @@ from app.utils.tradovate import (
     tradovate_execute_limit_order_with_sltp,
     tradovate_execute_market_order
 )
+import asyncio
 from app.db.repositories.broker_repository import (
     user_add_broker,
     user_get_brokers,
@@ -231,17 +232,17 @@ async def get_positions(db: Session, user_id: UUID):
         .filter(BrokerAccount.user_id == user_id)
         .all()
     )
+    # Gather all demo/live calls concurrently across accounts
+    tasks = []
     for db_broker_account in db_broker_accounts:
-        demo_positions = get_position_list_of_demo_account(
-            db_broker_account.access_token
-        )
-        live_positions = get_position_list_of_live_account(
-            db_broker_account.access_token
-        )
-        if demo_positions:
-            positions_status.extend(demo_positions)
-        if live_positions:
-            positions_status.extend(live_positions)
+        token = db_broker_account.access_token
+        tasks.append(get_position_list_of_demo_account(token))
+        tasks.append(get_position_list_of_live_account(token))
+    if tasks:
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        for res in results:
+            if res:
+                positions_status.extend(res)
     if positions_status != []:
         for position in positions_status:
             print("Position: ", position)
@@ -287,13 +288,16 @@ async def get_orders(db: Session, user_id: UUID):
         .filter(BrokerAccount.user_id == user_id)
         .all()
     )
+    tasks = []
     for db_broker_account in db_broker_accounts:
-        demo_orders = get_order_list_of_demo_account(db_broker_account.access_token)
-        live_orders = get_order_list_of_live_account(db_broker_account.access_token)
-        if demo_orders:
-            order_status.extend(demo_orders)
-        if live_orders:
-            order_status.extend(live_orders)
+        token = db_broker_account.access_token
+        tasks.append(get_order_list_of_demo_account(token))
+        tasks.append(get_order_list_of_live_account(token))
+    if tasks:
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        for res in results:
+            if res:
+                order_status.extend(res)
     if order_status != []:
         for order in order_status:
             db_sub_broker_account = (
@@ -344,14 +348,16 @@ async def get_accounts(db: Session, user_id: UUID):
         .filter(BrokerAccount.user_id == user_id)
         .all()
     )
+    tasks = []
     for db_broker_account in db_broker_accounts:
-        demo_accounts = get_cash_balances(db_broker_account.access_token, True)
-        live_accounts = get_cash_balances(db_broker_account.access_token, False)
-        if demo_accounts:
-            accounts_status.extend(demo_accounts)
-        if live_accounts:
-            accounts_status.extend(live_accounts)
-    print("Accounts: ", accounts_status)
+        token = db_broker_account.access_token
+        tasks.append(get_cash_balances(token, True))
+        tasks.append(get_cash_balances(token, False))
+    if tasks:
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        for res in results:
+            if res:
+                accounts_status.extend(res)
     if accounts_status != []:
         for account in accounts_status:
             db_sub_broker_account = (
