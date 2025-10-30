@@ -371,6 +371,32 @@ const TradingPage: React.FC = () => {
       if (acc) setAccounts(acc);
       if (pos) setPositions(pos);
       if (ord) setOrders(ord);
+      // Reconnect PnL SSE to ensure fresh stream after exits
+      connectToPnLStream();
+      // Normalize unrealized PnL to zero for accounts that are now flat to refresh equities immediately
+      try {
+        const netByAccount: Record<number, number> = {};
+        (pos || []).forEach((p: any) => {
+          const acc = Number(p.accountId);
+          netByAccount[acc] = (netByAccount[acc] || 0) + (Number(p.netPos) || 0);
+        });
+        const flatAccounts = new Set<number>(
+          Object.entries(netByAccount)
+            .filter(([, net]) => (Number(net) || 0) === 0)
+            .map(([acc]) => Number(acc))
+        );
+        if (flatAccounts.size > 0) {
+          setPnlData((prev) => {
+            const next = { ...prev } as Record<string, any>;
+            Object.entries(prev).forEach(([key, value]: [string, any]) => {
+              if (value && flatAccounts.has(Number(value.accountId))) {
+                next[key] = { ...value, unrealizedPnL: 0 };
+              }
+            });
+            return next;
+          });
+        }
+      } catch {}
     } catch (e) {
       console.error("Flatten all failed", e);
     } finally {
