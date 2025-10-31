@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -124,45 +124,13 @@ const DashboardPage: React.FC = () => {
     loadData();
   }, [user_id]);
 
-  // Poll positions, orders, accounts, and reconnect PnL stream every 3 seconds (like page load)
+  // Poll positions, orders, and accounts every 3 seconds to sync with Tradovate
   useEffect(() => {
     if (!user_id || isInitialLoad) return;
 
     const pollInterval = setInterval(async () => {
       try {
-        // Refresh positions, orders, and accounts (same as page load)
         await Promise.all([fetchPositions(), fetchOrders(), fetchAccounts()]);
-        
-        // Reconnect PnL stream every 3 seconds to ensure it's tracking all current positions
-        // Close existing connection first
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
-        }
-        
-        // Wait a bit then reconnect (similar to page load flow)
-        setTimeout(() => {
-          const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-          const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
-          eventSourceRef.current = eventSource;
-          eventSource.onopen = () => setIsConnectedToPnL(true);
-          eventSource.onmessage = (e) => {
-            try {
-              const data = JSON.parse(e.data);
-              if (data.status === "connected" || data.error) return;
-              if (data.symbol && data.unrealizedPnL !== undefined) {
-                const key = data.positionKey || `${data.symbol}:${data.accountId}`;
-                setPnlData(prev => ({ ...prev, [key]: data }));
-                lastPnlTsRef.current = Date.now();
-                setIsPnlIdle(false);
-              }
-            } catch {}
-          };
-          eventSource.onerror = () => {
-            setIsConnectedToPnL(false);
-            eventSource.close();
-          };
-        }, 300);
       } catch (error) {
         console.error("Error polling positions/orders/accounts:", error);
       }
@@ -171,14 +139,44 @@ const DashboardPage: React.FC = () => {
     return () => clearInterval(pollInterval);
   }, [user_id, isInitialLoad]);
 
-  // Connect to real-time PnL SSE stream AFTER initial data has rendered
+  // Connect to real-time PnL SSE stream and reconnect when positions change
+  const prevPositionKeysRef = useRef<string>("");
   useEffect(() => {
-    if (!user_id || positions.length === 0 || isInitialLoad) {
+    if (!user_id || isInitialLoad) {
+      return;
+    }
+
+    // Create a hash of position keys (symbol:accountId) to detect changes
+    const currentPositionKeys = positions
+      .filter((p: any) => (p.netPos || 0) !== 0)
+      .map((p: any) => `${p.symbol}:${p.accountId}`)
+      .sort()
+      .join(",");
+    
+    // If position keys changed, reconnect stream
+    const positionsChanged = currentPositionKeys !== prevPositionKeysRef.current;
+    prevPositionKeysRef.current = currentPositionKeys;
+
+    // If no positions, disconnect and clear PnL data
+    if (positions.length === 0 || currentPositionKeys === "") {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
+      setPnlData({});
       return;
     }
 
     const start = () => {
       const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+      
+      // Close existing connection if positions changed
+      if (positionsChanged && eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+
       const symbols = Array.from(new Set(positions.map(p => p.symbol))).join(",");
       fetch(`${API_BASE}/databento/market-status?symbols=${encodeURIComponent(symbols)}`)
         .then(r => r.json())
@@ -208,7 +206,12 @@ const DashboardPage: React.FC = () => {
           }
           const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
           eventSourceRef.current = eventSource;
-          eventSource.onopen = () => setIsConnectedToPnL(true);
+          eventSource.onopen = () => {
+            setIsConnectedToPnL(true);
+            if (positionsChanged) {
+              console.log("🔄 PnL stream reconnected after positions changed");
+            }
+          };
           eventSource.onmessage = (e) => {
             try {
               const data = JSON.parse(e.data);
@@ -232,32 +235,37 @@ const DashboardPage: React.FC = () => {
         });
     };
 
-    const idleCb = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: any) => number);
+    // If positions changed, reconnect immediately, otherwise use deferred start
+    let idleInterval: number | undefined;
     let timeoutId: number | undefined;
-    if (typeof idleCb === "function") {
-      idleCb(start, { timeout: 1000 });
+
+    if (positionsChanged) {
+      start();
     } else {
-      timeoutId = window.setTimeout(start, 250);
+      const idleCb = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: any) => number);
+      if (typeof idleCb === "function") {
+        idleCb(start, { timeout: 1000 });
+      } else {
+        timeoutId = window.setTimeout(start, 250);
+      }
+
+      // Idle detector
+      idleInterval = window.setInterval(() => {
+        const since = Date.now() - (lastPnlTsRef.current || 0);
+        if (since > 20000) {
+          setIsPnlIdle(true);
+        }
+      }, 5000);
     }
-
-    // Idle detector
-    const idleInterval = window.setInterval(() => {
-      const since = Date.now() - (lastPnlTsRef.current || 0);
-      if (since > 20000) {
-        setIsPnlIdle(true);
-      }
-    }, 5000);
-
+    
+    // Return cleanup for when component unmounts or positions change
     return () => {
-      window.clearInterval(idleInterval);
+      if (idleInterval) window.clearInterval(idleInterval);
       if (timeoutId) window.clearTimeout(timeoutId);
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-      setIsConnectedToPnL(false);
+      // Note: We don't close the EventSource here when positions change
+      // because we're reconnecting in the start() function
     };
-  }, [user_id, positions.length, isInitialLoad]);
+  }, [user_id, positions, isInitialLoad]);
 
   // General sorting utility for array of objects
   const sortData = <T,>(

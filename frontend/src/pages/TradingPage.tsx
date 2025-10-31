@@ -346,13 +346,12 @@ const TradingPage: React.FC = () => {
     load();
   }, [user_id]);
 
-  // Poll positions, orders, accounts, and reconnect PnL stream every 3 seconds (like page load)
+  // Poll positions, orders, and accounts every 3 seconds to sync with Tradovate
   useEffect(() => {
     if (!user_id) return;
 
     const pollInterval = setInterval(async () => {
       try {
-        // Refresh positions, orders, and accounts (same as page load)
         const [acc, pos, ord] = await Promise.all([
           getAccounts(user_id),
           getPositions(user_id),
@@ -361,10 +360,6 @@ const TradingPage: React.FC = () => {
         if (acc) setAccounts(acc);
         if (pos) setPositions(pos);
         if (ord) setOrders(ord);
-        
-        // Reconnect PnL stream every 3 seconds to ensure it's tracking all current positions
-        // This is similar to page load behavior where PnL stream connects after positions load
-        connectToPnLStream();
       } catch (error) {
         console.error("Error polling positions/orders/accounts:", error);
       }
@@ -378,32 +373,33 @@ const TradingPage: React.FC = () => {
   useEffect(() => {
     if (!positions || positions.length === 0) {
       prevPositionsRef.current = "";
+      // If all positions are closed, clear PnL data and disconnect stream
+      setPnlData({});
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
       return;
     }
 
-    // Create a simple hash of positions to detect changes
-    const positionsHash = JSON.stringify(
-      positions.map((p: any) => ({ 
-        id: p.id, 
-        accountId: p.accountId, 
-        symbol: p.symbol, 
-        netPos: p.netPos 
-      }))
+    // Create a hash of position keys (symbol:accountId) to detect changes
+    const currentPositionKeys = new Set(
+      positions
+        .filter((p: any) => (p.netPos || 0) !== 0)
+        .map((p: any) => `${p.symbol}:${p.accountId}`)
     );
+    const positionsHash = Array.from(currentPositionKeys).sort().join(",");
 
-    // Only process if positions actually changed
+    // Only process if position keys actually changed
     if (positionsHash === prevPositionsRef.current) {
       return;
     }
 
     prevPositionsRef.current = positionsHash;
-    console.log("🔄 Positions changed - refreshing toolbar PnL");
+    console.log("🔄 Positions changed - reconnecting PnL stream to track new positions");
 
     // Clear stale PnL data for positions that no longer exist
-    const currentPositionKeys = new Set(
-      positions.map((p: any) => `${p.symbol}:${p.accountId}`)
-    );
-    
     setPnlData((prev) => {
       const next = { ...prev };
       let hasChanges = false;
@@ -416,22 +412,16 @@ const TradingPage: React.FC = () => {
       return hasChanges ? next : prev;
     });
     
-    // Force PnL recalculation after clearing stale data
+    // Always reconnect PnL stream when positions change
+    // This ensures backend fetches fresh positions and tracks all current positions
+    setTimeout(() => {
+      connectToPnLStream();
+    }, 300);
+    
+    // Force PnL recalculation after reconnecting
     setTimeout(() => {
       calculateGroupPnL();
-    }, 100);
-    
-    // If we have new positions but no PnL data and stream is disconnected, reconnect
-    const hasNewPositions = positions.some((p: any) => {
-      const key = `${p.symbol}:${p.accountId}`;
-      return (p.netPos || 0) !== 0 && !pnlData[key];
-    });
-    
-    if (hasNewPositions && !isConnectedToPnL) {
-      setTimeout(() => {
-        connectToPnLStream();
-      }, 500);
-    }
+    }, 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positions]);
 
