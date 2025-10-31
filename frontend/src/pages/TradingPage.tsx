@@ -385,8 +385,17 @@ const TradingPage: React.FC = () => {
       if (acc) setAccounts(acc);
       if (pos) setPositions(pos);
       if (ord) setOrders(ord);
+      
+      // Clear stale PnL data to force fresh calculation
+      setPnlData({});
       // Reconnect PnL SSE to ensure fresh stream after exits
-      connectToPnLStream();
+      setTimeout(() => {
+        connectToPnLStream();
+        // Force recalculation after stream reconnects
+        setTimeout(() => {
+          calculateGroupPnL();
+        }, 500);
+      }, 300);
       // Normalize unrealized PnL to zero for accounts that are now flat to refresh equities immediately
       try {
         const netByAccount: Record<number, number> = {};
@@ -702,10 +711,10 @@ const TradingPage: React.FC = () => {
     setSubBrokerEquities(equities);
   }, [groups, accounts, pnlData]);
 
-  // Update PnL calculations when data changes
+  // Update PnL calculations when data changes (including positions)
   useEffect(() => {
     calculateGroupPnL();
-  }, [pnlData, selectedGroup, symbol]);
+  }, [pnlData, selectedGroup, symbol, positions]);
 
   // Reset PnL to 0 when all positions in selected group are flat
   useEffect(() => {
@@ -733,8 +742,37 @@ const TradingPage: React.FC = () => {
         symbolPnL: 0,
         lastUpdate: new Date().toLocaleTimeString()
       });
+      // Clear PnL data for flat accounts
+      setPnlData((prev) => {
+        const next = { ...prev };
+        Object.keys(prev).forEach((key) => {
+          const data = prev[key];
+          if (data && groupAccountIds.has(data.accountId?.toString())) {
+            delete next[key];
+          }
+        });
+        return next;
+      });
     }
   }, [positions, selectedGroup]);
+
+  // Reconnect PnL stream and refresh when symbol or group changes
+  useEffect(() => {
+    if (selectedGroup && symbol && user_id) {
+      console.log(`🔄 Symbol or group changed - reconnecting PnL stream`);
+      // Clear stale PnL data for fresh calculation
+      setPnlData({});
+      // Reconnect PnL stream to get fresh data
+      setTimeout(() => {
+        connectToPnLStream();
+      }, 300);
+      // Force recalculation after a brief delay
+      setTimeout(() => {
+        calculateGroupPnL();
+      }, 500);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, selectedGroup?.id]);
 
   // Connect to PnL stream when component mounts
   useEffect(() => {
@@ -914,8 +952,16 @@ const TradingPage: React.FC = () => {
         if (pos) setPositions(pos);
         if (ord) setOrders(ord);
         
+        // Clear stale PnL data to force fresh calculation
+        setPnlData({});
         // Reconnect PnL SSE to ensure fresh stream picks up new positions
-        connectToPnLStream();
+        setTimeout(() => {
+          connectToPnLStream();
+          // Force recalculation after stream reconnects
+          setTimeout(() => {
+            calculateGroupPnL();
+          }, 500);
+        }, 300);
       } catch (e) {
         // Silent fail; SSE/next poll will catch up
       }
