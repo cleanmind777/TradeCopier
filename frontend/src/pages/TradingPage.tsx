@@ -368,6 +368,68 @@ const TradingPage: React.FC = () => {
     return () => clearInterval(pollInterval);
   }, [user_id]);
 
+  // Refresh PnL when positions change (from polling or manual updates)
+  const prevPositionsRef = useRef<string>("");
+  useEffect(() => {
+    if (!positions || positions.length === 0) {
+      prevPositionsRef.current = "";
+      return;
+    }
+
+    // Create a simple hash of positions to detect changes
+    const positionsHash = JSON.stringify(
+      positions.map((p: any) => ({ 
+        id: p.id, 
+        accountId: p.accountId, 
+        symbol: p.symbol, 
+        netPos: p.netPos 
+      }))
+    );
+
+    // Only process if positions actually changed
+    if (positionsHash === prevPositionsRef.current) {
+      return;
+    }
+
+    prevPositionsRef.current = positionsHash;
+    console.log("🔄 Positions changed - refreshing toolbar PnL");
+
+    // Clear stale PnL data for positions that no longer exist
+    const currentPositionKeys = new Set(
+      positions.map((p: any) => `${p.symbol}:${p.accountId}`)
+    );
+    
+    setPnlData((prev) => {
+      const next = { ...prev };
+      let hasChanges = false;
+      Object.keys(prev).forEach((key) => {
+        if (!currentPositionKeys.has(key)) {
+          delete next[key];
+          hasChanges = true;
+        }
+      });
+      return hasChanges ? next : prev;
+    });
+    
+    // Force PnL recalculation after clearing stale data
+    setTimeout(() => {
+      calculateGroupPnL();
+    }, 100);
+    
+    // If we have new positions but no PnL data and stream is disconnected, reconnect
+    const hasNewPositions = positions.some((p: any) => {
+      const key = `${p.symbol}:${p.accountId}`;
+      return (p.netPos || 0) !== 0 && !pnlData[key];
+    });
+    
+    if (hasNewPositions && !isConnectedToPnL) {
+      setTimeout(() => {
+        connectToPnLStream();
+      }, 500);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions]);
+
   const handleFlattenAll = async () => {
     try {
       setIsOrdering(true);
