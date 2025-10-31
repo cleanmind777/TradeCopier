@@ -365,16 +365,37 @@ const TradingPage: React.FC = () => {
       if (exitList.length > 0) {
         await exitAllPostions(exitList as any);
       }
+      // Wait briefly for provider to reflect flatten
+      const waitForFlatPositions = async (retries = 10, delayMs = 500) => {
+        for (let i = 0; i < retries; i++) {
+          const latest = await getPositions(user_id);
+          if (latest) {
+            const anyOpen = latest.some((p: any) => (Number(p.netPos) || 0) !== 0);
+            if (!anyOpen) return latest;
+          }
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+        return await getPositions(user_id);
+      };
       const [acc, pos, ord] = await Promise.all([
         getAccounts(user_id),
-        getPositions(user_id),
+        waitForFlatPositions(),
         getOrders(user_id),
       ]);
       if (acc) setAccounts(acc);
       if (pos) setPositions(pos);
       if (ord) setOrders(ord);
+      
+      // Clear stale PnL data to force fresh calculation
+      setPnlData({});
       // Reconnect PnL SSE to ensure fresh stream after exits
-      connectToPnLStream();
+      setTimeout(() => {
+        connectToPnLStream();
+        // Force recalculation after stream reconnects
+        setTimeout(() => {
+          calculateGroupPnL();
+        }, 500);
+      }, 300);
       // Normalize unrealized PnL to zero for accounts that are now flat to refresh equities immediately
       try {
         const netByAccount: Record<number, number> = {};
@@ -388,6 +409,20 @@ const TradingPage: React.FC = () => {
             .map(([acc]) => Number(acc))
         );
         if (flatAccounts.size > 0) {
+          // Check if all group positions are flat FIRST, before updating pnlData
+          if (selectedGroup) {
+            const groupAccountIds = new Set(selectedGroup.sub_brokers.map(s => s.sub_account_id));
+            const groupNet = (pos || [])
+              .filter((p: any) => groupAccountIds.has(p.accountId.toString()))
+              .reduce((sum: number, p: any) => sum + (Number(p.netPos) || 0), 0);
+            
+            // If all group positions are flat, immediately zero toolbar PnL
+            if (groupNet === 0) {
+              setGroupPnL({ totalPnL: 0, symbolPnL: 0, lastUpdate: new Date().toLocaleTimeString() });
+            }
+          }
+
+          // Zero out PnL data for flat accounts
           setPnlData((prev) => {
             const next = { ...prev } as Record<string, any>;
             Object.entries(prev).forEach(([key, value]: [string, any]) => {
@@ -676,10 +711,68 @@ const TradingPage: React.FC = () => {
     setSubBrokerEquities(equities);
   }, [groups, accounts, pnlData]);
 
-  // Update PnL calculations when data changes
+  // Update PnL calculations when data changes (including positions)
   useEffect(() => {
     calculateGroupPnL();
-  }, [pnlData, selectedGroup, symbol]);
+  }, [pnlData, selectedGroup, symbol, positions]);
+
+  // Reset PnL to 0 when all positions in selected group are flat
+  useEffect(() => {
+    if (!selectedGroup || !positions || positions.length === 0) {
+      return;
+    }
+
+    // Get sub-broker account IDs from selected group
+    const groupAccountIds = new Set(
+      selectedGroup.sub_brokers.map(sub => sub.sub_account_id.toString())
+    );
+
+    // Check if all positions for this group are flat
+    const groupPositions = positions.filter((p: any) => 
+      groupAccountIds.has(p.accountId?.toString())
+    );
+
+    const allFlat = groupPositions.length === 0 || 
+      groupPositions.every((p: any) => Number(p.netPos) === 0);
+
+    if (allFlat) {
+      console.log("✅ All positions flat - resetting toolbar PnL to 0");
+      setGroupPnL({
+        totalPnL: 0,
+        symbolPnL: 0,
+        lastUpdate: new Date().toLocaleTimeString()
+      });
+      // Clear PnL data for flat accounts
+      setPnlData((prev) => {
+        const next = { ...prev };
+        Object.keys(prev).forEach((key) => {
+          const data = prev[key];
+          if (data && groupAccountIds.has(data.accountId?.toString())) {
+            delete next[key];
+          }
+        });
+        return next;
+      });
+    }
+  }, [positions, selectedGroup]);
+
+  // Reconnect PnL stream and refresh when symbol or group changes
+  useEffect(() => {
+    if (selectedGroup && symbol && user_id) {
+      console.log(`🔄 Symbol or group changed - reconnecting PnL stream`);
+      // Clear stale PnL data for fresh calculation
+      setPnlData({});
+      // Reconnect PnL stream to get fresh data
+      setTimeout(() => {
+        connectToPnLStream();
+      }, 300);
+      // Force recalculation after a brief delay
+      setTimeout(() => {
+        calculateGroupPnL();
+      }, 500);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, selectedGroup?.id]);
 
   // Connect to PnL stream when component mounts
   useEffect(() => {
@@ -845,6 +938,9 @@ const TradingPage: React.FC = () => {
 
       setOrderHistory((prev) => [orderRecord, ...prev]);
 
+      // Wait briefly for provider to reflect new positions
+      await new Promise((r) => setTimeout(r, 1000));
+
       // Refresh dependent data after order so UI (monitor, netPos, equities, pnls) updates
       try {
         const [acc, pos, ord] = await Promise.all([
@@ -855,6 +951,17 @@ const TradingPage: React.FC = () => {
         if (acc) setAccounts(acc);
         if (pos) setPositions(pos);
         if (ord) setOrders(ord);
+        
+        // Clear stale PnL data to force fresh calculation
+        setPnlData({});
+        // Reconnect PnL SSE to ensure fresh stream picks up new positions
+        setTimeout(() => {
+          connectToPnLStream();
+          // Force recalculation after stream reconnects
+          setTimeout(() => {
+            calculateGroupPnL();
+          }, 500);
+        }, 300);
       } catch (e) {
         // Silent fail; SSE/next poll will catch up
       }
@@ -1496,7 +1603,7 @@ const TradingPage: React.FC = () => {
           
           {/* Chart - majority of the page */}
           <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '420px' }}>
-            <SymbolsMonitor initialSymbol={symbol} compact height={420} />
+            <SymbolsMonitor key={symbol} initialSymbol={symbol} compact height={420} />
               </div>
           
           {/* Monitor Tabs (Group Positions, Orders, Accounts) */}

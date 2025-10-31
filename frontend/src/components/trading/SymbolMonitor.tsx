@@ -46,32 +46,43 @@ const SymbolsMonitor: React.FC<SymbolsMonitorProps> = ({ initialSymbol = "", com
   const [connectionStatus, setConnectionStatus] = useState("");
   const eventSourceRef = useRef<EventSource | null>(null);
   const chartRefs = useRef<Record<string, { chart: IChartApi; candleSeries: ISeriesApi<any> }>>({});
+  const prevSymbolRef = useRef<string>("");
 
   // Sync symbolInput with initialSymbol prop
   useEffect(() => {
     setSymbolInput(initialSymbol);
   }, [initialSymbol]);
 
-  // Auto-connect in compact mode when a symbol is provided
-  useEffect(() => {
-    if (compact && symbolInput && !isConnected && !isConnecting) {
-      handleConnect();
-    }
-  }, [compact, symbolInput]);
-
-  // In compact mode, when symbol changes while connected, reconnect to load historical + stream for new symbol
+  // In compact mode, handle symbol changes: disconnect if connected, then connect with new symbol to load historical data
   useEffect(() => {
     if (!compact || !symbolInput) return;
-    if (isConnected && !isConnecting) {
-      handleDisconnect();
-      // slight delay to allow cleanup
-      setTimeout(() => {
-        if (!isConnected && !isConnecting) {
-          handleConnect();
-        }
-      }, 0);
+
+    // Only reconnect if the symbol actually changed
+    if (prevSymbolRef.current === symbolInput) {
+      // Symbol hasn't changed, skip reconnection unless not connected
+      if (!isConnected && !isConnecting) {
+        handleConnect();
+      }
+      return;
     }
-  }, [symbolInput]);
+
+    // Symbol changed - update ref
+    prevSymbolRef.current = symbolInput;
+
+    // If already connected or connecting, disconnect first to clean up
+    if (isConnected || isConnecting) {
+      handleDisconnect();
+      // Wait a bit for cleanup to complete, then connect with new symbol
+      const timeoutId = setTimeout(() => {
+        handleConnect();
+      }, 150);
+      return () => clearTimeout(timeoutId);
+    } else {
+      // Not connected yet, just connect directly
+      handleConnect();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbolInput, compact]);
 
   // Helper function to get current minute timestamp
   const getCurrentMinuteTimestamp = (): number => {
