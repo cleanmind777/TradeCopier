@@ -124,13 +124,45 @@ const DashboardPage: React.FC = () => {
     loadData();
   }, [user_id]);
 
-  // Poll positions, orders, and accounts every 3 seconds to sync with Tradovate
+  // Poll positions, orders, accounts, and reconnect PnL stream every 3 seconds (like page load)
   useEffect(() => {
     if (!user_id || isInitialLoad) return;
 
     const pollInterval = setInterval(async () => {
       try {
+        // Refresh positions, orders, and accounts (same as page load)
         await Promise.all([fetchPositions(), fetchOrders(), fetchAccounts()]);
+        
+        // Reconnect PnL stream every 3 seconds to ensure it's tracking all current positions
+        // Close existing connection first
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+        
+        // Wait a bit then reconnect (similar to page load flow)
+        setTimeout(() => {
+          const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+          const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
+          eventSourceRef.current = eventSource;
+          eventSource.onopen = () => setIsConnectedToPnL(true);
+          eventSource.onmessage = (e) => {
+            try {
+              const data = JSON.parse(e.data);
+              if (data.status === "connected" || data.error) return;
+              if (data.symbol && data.unrealizedPnL !== undefined) {
+                const key = data.positionKey || `${data.symbol}:${data.accountId}`;
+                setPnlData(prev => ({ ...prev, [key]: data }));
+                lastPnlTsRef.current = Date.now();
+                setIsPnlIdle(false);
+              }
+            } catch {}
+          };
+          eventSource.onerror = () => {
+            setIsConnectedToPnL(false);
+            eventSource.close();
+          };
+        }, 300);
       } catch (error) {
         console.error("Error polling positions/orders/accounts:", error);
       }

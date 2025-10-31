@@ -346,12 +346,13 @@ const TradingPage: React.FC = () => {
     load();
   }, [user_id]);
 
-  // Poll positions, orders, and accounts every 3 seconds to sync with Tradovate
+  // Poll positions, orders, accounts, and reconnect PnL stream every 3 seconds (like page load)
   useEffect(() => {
     if (!user_id) return;
 
     const pollInterval = setInterval(async () => {
       try {
+        // Refresh positions, orders, and accounts (same as page load)
         const [acc, pos, ord] = await Promise.all([
           getAccounts(user_id),
           getPositions(user_id),
@@ -360,6 +361,10 @@ const TradingPage: React.FC = () => {
         if (acc) setAccounts(acc);
         if (pos) setPositions(pos);
         if (ord) setOrders(ord);
+        
+        // Reconnect PnL stream every 3 seconds to ensure it's tracking all current positions
+        // This is similar to page load behavior where PnL stream connects after positions load
+        connectToPnLStream();
       } catch (error) {
         console.error("Error polling positions/orders/accounts:", error);
       }
