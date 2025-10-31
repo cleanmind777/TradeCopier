@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -123,6 +123,21 @@ const DashboardPage: React.FC = () => {
     };
     loadData();
   }, [user_id]);
+
+  // Poll positions, orders, and accounts every 3 seconds to sync with Tradovate
+  useEffect(() => {
+    if (!user_id || isInitialLoad) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        await Promise.all([fetchPositions(), fetchOrders(), fetchAccounts()]);
+      } catch (error) {
+        console.error("Error polling positions/orders/accounts:", error);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [user_id, isInitialLoad]);
 
   // Connect to real-time PnL SSE stream AFTER initial data has rendered
   useEffect(() => {

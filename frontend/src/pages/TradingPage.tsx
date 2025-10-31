@@ -346,6 +346,28 @@ const TradingPage: React.FC = () => {
     load();
   }, [user_id]);
 
+  // Poll positions, orders, and accounts every 3 seconds to sync with Tradovate
+  useEffect(() => {
+    if (!user_id) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const [acc, pos, ord] = await Promise.all([
+          getAccounts(user_id),
+          getPositions(user_id),
+          getOrders(user_id),
+        ]);
+        if (acc) setAccounts(acc);
+        if (pos) setPositions(pos);
+        if (ord) setOrders(ord);
+      } catch (error) {
+        console.error("Error polling positions/orders/accounts:", error);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [user_id]);
+
   const handleFlattenAll = async () => {
     try {
       setIsOrdering(true);
