@@ -72,6 +72,9 @@ const TradingPage: React.FC = () => {
   const [isPriceIdle, setIsPriceIdle] = useState<boolean>(false);
   const lastPriceTsRef = useRef<number>(0);
   const wsUnsubscribeRef = useRef<null | (() => void)>(null);
+  
+  // Chart view toggle
+  const [showChart, setShowChart] = useState<boolean>(false);
 
   // Equity per sub-broker (balance + unrealizedPnL)
   const [subBrokerEquities, setSubBrokerEquities] = useState<Record<string, {
@@ -530,8 +533,10 @@ const TradingPage: React.FC = () => {
       if (positions.length === 0) return;
 
       const now = new Date();
-      const endIso = new Date(now.getTime() - 60 * 1000).toISOString();
-      const startIso = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+      // Ensure end is at least 2 minutes ago to avoid real-time data issues
+      const endIso = new Date(now.getTime() - 2 * 60 * 1000).toISOString();
+      // Start is 15 minutes before end
+      const startIso = new Date(now.getTime() - 17 * 60 * 1000).toISOString();
 
       const hist = await getHistoricalChart(symbol, startIso, endIso, "ohlcv-1m");
       if (!hist || !hist.data || hist.data.length === 0) return;
@@ -668,8 +673,10 @@ const TradingPage: React.FC = () => {
           setIsPriceIdle(true);
           // Load last historical candle to populate price snapshot
           const now = new Date();
-          const startIso = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
-          const endIso = now.toISOString();
+          // Ensure end is at least 2 minutes ago to avoid real-time data issues
+          const endIso = new Date(now.getTime() - 2 * 60 * 1000).toISOString();
+          // Start is 30 minutes before end
+          const startIso = new Date(now.getTime() - 32 * 60 * 1000).toISOString();
           const hRes = await fetch(`${API_BASE}/databento/historical?symbol=${encodeURIComponent(symbol)}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&schema=ohlcv-1m`);
           const hJson = await hRes.json();
           const last = hJson?.data?.[hJson.data.length - 1];
@@ -1553,6 +1560,21 @@ const TradingPage: React.FC = () => {
                     <span>Net {groupSymbolNet.netPos} @ {groupSymbolNet.avgNetPrice ? groupSymbolNet.avgNetPrice.toFixed(2) : 0}</span>
                   )}
                 </div>
+                <div className="w-px h-6 bg-slate-700" />
+                {/* View Chart toggle */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowChart(!showChart)}
+                    className={`h-8 px-3 rounded text-sm font-medium ${
+                      showChart 
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                        : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                    }`}
+                  >
+                    {showChart ? 'Hide Chart' : 'View Chart'}
+                  </button>
+                </div>
+                <div className="w-px h-6 bg-slate-700" />
                 {/* Action buttons */}
                 <div className="flex items-center gap-2">
                   <button
@@ -1711,9 +1733,18 @@ const TradingPage: React.FC = () => {
           )} */}
           
           {/* Chart - majority of the page */}
-          <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '420px' }}>
-            <SymbolsMonitor key={symbol} initialSymbol={symbol} compact height={420} />
+          {showChart ? (
+            <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '420px' }}>
+              <SymbolsMonitor key={symbol} initialSymbol={symbol} compact height={420} />
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden flex items-center justify-center bg-slate-50" style={{ minHeight: '420px' }}>
+              <div className="text-center text-slate-400">
+                <p className="text-sm">Chart is disabled</p>
+                <p className="text-xs mt-1">Click "View Chart" to enable and load historical data</p>
               </div>
+            </div>
+          )}
           
           {/* Monitor Tabs (Group Positions, Orders, Accounts) */}
           <div className="mt-4 bg-white rounded-md border border-slate-200 shadow-sm">
