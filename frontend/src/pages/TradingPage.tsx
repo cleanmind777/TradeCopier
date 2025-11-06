@@ -1733,16 +1733,9 @@ const TradingPage: React.FC = () => {
           )} */}
           
           {/* Chart - majority of the page */}
-          {showChart ? (
+          {showChart && (
             <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '420px' }}>
               <SymbolsMonitor key={symbol} initialSymbol={symbol} compact height={420} />
-            </div>
-          ) : (
-            <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden flex items-center justify-center bg-slate-50" style={{ minHeight: '420px' }}>
-              <div className="text-center text-slate-400">
-                <p className="text-sm">Chart is disabled</p>
-                <p className="text-xs mt-1">Click "View Chart" to enable and load historical data</p>
-              </div>
             </div>
           )}
           
