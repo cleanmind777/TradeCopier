@@ -25,6 +25,7 @@ import {
 } from "../types/broker";
 import { getHistoricalChart } from "../api/databentoApi";
 import LoadingModal from "../components/ui/LoadingModal";
+import { tradovateWSClient } from "../services/tradovateWs";
 
 const TradingPage: React.FC = () => {
   // Trading state
@@ -70,6 +71,7 @@ const TradingPage: React.FC = () => {
   const priceEventSourceRef = useRef<EventSource | null>(null);
   const [isPriceIdle, setIsPriceIdle] = useState<boolean>(false);
   const lastPriceTsRef = useRef<number>(0);
+  const wsUnsubscribeRef = useRef<null | (() => void)>(null);
 
   // Equity per sub-broker (balance + unrealizedPnL)
   const [subBrokerEquities, setSubBrokerEquities] = useState<Record<string, {
@@ -1276,13 +1278,41 @@ const TradingPage: React.FC = () => {
   // };
 
   useEffect(() => {
-    // initializeWebSocket();
+    if (user_id) {
+      tradovateWSClient.connect(user_id);
+    }
     loadGroups();
 
     // return () => {
-    //   cleanupWebSocket();
+    //   tradovateWSClient.disconnect();
     // };
   }, [user_id]);
+
+  // Subscribe WS quotes for current symbol and update currentPrice
+  useEffect(() => {
+    if (!user_id || !symbol) return;
+    if (wsUnsubscribeRef.current) {
+      wsUnsubscribeRef.current();
+      wsUnsubscribeRef.current = null;
+    }
+    wsUnsubscribeRef.current = tradovateWSClient.onQuote((q) => {
+      setCurrentPrice((prev) => ({
+        ...prev,
+        bid: typeof q.bid === "number" ? q.bid : prev.bid,
+        ask: typeof q.ask === "number" ? q.ask : prev.ask,
+        last: typeof q.last === "number" ? q.last : prev.last,
+      }));
+      lastPriceTsRef.current = Date.now();
+      setIsPriceIdle(false);
+    });
+    tradovateWSClient.subscribeQuotes(symbol);
+    return () => {
+      if (wsUnsubscribeRef.current) {
+        wsUnsubscribeRef.current();
+        wsUnsubscribeRef.current = null;
+      }
+    };
+  }, [user_id, symbol]);
 
   // Initialize lightweight chart
   // useEffect(() => {
