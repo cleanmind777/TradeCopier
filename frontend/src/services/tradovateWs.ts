@@ -25,6 +25,7 @@ export class TradovateWSClient {
   private isConnecting = false;
   private userId: string | null = null;
   private groupId: string | null = null;
+  private numericUserId: string | null = null; // Numeric user ID from JWT token for user/syncrequest
   private quoteListeners = new Set<QuoteListener>();
   private positionListeners = new Set<PositionListener>();
   private orderListeners = new Set<OrderListener>();
@@ -67,6 +68,21 @@ export class TradovateWSClient {
       }
       console.log(`[TradovateWS] Token received, connecting WebSocket`);
 
+      // Extract numeric user ID from JWT token for user/syncrequest
+      // The JWT token contains the user ID in the 'sub' claim
+      let numericUserId: string | null = null;
+      try {
+        const tokenParts = tokens.access_token.split('.');
+        if (tokenParts.length >= 2) {
+          // Decode the payload (second part of JWT)
+          const payload = JSON.parse(atob(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/')));
+          numericUserId = payload.sub || null;
+          console.log(`[TradovateWS] Extracted numeric user ID from token: ${numericUserId}`);
+        }
+      } catch (e) {
+        console.warn(`[TradovateWS] Could not extract user ID from token:`, e);
+      }
+
       const ws = new WebSocket("wss://md.tradovateapi.com/v1/websocket");
       this.ws = ws;
 
@@ -77,6 +93,10 @@ export class TradovateWSClient {
           this.scheduleHeartbeat();
           // Wait a bit for auth to complete, then subscribe
           setTimeout(() => {
+            // Store numeric user ID for subscriptions
+            if (numericUserId) {
+              this.numericUserId = numericUserId;
+            }
             this.subscribePositions();
             this.subscribeOrders();
             this.subscribeAccounts();
@@ -132,6 +152,7 @@ export class TradovateWSClient {
       this.ws = null;
     }
     this.groupId = null;
+    this.numericUserId = null; // Clear numeric user ID on disconnect
     // Don't clear subscribedSymbols on disconnect - we'll resubscribe on reconnect
   }
 
@@ -206,11 +227,23 @@ export class TradovateWSClient {
 
   subscribePositions() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    
+    // Get numeric user ID from token (stored during connect)
+    if (!this.numericUserId) {
+      console.error(`[TradovateWS] Cannot subscribe to positions: numeric user ID not available`);
+      return;
+    }
+    
     try {
       const id = this.messageIdCounter++;
-      const subscribeMsg = `position/list\n${id}\n\n{}`;
+      // Use user/syncrequest to subscribe to user data updates (positions, orders, accounts)
+      // The userId should be the numeric user ID from the JWT token's 'sub' claim
+      // Format: user/syncrequest\n{id}\n\n{"users": [userId]}
+      const subscribeMsg = `user/syncrequest\n${id}\n\n{"users": [${this.numericUserId}]}`;
+      console.log(`[TradovateWS] Subscribing to user data via user/syncrequest for numeric userId: ${this.numericUserId}`);
       this.ws.send(subscribeMsg);
-    } catch {
+    } catch (error) {
+      console.error(`[TradovateWS] Error subscribing to positions:`, error);
       this.reconnect();
     }
   }
@@ -218,22 +251,20 @@ export class TradovateWSClient {
   subscribeOrders() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     try {
-      const id = this.messageIdCounter++;
-      const subscribeMsg = `order/list\n${id}\n\n{}`;
-      this.ws.send(subscribeMsg);
-    } catch {
-      this.reconnect();
+      // Orders are included in user/syncrequest, no separate subscription needed
+      console.log(`[TradovateWS] Orders will be received via user/syncrequest`);
+    } catch (error) {
+      console.error(`[TradovateWS] Error subscribing to orders:`, error);
     }
   }
 
   subscribeAccounts() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     try {
-      const id = this.messageIdCounter++;
-      const subscribeMsg = `account/list\n${id}\n\n{}`;
-      this.ws.send(subscribeMsg);
-    } catch {
-      this.reconnect();
+      // Accounts are included in user/syncrequest, no separate subscription needed
+      console.log(`[TradovateWS] Accounts will be received via user/syncrequest`);
+    } catch (error) {
+      console.error(`[TradovateWS] Error subscribing to accounts:`, error);
     }
   }
 
