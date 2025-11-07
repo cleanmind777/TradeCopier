@@ -365,8 +365,8 @@ const TradingPage: React.FC = () => {
     setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
   }, [selectedGroup?.id, symbol, positions]);
 
-  // Fetch accounts, positions, and orders once on mount only
-  // WebSocket will handle updates, and filtering happens in WebSocket listeners
+  // Fetch accounts, positions, and orders on mount and when symbol changes
+  // Reload all data when symbol changes (like first loading)
   useEffect(() => {
     const load = async () => {
       if (!user_id) return;
@@ -385,9 +385,9 @@ const TradingPage: React.FC = () => {
       setIsPageLoading(false);
     };
     load();
-    // Only load once on mount, WebSocket handles subsequent updates
+    // Reload when user_id or symbol changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user_id]);
+  }, [user_id, symbol]);
 
   // Subscribe to WebSocket updates for positions, orders, and accounts
   // Use refs to access current selectedGroup and symbol without re-subscribing
@@ -856,28 +856,28 @@ const TradingPage: React.FC = () => {
     }
   }, [positions, selectedGroup?.id]);
 
-  // Recalculate PnL when symbol or group changes
-  // PnL stream is already connected, just recalculate with filtered data
+  // Connect/reconnect PnL stream when user_id, symbol, or group changes
+  // This ensures fresh data is loaded when symbol changes (like first loading)
   useEffect(() => {
-    if (selectedGroup && symbol && user_id) {
+    if (user_id && symbol && selectedGroup) {
       // Clear stale PnL data for fresh calculation
       setPnlData({});
-      // Recalculate with current filtered positions
-      calculateGroupPnL();
+      // Connect/reconnect PnL stream to get fresh data
+      connectToPnLStream();
+      // Recalculate with current filtered positions after a brief delay
+      setTimeout(() => {
+        calculateGroupPnL();
+      }, 500);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, selectedGroup?.id, positions]);
-
-  // Connect to PnL stream when component mounts
-  useEffect(() => {
-    connectToPnLStream();
     
     return () => {
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
     };
-  }, [user_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user_id, symbol, selectedGroup?.id]);
 
   // Load user groups
   const loadGroups = async () => {
