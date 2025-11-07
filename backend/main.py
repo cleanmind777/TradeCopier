@@ -11,7 +11,16 @@ from app.services.broker_service import (
 from app.api.v1.routers import api_router  # Your routers
 
 # Async SQLAlchemy engine and session maker
-engine = create_async_engine(settings.ASYNC_DATABASE_URL, echo=True)
+# Configure connection pool to handle connection errors and stale connections
+engine = create_async_engine(
+    settings.ASYNC_DATABASE_URL,
+    echo=True,
+    pool_pre_ping=True,  # Verify connections before using them
+    pool_size=10,  # Number of connections to maintain
+    max_overflow=20,  # Maximum number of connections beyond pool_size
+    pool_recycle=1800,  # Recycle connections after 30 minutes (1800 seconds)
+    pool_reset_on_return='commit',  # Reset connections on return
+)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 
