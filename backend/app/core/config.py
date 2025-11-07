@@ -56,10 +56,6 @@ class Settings(BaseSettings):
 
     DATABENTO_KEY: str = Field(env="DATABENTO_KEY")
 
-    # Optional Redis cache
-    REDIS_URL: str | None = Field(default=None, env="REDIS_URL")
-    CACHE_TTL_SECONDS: int = Field(default=2, env="CACHE_TTL_SECONDS")
-
     class Config:
         # Path to the .env file (relative to project root)
         env_file = ".env"

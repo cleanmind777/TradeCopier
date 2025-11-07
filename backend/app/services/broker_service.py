@@ -67,8 +67,6 @@ from app.utils.tradovate import (
     tradovate_execute_market_order
 )
 import asyncio
-from app.utils.cache import cache_get_json, cache_set_json
-from app.core.config import settings
 from app.db.repositories.broker_repository import (
     user_add_broker,
     user_get_brokers,
@@ -227,10 +225,6 @@ def change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
 
 
 async def get_positions(db: Session, user_id: UUID):
-    cache_key = f"user:{user_id}:positions"
-    cached = await cache_get_json(cache_key)
-    if cached is not None:
-        return cached
     positions_status: list[TradovatePositionListResponse] = []
     positions_for_frontend: list[TradovatePositionListForFrontend] = []
     db_broker_accounts = (
@@ -301,15 +295,10 @@ async def get_positions(db: Session, user_id: UUID):
                 accountDisplayName=sba.sub_account_name,
             )
             positions_for_frontend.append(p)
-    await cache_set_json(cache_key, [p.model_dump() for p in positions_for_frontend], settings.CACHE_TTL_SECONDS)
     return positions_for_frontend
 
 
 async def get_orders(db: Session, user_id: UUID):
-    cache_key = f"user:{user_id}:orders"
-    cached = await cache_get_json(cache_key)
-    if cached is not None:
-        return cached
     order_status: list[TradovateOrderListResponse] = []
     order_for_frontend = []
     db_broker_accounts = (
@@ -379,15 +368,10 @@ async def get_orders(db: Session, user_id: UUID):
                 accountDisplayName=sba.sub_account_name,
             )
             order_for_frontend.append(o)
-    await cache_set_json(cache_key, [o.model_dump() for o in order_for_frontend], settings.CACHE_TTL_SECONDS)
     return order_for_frontend
 
 
 async def get_accounts(db: Session, user_id: UUID):
-    cache_key = f"user:{user_id}:accounts"
-    cached = await cache_get_json(cache_key)
-    if cached is not None:
-        return cached
     accounts_status: list[TradovateCashBalanceResponse] = []
     accounts_for_dashboard = []
     db_broker_accounts = (
@@ -431,7 +415,6 @@ async def get_accounts(db: Session, user_id: UUID):
                 accountDisplayName=sba.sub_account_name,
             )
             accounts_for_dashboard.append(a)
-    await cache_set_json(cache_key, [a.model_dump() for a in accounts_for_dashboard], settings.CACHE_TTL_SECONDS)
     return accounts_for_dashboard
 
 
