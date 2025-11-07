@@ -20,6 +20,12 @@ export class TradovateWSClient {
   private orderListeners = new Set<OrderListener>();
   private accountListeners = new Set<AccountListener>();
   private messageIdCounter = 10; // Start from 10 to avoid conflicts
+  
+  // Maintain current state for positions, orders, and accounts
+  // These are updated incrementally from WebSocket events
+  private currentPositions: PositionUpdate[] = [];
+  private currentOrders: OrderUpdate[] = [];
+  private currentAccounts: AccountUpdate[] = [];
 
   async connect(userId: string, groupId?: string) {
     // If already connecting, skip
@@ -145,6 +151,10 @@ export class TradovateWSClient {
     }
     this.groupId = null;
     this.numericUserId = null; // Clear numeric user ID on disconnect
+    // Clear state on disconnect
+    this.currentPositions = [];
+    this.currentOrders = [];
+    this.currentAccounts = [];
   }
 
   onPositions(listener: PositionListener) {
@@ -245,64 +255,172 @@ export class TradovateWSClient {
             // Authorization/command response (s=200 means success)
             if (item.s === 200 && item.i === 1) {
               // Auth successful, subscriptions will be sent in onopen
+              console.log(`[TradovateWS] Authorization successful`);
             }
             return;
           }
           
+          // Handle props events (entity updates from user/syncrequest)
+          // Format: {"e":"props","d":{"entityType":"order","eventType":"Created","entity":{...}}}
+          if (item.e === "props" && item.d) {
+            const entityType = item.d.entityType;
+            const eventType = item.d.eventType; // "Created", "Updated", "Deleted"
+            const entity = item.d.entity;
+            
+            if (!entity) return;
+            
+            // Handle position updates
+            if (entityType === "position") {
+              this.handlePositionUpdate(entity, eventType);
+            }
+            // Handle order updates
+            else if (entityType === "order") {
+              this.handleOrderUpdate(entity, eventType);
+            }
+            // Handle account/cashBalance updates
+            else if (entityType === "cashBalance" || entityType === "account") {
+              this.handleAccountUpdate(entity, eventType, entityType);
+            }
+          }
+          
+          // Legacy format support (if we still receive these)
           // Positions updates (real-time and initial list)
           if (item.e === "position" && item.d) {
             const positions = Array.isArray(item.d) ? item.d : [item.d];
-            console.log(`[TradovateWS] Received position update: ${positions.length} position(s)`);
+            console.log(`[TradovateWS] Received position update (legacy): ${positions.length} position(s)`);
+            this.currentPositions = positions;
             this.positionListeners.forEach((cb) => cb(positions));
           }
           
           // Orders updates (real-time and initial list)
           if (item.e === "order" && item.d) {
             const orders = Array.isArray(item.d) ? item.d : [item.d];
-            console.log(`[TradovateWS] Received order update: ${orders.length} order(s)`);
+            console.log(`[TradovateWS] Received order update (legacy): ${orders.length} order(s)`);
+            this.currentOrders = orders;
             this.orderListeners.forEach((cb) => cb(orders));
           }
           
           // Accounts updates (real-time and initial list)
           if (item.e === "account" && item.d) {
             const accounts = Array.isArray(item.d) ? item.d : [item.d];
-            console.log(`[TradovateWS] Received account update: ${accounts.length} account(s)`);
+            console.log(`[TradovateWS] Received account update (legacy): ${accounts.length} account(s)`);
+            this.currentAccounts = accounts;
             this.accountListeners.forEach((cb) => cb(accounts));
-          }
-          
-          // List responses (initial data from position/list, order/list, account/list)
-          // These come without an event type, so we detect them by structure
-          if (!item.e && item.d && typeof item.d === 'object') {
-            // Check if it's a list response by looking for array data
-            if (Array.isArray(item.d)) {
-              // Could be positions, orders, or accounts list
-              // We'll check the first item to determine type
-              if (item.d.length > 0) {
-                const first = item.d[0];
-                if (first.accountId !== undefined && first.netPos !== undefined) {
-                  // Positions list
-                  console.log(`[TradovateWS] Received positions list: ${item.d.length} position(s)`);
-                  this.positionListeners.forEach((cb) => cb(item.d));
-                } else if (first.accountId !== undefined && first.ordStatus !== undefined) {
-                  // Orders list
-                  console.log(`[TradovateWS] Received orders list: ${item.d.length} order(s)`);
-                  this.orderListeners.forEach((cb) => cb(item.d));
-                } else if (first.accountId !== undefined && first.amount !== undefined) {
-                  // Accounts list
-                  console.log(`[TradovateWS] Received accounts list: ${item.d.length} account(s)`);
-                  this.accountListeners.forEach((cb) => cb(item.d));
-                }
-              }
-            }
           }
         });
       } catch (error) {
-        console.error("Error parsing WebSocket message:", error);
+        console.error(`[TradovateWS] Error parsing message:`, error);
       }
     } else if (frameType === "h") {
+      // Heartbeat - respond with empty array
       if (this.ws?.readyState === WebSocket.OPEN) {
-        try { this.ws.send("[]"); } catch {}
+        this.ws.send("[]");
       }
+    }
+  }
+
+  private handlePositionUpdate(entity: any, eventType: string) {
+    if (eventType === "Created" || eventType === "Updated") {
+      // Find existing position by id or accountId+contractId
+      const existingIndex = this.currentPositions.findIndex(
+        (p: any) => p.id === entity.id || 
+        (p.accountId === entity.accountId && p.contractId === entity.contractId)
+      );
+      
+      if (existingIndex >= 0) {
+        // Update existing position
+        this.currentPositions[existingIndex] = { ...this.currentPositions[existingIndex], ...entity };
+      } else {
+        // Add new position
+        this.currentPositions.push(entity);
+      }
+      
+      // Remove archived positions
+      this.currentPositions = this.currentPositions.filter((p: any) => !p.archived);
+      
+      console.log(`[TradovateWS] Position ${eventType.toLowerCase()}: ${entity.id}, total positions: ${this.currentPositions.length}`);
+      this.positionListeners.forEach((cb) => cb([...this.currentPositions]));
+    } else if (eventType === "Deleted" || entity.archived) {
+      // Remove position
+      this.currentPositions = this.currentPositions.filter(
+        (p: any) => p.id !== entity.id && 
+        !(p.accountId === entity.accountId && p.contractId === entity.contractId)
+      );
+      console.log(`[TradovateWS] Position deleted/archived: ${entity.id}, total positions: ${this.currentPositions.length}`);
+      this.positionListeners.forEach((cb) => cb([...this.currentPositions]));
+    }
+  }
+
+  private handleOrderUpdate(entity: any, eventType: string) {
+    if (eventType === "Created" || eventType === "Updated") {
+      // Find existing order by id
+      const existingIndex = this.currentOrders.findIndex((o: any) => o.id === entity.id);
+      
+      if (existingIndex >= 0) {
+        // Update existing order
+        this.currentOrders[existingIndex] = { ...this.currentOrders[existingIndex], ...entity };
+      } else {
+        // Add new order
+        this.currentOrders.push(entity);
+      }
+      
+      // Remove archived or filled orders that are no longer active
+      // Keep orders that are still pending or working
+      this.currentOrders = this.currentOrders.filter((o: any) => {
+        if (o.archived) return false;
+        // Keep orders that are not filled or cancelled
+        const status = o.ordStatus || o.status;
+        return status !== "Filled" && status !== "Cancelled" && status !== "Rejected";
+      });
+      
+      console.log(`[TradovateWS] Order ${eventType.toLowerCase()}: ${entity.id}, status: ${entity.ordStatus || entity.status}, total orders: ${this.currentOrders.length}`);
+      this.orderListeners.forEach((cb) => cb([...this.currentOrders]));
+    } else if (eventType === "Deleted" || entity.archived) {
+      // Remove order
+      this.currentOrders = this.currentOrders.filter((o: any) => o.id !== entity.id);
+      console.log(`[TradovateWS] Order deleted/archived: ${entity.id}, total orders: ${this.currentOrders.length}`);
+      this.orderListeners.forEach((cb) => cb([...this.currentOrders]));
+    }
+  }
+
+  private handleAccountUpdate(entity: any, eventType: string, entityType: string) {
+    if (entityType === "cashBalance") {
+      // cashBalance updates affect accounts - find account by accountId
+      const accountId = entity.accountId;
+      const existingIndex = this.currentAccounts.findIndex((a: any) => a.accountId === accountId);
+      
+      if (existingIndex >= 0) {
+        // Update account with new cash balance
+        this.currentAccounts[existingIndex] = {
+          ...this.currentAccounts[existingIndex],
+          amount: entity.amount,
+          realizedPnL: entity.realizedPnL,
+          weekRealizedPnL: entity.weekRealizedPnL,
+        };
+      } else {
+        // Create new account entry from cashBalance
+        this.currentAccounts.push({
+          accountId: accountId,
+          amount: entity.amount,
+          realizedPnL: entity.realizedPnL,
+          weekRealizedPnL: entity.weekRealizedPnL,
+        });
+      }
+      
+      console.log(`[TradovateWS] Account cashBalance updated: ${accountId}, amount: ${entity.amount}`);
+      this.accountListeners.forEach((cb) => cb([...this.currentAccounts]));
+    } else if (entityType === "account") {
+      // Direct account updates
+      const existingIndex = this.currentAccounts.findIndex((a: any) => a.accountId === entity.accountId || a.id === entity.id);
+      
+      if (existingIndex >= 0) {
+        this.currentAccounts[existingIndex] = { ...this.currentAccounts[existingIndex], ...entity };
+      } else {
+        this.currentAccounts.push(entity);
+      }
+      
+      console.log(`[TradovateWS] Account ${eventType.toLowerCase()}: ${entity.accountId || entity.id}`);
+      this.accountListeners.forEach((cb) => cb([...this.currentAccounts]));
     }
   }
 }
