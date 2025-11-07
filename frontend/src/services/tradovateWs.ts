@@ -302,26 +302,30 @@ export class TradovateWSClient {
             }
           }
           
-          // Positions updates
+          // Positions updates (real-time and initial list)
           if (item.e === "position" && item.d) {
             const positions = Array.isArray(item.d) ? item.d : [item.d];
+            console.log(`[TradovateWS] Received position update: ${positions.length} position(s)`);
             this.positionListeners.forEach((cb) => cb(positions));
           }
           
-          // Orders updates
+          // Orders updates (real-time and initial list)
           if (item.e === "order" && item.d) {
             const orders = Array.isArray(item.d) ? item.d : [item.d];
+            console.log(`[TradovateWS] Received order update: ${orders.length} order(s)`);
             this.orderListeners.forEach((cb) => cb(orders));
           }
           
-          // Accounts updates
+          // Accounts updates (real-time and initial list)
           if (item.e === "account" && item.d) {
             const accounts = Array.isArray(item.d) ? item.d : [item.d];
+            console.log(`[TradovateWS] Received account update: ${accounts.length} account(s)`);
             this.accountListeners.forEach((cb) => cb(accounts));
           }
           
-          // List responses (initial data)
-          if (item.d && typeof item.d === 'object') {
+          // List responses (initial data from position/list, order/list, account/list)
+          // These come without an event type, so we detect them by structure
+          if (!item.e && item.d && typeof item.d === 'object') {
             // Check if it's a list response by looking for array data
             if (Array.isArray(item.d)) {
               // Could be positions, orders, or accounts list
@@ -329,13 +333,16 @@ export class TradovateWSClient {
               if (item.d.length > 0) {
                 const first = item.d[0];
                 if (first.accountId !== undefined && first.netPos !== undefined) {
-                  // Positions
+                  // Positions list
+                  console.log(`[TradovateWS] Received positions list: ${item.d.length} position(s)`);
                   this.positionListeners.forEach((cb) => cb(item.d));
                 } else if (first.accountId !== undefined && first.ordStatus !== undefined) {
-                  // Orders
+                  // Orders list
+                  console.log(`[TradovateWS] Received orders list: ${item.d.length} order(s)`);
                   this.orderListeners.forEach((cb) => cb(item.d));
                 } else if (first.accountId !== undefined && first.amount !== undefined) {
-                  // Accounts
+                  // Accounts list
+                  console.log(`[TradovateWS] Received accounts list: ${item.d.length} account(s)`);
                   this.accountListeners.forEach((cb) => cb(item.d));
                 }
               }
