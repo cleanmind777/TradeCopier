@@ -1303,58 +1303,110 @@ const TradingPage: React.FC = () => {
     };
   }, [user_id, selectedGroup?.id]);
 
-  // Track previous symbol to unsubscribe when it changes
-  const prevSymbolRef = useRef<string | null>(null);
+  // Track current symbol for quote listener
+  const wsSymbolRef = useRef<string | null>(null);
 
   // Subscribe WS quotes for current symbol and update currentPrice
   useEffect(() => {
     if (!user_id || !symbol) {
+      // Unsubscribe old listener
+      if (wsUnsubscribeRef.current) {
+        wsUnsubscribeRef.current();
+        wsUnsubscribeRef.current = null;
+      }
       // Unsubscribe from previous symbol if exists
-      if (prevSymbolRef.current) {
-        tradovateWSClient.unsubscribeQuotes(prevSymbolRef.current);
-        prevSymbolRef.current = null;
+      const previousSymbol = wsSymbolRef.current;
+      if (previousSymbol) {
+        tradovateWSClient.unsubscribeQuotes(previousSymbol);
+        wsSymbolRef.current = null;
       }
       // Clear price when symbol is cleared
       setCurrentPrice({});
       return;
     }
 
+    // Store the symbol we're about to subscribe to
+    const symbolToSubscribe = symbol;
+    const previousSymbol = wsSymbolRef.current;
+
     // Unsubscribe from previous symbol if it changed
-    if (prevSymbolRef.current && prevSymbolRef.current !== symbol) {
-      tradovateWSClient.unsubscribeQuotes(prevSymbolRef.current);
+    if (previousSymbol && previousSymbol !== symbolToSubscribe) {
+      tradovateWSClient.unsubscribeQuotes(previousSymbol);
     }
 
-    // Unsubscribe old listener and clear price when symbol changes
+    // Unsubscribe old listener
     if (wsUnsubscribeRef.current) {
       wsUnsubscribeRef.current();
       wsUnsubscribeRef.current = null;
     }
-    setCurrentPrice({}); // Clear old symbol's price
 
-    // Update previous symbol ref
-    prevSymbolRef.current = symbol;
+    // Clear price when symbol changes (but only if it actually changed)
+    if (previousSymbol !== symbolToSubscribe) {
+      setCurrentPrice({});
+    }
 
-    // Subscribe to new symbol
-    const currentSymbol = symbol; // Capture current symbol for closure
+    // Update ref AFTER we've checked the previous value
+    wsSymbolRef.current = symbolToSubscribe;
+
+    // Subscribe to new symbol quotes
     wsUnsubscribeRef.current = tradovateWSClient.onQuote((q) => {
-      // Only update if quote is for current symbol (if symbol is provided in quote)
-      if (q.symbol && q.symbol !== currentSymbol) return;
+      // Use ref to get current symbol (not closure value)
+      const currentSymbol = wsSymbolRef.current;
+      if (!currentSymbol) return; // Symbol was cleared
       
-      setCurrentPrice((prev) => ({
-        ...prev,
-        bid: typeof q.bid === "number" ? q.bid : prev.bid,
-        ask: typeof q.ask === "number" ? q.ask : prev.ask,
-        last: typeof q.last === "number" ? q.last : prev.last,
-      }));
+      // If quote has a symbol field, only accept if it matches current symbol
+      // Otherwise, accept all quotes (WebSocket subscription should handle filtering)
+      if (q.symbol && q.symbol !== currentSymbol) {
+        console.log(`[TradingPage] Ignoring quote for ${q.symbol}, current symbol is ${currentSymbol}`);
+        return; // Quote is for a different symbol
+      }
+      
+      console.log(`[TradingPage] Received quote for ${currentSymbol}:`, { bid: q.bid, ask: q.ask, last: q.last });
+      
+      // Update price with new quote data
+      setCurrentPrice((prev) => {
+        const newPrice = {
+          ...prev,
+        };
+        if (typeof q.bid === "number") newPrice.bid = q.bid;
+        if (typeof q.ask === "number") newPrice.ask = q.ask;
+        if (typeof q.last === "number") newPrice.last = q.last;
+        return newPrice;
+      });
       lastPriceTsRef.current = Date.now();
       setIsPriceIdle(false);
     });
     
     // Subscribe to quotes for the new symbol
-    // Use a small delay to ensure WebSocket is ready
+    // Retry if WebSocket isn't ready yet
+    const trySubscribe = () => {
+      if (wsSymbolRef.current !== symbolToSubscribe) {
+        // Symbol changed while waiting, don't subscribe
+        console.log(`[TradingPage] Symbol changed from ${symbolToSubscribe} to ${wsSymbolRef.current}, skipping subscription`);
+        return;
+      }
+      console.log(`[TradingPage] Attempting to subscribe to quotes for: ${symbolToSubscribe}`);
+      const success = tradovateWSClient.subscribeQuotes(symbolToSubscribe);
+      if (!success) {
+        console.log(`[TradingPage] Subscription failed for ${symbolToSubscribe}, will retry`);
+        // WebSocket might be connecting, retry after a delay
+        setTimeout(() => {
+          if (wsSymbolRef.current === symbolToSubscribe) {
+            trySubscribe();
+          }
+        }, 500);
+      } else {
+        console.log(`[TradingPage] Successfully subscribed to quotes for: ${symbolToSubscribe}`);
+      }
+    };
+
+    // Try immediately, then retry if needed
+    trySubscribe();
     const subscribeTimeout = setTimeout(() => {
-      tradovateWSClient.subscribeQuotes(symbol);
-    }, 200);
+      if (wsSymbolRef.current === symbolToSubscribe) {
+        trySubscribe();
+      }
+    }, 1000);
 
     return () => {
       clearTimeout(subscribeTimeout);
@@ -1362,9 +1414,11 @@ const TradingPage: React.FC = () => {
         wsUnsubscribeRef.current();
         wsUnsubscribeRef.current = null;
       }
-      // Unsubscribe when component unmounts or symbol changes
-      if (prevSymbolRef.current) {
-        tradovateWSClient.unsubscribeQuotes(prevSymbolRef.current);
+      // Unsubscribe from the symbol this effect subscribed to
+      // Only if it's still the current symbol (to avoid unsubscribing if symbol changed again)
+      if (wsSymbolRef.current === symbolToSubscribe) {
+        tradovateWSClient.unsubscribeQuotes(symbolToSubscribe);
+        wsSymbolRef.current = null;
       }
     };
   }, [user_id, symbol]);

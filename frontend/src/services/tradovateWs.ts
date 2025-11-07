@@ -114,33 +114,36 @@ export class TradovateWSClient {
 
   private subscribedSymbols = new Set<string>();
 
-  subscribeQuotes(symbol: string) {
+  subscribeQuotes(symbol: string): boolean {
     if (!this.ws) {
       // If WebSocket doesn't exist, try to connect first
       if (this.userId) {
         this.connect(this.userId, this.groupId || undefined);
       }
-      return;
+      return false;
     }
     
     if (this.ws.readyState !== WebSocket.OPEN) {
-      // If WebSocket is connecting, wait a bit and retry
-      if (this.ws.readyState === WebSocket.CONNECTING) {
-        setTimeout(() => this.subscribeQuotes(symbol), 500);
-      }
-      return;
+      // If WebSocket is connecting, caller should retry
+      return false;
     }
     
     try {
       // Only subscribe if not already subscribed
-      if (this.subscribedSymbols.has(symbol)) return;
+      if (this.subscribedSymbols.has(symbol)) {
+        return true; // Already subscribed
+      }
       
       const id = this.messageIdCounter++;
       const subscribeMsg = `md/subscribeQuote\n${id}\n\n${JSON.stringify({ symbol })}`;
       this.ws.send(subscribeMsg);
       this.subscribedSymbols.add(symbol);
-    } catch {
+      console.log(`[TradovateWS] Subscribed to quotes for: ${symbol}`);
+      return true;
+    } catch (error) {
+      console.error(`[TradovateWS] Error subscribing to ${symbol}:`, error);
       this.reconnect();
+      return false;
     }
   }
 
@@ -251,13 +254,16 @@ export class TradovateWSClient {
             const tradeData = entries.Trade || {};
 
             const update: QuoteUpdate = {
-              symbol: quote.symbol || item.d.symbol || undefined,
+              symbol: quote.symbol || item.d.symbol || item.d.contract?.symbol || undefined,
               bid: bidData.price ?? undefined,
               ask: askData.price ?? undefined,
               last: tradeData.price ?? undefined,
               timestamp: quote.timestamp ?? undefined,
             };
-            this.quoteListeners.forEach((cb) => cb(update));
+            // Only notify listeners if we have at least one price value
+            if (update.bid !== undefined || update.ask !== undefined || update.last !== undefined) {
+              this.quoteListeners.forEach((cb) => cb(update));
+            }
           }
           
           // Positions updates
