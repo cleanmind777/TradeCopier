@@ -365,8 +365,8 @@ const TradingPage: React.FC = () => {
     setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
   }, [selectedGroup, symbol, positions]);
 
-  // Fetch accounts, positions, and orders once on mount (single combined request)
-  // Then filter by selected group and symbol
+  // Fetch accounts, positions, and orders once on mount only
+  // WebSocket will handle updates, and filtering happens in WebSocket listeners
   useEffect(() => {
     const load = async () => {
       if (!user_id) return;
@@ -385,7 +385,9 @@ const TradingPage: React.FC = () => {
       setIsPageLoading(false);
     };
     load();
-  }, [user_id, selectedGroup, symbol]);
+    // Only load once on mount, WebSocket handles subsequent updates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user_id]);
 
   // Subscribe to WebSocket updates for positions, orders, and accounts
   // Filter by selected group's accounts and selected symbol
@@ -519,16 +521,9 @@ const TradingPage: React.FC = () => {
       return hasChanges ? next : prev;
     });
     
-    // Always reconnect PnL stream when positions change
-    // This ensures backend fetches fresh positions and tracks all current positions
-    setTimeout(() => {
-      connectToPnLStream();
-    }, 300);
-    
-    // Force PnL recalculation after reconnecting
-    setTimeout(() => {
-      calculateGroupPnL();
-    }, 500);
+    // Recalculate PnL when positions change (from WebSocket updates)
+    // PnL stream is already connected, just recalculate
+    calculateGroupPnL();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [positions]);
 
@@ -552,32 +547,12 @@ const TradingPage: React.FC = () => {
         await exitAllPostions(exitList as any);
       }
       // Wait briefly for provider to reflect flatten
-      // WebSocket will update positions automatically, so we just wait a bit
-      await new Promise((r) => setTimeout(r, 2000));
+      // WebSocket will update positions automatically
+      await new Promise((r) => setTimeout(r, 1000));
       
-      // Optionally refresh once to ensure we have latest state
-      const data = await getAllTradingData(user_id);
-      if (data) {
-        const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
-          data.accounts || [],
-          data.positions || [],
-          data.orders || []
-        );
-        setAccounts(filteredAccounts);
-        setPositions(filteredPositions);
-        setOrders(filteredOrders);
-      }
-      
-      // Clear stale PnL data to force fresh calculation
+      // Clear stale PnL data - WebSocket will update positions automatically
       setPnlData({});
-      // Reconnect PnL SSE to ensure fresh stream after exits
-      setTimeout(() => {
-        connectToPnLStream();
-        // Force recalculation after stream reconnects
-        setTimeout(() => {
-          calculateGroupPnL();
-        }, 500);
-      }, 300);
+      // PnL stream will automatically update when positions change via WebSocket
       // Normalize unrealized PnL to zero for accounts that are now flat to refresh equities immediately
       try {
         const netByAccount: Record<number, number> = {};
@@ -865,23 +840,17 @@ const TradingPage: React.FC = () => {
     }
   }, [positions, selectedGroup]);
 
-  // Reconnect PnL stream and refresh when symbol or group changes
+  // Recalculate PnL when symbol or group changes
+  // PnL stream is already connected, just recalculate with filtered data
   useEffect(() => {
     if (selectedGroup && symbol && user_id) {
-      console.log(`🔄 Symbol or group changed - reconnecting PnL stream`);
       // Clear stale PnL data for fresh calculation
       setPnlData({});
-      // Reconnect PnL stream to get fresh data
-      setTimeout(() => {
-        connectToPnLStream();
-      }, 300);
-      // Force recalculation after a brief delay
-      setTimeout(() => {
-        calculateGroupPnL();
-      }, 500);
+      // Recalculate with current filtered positions
+      calculateGroupPnL();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, selectedGroup?.id]);
+  }, [symbol, selectedGroup?.id, positions]);
 
   // Connect to PnL stream when component mounts
   useEffect(() => {
@@ -1048,36 +1017,12 @@ const TradingPage: React.FC = () => {
       setOrderHistory((prev) => [orderRecord, ...prev]);
 
       // Wait briefly for provider to reflect new positions
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 500));
 
       // WebSocket will automatically update positions, orders, and accounts
-      // But refresh once to ensure we have latest state immediately
-      try {
-        const data = await getAllTradingData(user_id);
-        if (data) {
-          const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
-            data.accounts || [],
-            data.positions || [],
-            data.orders || []
-          );
-          setAccounts(filteredAccounts);
-          setPositions(filteredPositions);
-          setOrders(filteredOrders);
-        }
-        
-        // Clear stale PnL data to force fresh calculation
-        setPnlData({});
-        // Reconnect PnL SSE to ensure fresh stream picks up new positions
-        setTimeout(() => {
-          connectToPnLStream();
-          // Force recalculation after stream reconnects
-          setTimeout(() => {
-            calculateGroupPnL();
-          }, 500);
-        }, 300);
-      } catch (e) {
-        // Silent fail; WebSocket will catch up
-      }
+      // Clear stale PnL data - WebSocket will update positions automatically
+      setPnlData({});
+      // PnL stream will automatically update when positions change via WebSocket
 
       // Reset form
       setOrderQuantity("1");
