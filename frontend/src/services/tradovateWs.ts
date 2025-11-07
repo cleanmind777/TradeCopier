@@ -1,15 +1,5 @@
 import { getWebSocketToken, getWebSocketTokenForGroup } from "../api/brokerApi";
 
-type QuoteUpdate = {
-  symbol?: string;
-  bid?: number;
-  ask?: number;
-  last?: number;
-  timestamp?: string;
-};
-
-type QuoteListener = (quote: QuoteUpdate) => void;
-
 type PositionUpdate = any; // TradovatePositionListResponse
 type OrderUpdate = any; // TradovateOrderListResponse
 type AccountUpdate = any; // TradovateAccountsResponse
@@ -26,7 +16,6 @@ export class TradovateWSClient {
   private userId: string | null = null;
   private groupId: string | null = null;
   private numericUserId: string | null = null; // Numeric user ID from JWT token for user/syncrequest
-  private quoteListeners = new Set<QuoteListener>();
   private positionListeners = new Set<PositionListener>();
   private orderListeners = new Set<OrderListener>();
   private accountListeners = new Set<AccountListener>();
@@ -100,12 +89,6 @@ export class TradovateWSClient {
             this.subscribePositions();
             this.subscribeOrders();
             this.subscribeAccounts();
-            // Resubscribe to all previously subscribed symbols
-            const symbolsToResubscribe = Array.from(this.subscribedSymbols);
-            this.subscribedSymbols.clear(); // Clear first to allow resubscription
-            symbolsToResubscribe.forEach(symbol => {
-              this.subscribeQuotes(symbol);
-            });
           }, 500);
         } catch {
           this.reconnect();
@@ -153,61 +136,6 @@ export class TradovateWSClient {
     }
     this.groupId = null;
     this.numericUserId = null; // Clear numeric user ID on disconnect
-    // Don't clear subscribedSymbols on disconnect - we'll resubscribe on reconnect
-  }
-
-  onQuote(listener: QuoteListener) {
-    this.quoteListeners.add(listener);
-    return () => this.quoteListeners.delete(listener);
-  }
-
-  private subscribedSymbols = new Set<string>();
-
-  subscribeQuotes(symbol: string): boolean {
-    if (!this.ws) {
-      // If WebSocket doesn't exist, try to connect first
-      if (this.userId) {
-        this.connect(this.userId, this.groupId || undefined);
-      }
-      return false;
-    }
-    
-    if (this.ws.readyState !== WebSocket.OPEN) {
-      // If WebSocket is connecting, caller should retry
-      return false;
-    }
-    
-    try {
-      // Only subscribe if not already subscribed
-      if (this.subscribedSymbols.has(symbol)) {
-        return true; // Already subscribed
-      }
-      
-      const id = this.messageIdCounter++;
-      const subscribeMsg = `md/subscribeQuote\n${id}\n\n${JSON.stringify({ symbol })}`;
-      this.ws.send(subscribeMsg);
-      this.subscribedSymbols.add(symbol);
-      console.log(`[TradovateWS] Subscribed to quotes for: ${symbol}`);
-      return true;
-    } catch (error) {
-      console.error(`[TradovateWS] Error subscribing to ${symbol}:`, error);
-      this.reconnect();
-      return false;
-    }
-  }
-
-  unsubscribeQuotes(symbol: string) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    try {
-      if (!this.subscribedSymbols.has(symbol)) return;
-      
-      const id = this.messageIdCounter++;
-      const unsubscribeMsg = `md/unsubscribeQuote\n${id}\n\n${JSON.stringify({ symbol })}`;
-      this.ws.send(unsubscribeMsg);
-      this.subscribedSymbols.delete(symbol);
-    } catch {
-      // Ignore errors
-    }
   }
 
   onPositions(listener: PositionListener) {
@@ -310,27 +238,6 @@ export class TradovateWSClient {
               // Auth successful, subscriptions will be sent in onopen
             }
             return;
-          }
-          
-          // Market data quotes
-          if (item.e === "md" && item.d?.quotes) {
-            const quote = item.d.quotes[0];
-            const entries = quote.entries || {};
-            const bidData = entries.Bid || {};
-            const askData = entries.Offer || {};
-            const tradeData = entries.Trade || {};
-
-            const update: QuoteUpdate = {
-              symbol: quote.symbol || item.d.symbol || item.d.contract?.symbol || undefined,
-              bid: bidData.price ?? undefined,
-              ask: askData.price ?? undefined,
-              last: tradeData.price ?? undefined,
-              timestamp: quote.timestamp ?? undefined,
-            };
-            // Only notify listeners if we have at least one price value
-            if (update.bid !== undefined || update.ask !== undefined || update.last !== undefined) {
-              this.quoteListeners.forEach((cb) => cb(update));
-            }
           }
           
           // Positions updates (real-time and initial list)
