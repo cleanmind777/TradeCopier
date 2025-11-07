@@ -21,7 +21,8 @@ import {
   TradovatePositionListResponse,
 } from "../types/broker";
 import LoadingModal from "../components/ui/LoadingModal";
-import { tradovateWSClient } from "../services/tradovateWs";
+import { tradovateWSMultiClient } from "../services/tradovateWsMulti";
+import { getAllWebSocketTokens } from "../api/brokerApi";
 
 const TradingPage: React.FC = () => {
   // Trading state
@@ -474,7 +475,7 @@ const TradingPage: React.FC = () => {
       refreshPnLStream,
     };
 
-    const unsubPositions = tradovateWSClient.onPositions((allPositions) => {
+    const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
       if (!allPositions || allPositions.length === 0) {
         setPositions([]);
         return;
@@ -517,7 +518,7 @@ const TradingPage: React.FC = () => {
       }
     });
 
-    const unsubOrders = tradovateWSClient.onOrders((allOrders) => {
+    const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
       if (!allOrders || allOrders.length === 0) {
         setOrders([]);
         return;
@@ -560,7 +561,7 @@ const TradingPage: React.FC = () => {
       }
     });
 
-    const unsubAccounts = tradovateWSClient.onAccounts((allAccounts) => {
+    const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
       if (!allAccounts || allAccounts.length === 0) {
         setAccounts([]);
         return;
@@ -1423,34 +1424,48 @@ const TradingPage: React.FC = () => {
     }
   }, [user_id]);
 
-  // Connect WebSocket when user_id or selectedGroup changes
-  // Use refs to track previous values and avoid unnecessary reconnections
+  // Connect WebSocket to all broker accounts when user_id changes
   const prevUserIdRef = useRef<string | null>(null);
-  const prevGroupIdRef = useRef<string | null>(null);
   
   useEffect(() => {
     const currentUserId = user_id;
-    const currentGroupId = selectedGroup?.id || null;
     
-    // Only connect if userId or groupId actually changed
-    if (currentUserId && 
-        (prevUserIdRef.current !== currentUserId || prevGroupIdRef.current !== currentGroupId)) {
-      console.log(`[TradingPage] WebSocket connection triggered: userId=${currentUserId}, groupId=${currentGroupId} (prev: userId=${prevUserIdRef.current}, groupId=${prevGroupIdRef.current})`);
+    // Only connect if userId actually changed
+    if (currentUserId && prevUserIdRef.current !== currentUserId) {
+      console.log(`[TradingPage] WebSocket connection triggered for all accounts: userId=${currentUserId}`);
       prevUserIdRef.current = currentUserId;
-      prevGroupIdRef.current = currentGroupId;
-      tradovateWSClient.connect(currentUserId, currentGroupId || undefined);
+      
+      // Fetch tokens for all broker accounts and connect
+      getAllWebSocketTokens(currentUserId).then((tokensList) => {
+        if (tokensList && tokensList.length > 0) {
+          console.log(`[TradingPage] Connecting to ${tokensList.length} broker account(s)`);
+          // Map tokens to ensure is_demo has a default value
+          const mappedTokens = tokensList.map(t => ({
+            id: t.id,
+            access_token: t.access_token,
+            md_access_token: t.md_access_token,
+            is_demo: t.is_demo ?? false
+          }));
+          tradovateWSMultiClient.connectAll(currentUserId, mappedTokens);
+        } else {
+          console.warn(`[TradingPage] No WebSocket tokens found for user ${currentUserId}`);
+        }
+      }).catch((error) => {
+        console.error(`[TradingPage] Error fetching WebSocket tokens:`, error);
+      });
     } else if (!currentUserId) {
-      // If userId is cleared, disconnect
+      // If userId is cleared, disconnect all
       prevUserIdRef.current = null;
-      prevGroupIdRef.current = null;
-      tradovateWSClient.disconnect();
+      tradovateWSMultiClient.disconnectAll();
     }
 
     return () => {
-      // Only disconnect on unmount, not on every dependency change
-      // The connect method handles reconnection when userId/groupId changes
+      // Only disconnect on unmount
+      if (!user_id) {
+        tradovateWSMultiClient.disconnectAll();
+      }
     };
-  }, [user_id, selectedGroup?.id]);
+  }, [user_id]);
 
 
   // Initialize lightweight chart

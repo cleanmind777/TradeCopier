@@ -296,6 +296,47 @@ def user_get_tokens_for_websocket(
             return websocket_token
     return None
 
+def user_get_all_tokens_for_websocket(
+    db: Session, user_id: UUID
+) -> list[WebSocketTokens]:
+    """Get WebSocket tokens for all broker accounts for a user"""
+    broker_accounts = (
+        db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
+    )
+    tokens_list = []
+    for broker in broker_accounts:
+        # Check if any active sub-broker is demo to determine endpoint
+        is_demo = False
+        sub_brokers = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.broker_account_id == broker.id)
+            .filter(SubBrokerAccount.is_active == True)
+            .all()
+        )
+        if sub_brokers:
+            # If any active sub-broker is demo, use demo endpoint
+            is_demo = any(sub.is_demo for sub in sub_brokers)
+        
+        # Prefer websocket tokens if available
+        if broker.websocket_access_token:
+            websocket_token = WebSocketTokens(
+                id=broker.id,
+                access_token=broker.websocket_access_token,
+                md_access_token=broker.websocket_md_access_token,
+                is_demo=is_demo
+            )
+            tokens_list.append(websocket_token)
+        # Fallback to regular access tokens if websocket tokens don't exist
+        elif broker.access_token and broker.md_access_token:
+            websocket_token = WebSocketTokens(
+                id=broker.id,
+                access_token=broker.access_token,
+                md_access_token=broker.md_access_token,
+                is_demo=is_demo
+            )
+            tokens_list.append(websocket_token)
+    return tokens_list
+
 def user_get_tokens_for_group(
     db: Session, group_id: UUID
 ) -> WebSocketTokens | None:

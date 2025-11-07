@@ -316,6 +316,26 @@ export const getWebSocketTokenForGroup = async (
   }
 };
 
+export const getAllWebSocketTokens = async (
+  user_id: string
+): Promise<Tokens[] | null> => {
+  try {
+    const params = { user_id };
+    const response = await axios.get(`${API_BASE}/broker/websockettoken/all`, {
+      params,
+    });
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get All Tokens:", error.response?.data);
+      // Don't alert to avoid spam
+    } else {
+      console.error("Unexpected Get All Tokens error:", error);
+    }
+    return null;
+  }
+};
+
 export const executeMarketOrder = async (order: MarketOrder) => {
   try {
     const response = await axios.post(`${API_BASE}/broker/execute-order/market`, order);

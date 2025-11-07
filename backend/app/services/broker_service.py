@@ -474,6 +474,12 @@ def get_token_for_websocket(
 ) -> WebSocketTokens | None:
     return user_get_tokens_for_websocket(db, user_id)
 
+def get_all_tokens_for_websocket(
+    db: Session, user_id: UUID
+) -> list[WebSocketTokens]:
+    from app.db.repositories.broker_repository import user_get_all_tokens_for_websocket
+    return user_get_all_tokens_for_websocket(db, user_id)
+
 def get_token_for_group_websocket(
     db: Session, group_id: UUID
 ) -> WebSocketTokens | None:
