@@ -72,7 +72,10 @@ export class TradovateWSClient {
         console.warn(`[TradovateWS] Could not extract user ID from token:`, e);
       }
 
-      const ws = new WebSocket("wss://md.tradovateapi.com/v1/websocket");
+      // Use account WebSocket endpoint for positions, orders, and accounts
+      // Market data endpoint (wss://md.tradovateapi.com) is only for quotes
+      // Account endpoint (wss://live.tradovateapi.com) is for account operations
+      const ws = new WebSocket("wss://live.tradovateapi.com/v1/websocket");
       this.ws = ws;
 
       ws.onopen = () => {
