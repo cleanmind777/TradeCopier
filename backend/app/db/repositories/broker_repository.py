@@ -264,11 +264,20 @@ def user_get_tokens_for_websocket(
         db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
     )
     for broker in broker_accounts:
+        # Prefer websocket tokens if available
         if broker.websocket_access_token:
             websocket_token = WebSocketTokens(
                 id=broker.id,
                 access_token=broker.websocket_access_token,
                 md_access_token=broker.websocket_md_access_token
+            )
+            return websocket_token
+        # Fallback to regular access tokens if websocket tokens don't exist
+        elif broker.access_token and broker.md_access_token:
+            websocket_token = WebSocketTokens(
+                id=broker.id,
+                access_token=broker.access_token,
+                md_access_token=broker.md_access_token
             )
             return websocket_token
     return None
@@ -307,11 +316,23 @@ def user_get_tokens_for_group(
         .first()
     )
     
-    if broker_account and broker_account.websocket_access_token:
+    if not broker_account:
+        return None
+    
+    # Prefer websocket tokens if available
+    if broker_account.websocket_access_token:
         websocket_token = WebSocketTokens(
             id=broker_account.id,
             access_token=broker_account.websocket_access_token,
             md_access_token=broker_account.websocket_md_access_token
+        )
+        return websocket_token
+    # Fallback to regular access tokens if websocket tokens don't exist
+    elif broker_account.access_token and broker_account.md_access_token:
+        websocket_token = WebSocketTokens(
+            id=broker_account.id,
+            access_token=broker_account.access_token,
+            md_access_token=broker_account.md_access_token
         )
         return websocket_token
     
