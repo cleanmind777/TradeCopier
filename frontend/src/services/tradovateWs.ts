@@ -32,28 +32,40 @@ export class TradovateWSClient {
   private messageIdCounter = 10; // Start from 10 to avoid conflicts
 
   async connect(userId: string, groupId?: string) {
-    // If already connected with same userId and groupId, don't reconnect
-    if (this.isConnecting) return;
-    if (this.ws?.readyState === WebSocket.OPEN && this.userId === userId && this.groupId === (groupId || null)) {
+    // If already connecting, skip
+    if (this.isConnecting) {
+      console.log(`[TradovateWS] Already connecting, skipping (userId: ${userId}, groupId: ${groupId})`);
       return;
     }
+    
+    // If already connected with same userId and groupId, don't reconnect
+    if (this.ws?.readyState === WebSocket.OPEN && this.userId === userId && this.groupId === (groupId || null)) {
+      console.log(`[TradovateWS] Already connected with same userId and groupId, skipping (userId: ${userId}, groupId: ${groupId})`);
+      return;
+    }
+    
     // If groupId changed, disconnect first
     if (this.ws?.readyState === WebSocket.OPEN && this.groupId !== (groupId || null)) {
+      console.log(`[TradovateWS] GroupId changed from ${this.groupId} to ${groupId}, disconnecting first`);
       this.disconnect();
     }
+    
     this.isConnecting = true;
     this.userId = userId;
     this.groupId = groupId || null;
 
     try {
+      console.log(`[TradovateWS] Fetching token (userId: ${userId}, groupId: ${groupId})`);
       // If groupId is provided, get token for that group, otherwise use user_id
       const tokens = groupId 
         ? await getWebSocketTokenForGroup(groupId)
         : await getWebSocketToken(userId);
       if (!tokens?.access_token) {
+        console.log(`[TradovateWS] No token received, aborting connection`);
         this.isConnecting = false;
         return;
       }
+      console.log(`[TradovateWS] Token received, connecting WebSocket`);
 
       const ws = new WebSocket("wss://md.tradovateapi.com/v1/websocket");
       this.ws = ws;
@@ -81,10 +93,26 @@ export class TradovateWSClient {
       };
 
       ws.onmessage = (evt) => this.handleMessage(evt);
-      ws.onerror = () => this.reconnect();
-      ws.onclose = () => this.reconnect();
-    } catch {
-      this.reconnect();
+      ws.onerror = (error) => {
+        console.error(`[TradovateWS] WebSocket error:`, error);
+        // Only reconnect if not already connecting/reconnecting
+        if (!this.isConnecting && !this.reconnectTimer) {
+          this.reconnect();
+        }
+      };
+      ws.onclose = (event) => {
+        console.log(`[TradovateWS] WebSocket closed (code: ${event.code}, reason: ${event.reason})`);
+        // Only reconnect if not already connecting/reconnecting and not a normal closure
+        if (event.code !== 1000 && !this.isConnecting && !this.reconnectTimer) {
+          this.reconnect();
+        }
+      };
+    } catch (error) {
+      console.error(`[TradovateWS] Connection error:`, error);
+      // Only reconnect if not already connecting/reconnecting
+      if (!this.isConnecting && !this.reconnectTimer) {
+        this.reconnect();
+      }
     } finally {
       this.isConnecting = false;
     }
@@ -219,11 +247,19 @@ export class TradovateWSClient {
   }
 
   private reconnect() {
-    if (this.reconnectTimer) return;
+    if (this.reconnectTimer) {
+      console.log("[TradovateWS] Reconnect already scheduled, skipping");
+      return;
+    }
+    if (!this.userId) {
+      console.log("[TradovateWS] No userId for reconnect, skipping");
+      return;
+    }
+    console.log(`[TradovateWS] Scheduling reconnect in 1500ms (userId: ${this.userId}, groupId: ${this.groupId})`);
     this.disconnect();
-    if (!this.userId) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
+      console.log(`[TradovateWS] Executing reconnect (userId: ${this.userId}, groupId: ${this.groupId})`);
       this.connect(this.userId!, this.groupId || undefined);
     }, 1500);
   }

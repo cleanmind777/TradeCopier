@@ -1325,15 +1325,31 @@ const TradingPage: React.FC = () => {
   }, [user_id]);
 
   // Connect WebSocket when user_id or selectedGroup changes
+  // Use refs to track previous values and avoid unnecessary reconnections
+  const prevUserIdRef = useRef<string | null>(null);
+  const prevGroupIdRef = useRef<string | null>(null);
+  
   useEffect(() => {
-    if (user_id) {
-      // Connect with selected group if available, otherwise use user_id
-      const groupId = selectedGroup?.id;
-      tradovateWSClient.connect(user_id, groupId);
+    const currentUserId = user_id;
+    const currentGroupId = selectedGroup?.id || null;
+    
+    // Only connect if userId or groupId actually changed
+    if (currentUserId && 
+        (prevUserIdRef.current !== currentUserId || prevGroupIdRef.current !== currentGroupId)) {
+      console.log(`[TradingPage] WebSocket connection triggered: userId=${currentUserId}, groupId=${currentGroupId} (prev: userId=${prevUserIdRef.current}, groupId=${prevGroupIdRef.current})`);
+      prevUserIdRef.current = currentUserId;
+      prevGroupIdRef.current = currentGroupId;
+      tradovateWSClient.connect(currentUserId, currentGroupId || undefined);
+    } else if (!currentUserId) {
+      // If userId is cleared, disconnect
+      prevUserIdRef.current = null;
+      prevGroupIdRef.current = null;
+      tradovateWSClient.disconnect();
     }
 
     return () => {
-      tradovateWSClient.disconnect();
+      // Only disconnect on unmount, not on every dependency change
+      // The connect method handles reconnection when userId/groupId changes
     };
   }, [user_id, selectedGroup?.id]);
 
