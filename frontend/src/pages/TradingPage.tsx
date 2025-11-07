@@ -687,15 +687,9 @@ const TradingPage: React.FC = () => {
           }
         }
       } catch {}
-      try {
-        await fetch(`${API_BASE}/databento/sse/current-price`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ symbols: [symbol] }),
-        });
-      } catch {}
-
-      const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
+      
+      // Create EventSource - the backend handles subscription automatically
+      const es = new EventSource(`${API_BASE}/databento/sse/current-price?symbols=${encodeURIComponent(symbol)}`);
       priceEventSourceRef.current = es;
 
       es.onmessage = (e) => {
@@ -1254,18 +1248,25 @@ const TradingPage: React.FC = () => {
   //   }
   // };
 
+  // Load groups once on mount
+  useEffect(() => {
+    if (user_id) {
+      loadGroups();
+    }
+  }, [user_id]);
+
+  // Connect WebSocket when user_id or selectedGroup changes
   useEffect(() => {
     if (user_id) {
       // Connect with selected group if available, otherwise use user_id
       const groupId = selectedGroup?.id;
       tradovateWSClient.connect(user_id, groupId);
     }
-    loadGroups();
 
     return () => {
       tradovateWSClient.disconnect();
     };
-  }, [user_id, selectedGroup]);
+  }, [user_id, selectedGroup?.id]);
 
   // Subscribe WS quotes for current symbol and update currentPrice
   useEffect(() => {

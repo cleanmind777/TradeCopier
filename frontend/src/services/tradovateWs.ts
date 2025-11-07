@@ -31,7 +31,15 @@ export class TradovateWSClient {
   private messageIdCounter = 10; // Start from 10 to avoid conflicts
 
   async connect(userId: string, groupId?: string) {
-    if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) return;
+    // If already connected with same userId and groupId, don't reconnect
+    if (this.isConnecting) return;
+    if (this.ws?.readyState === WebSocket.OPEN && this.userId === userId && this.groupId === (groupId || null)) {
+      return;
+    }
+    // If groupId changed, disconnect first
+    if (this.ws?.readyState === WebSocket.OPEN && this.groupId !== (groupId || null)) {
+      this.disconnect();
+    }
     this.isConnecting = true;
     this.userId = userId;
     this.groupId = groupId || null;
