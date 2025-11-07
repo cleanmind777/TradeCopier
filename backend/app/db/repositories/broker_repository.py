@@ -272,3 +272,47 @@ def user_get_tokens_for_websocket(
             )
             return websocket_token
     return None
+
+def user_get_tokens_for_group(
+    db: Session, group_id: UUID
+) -> WebSocketTokens | None:
+    """Get WebSocket token for the broker account associated with a group's sub-brokers"""
+    from app.models.group_broker import GroupBroker
+    from app.models.broker_account import SubBrokerAccount
+    
+    # Get all sub-brokers in this group
+    group_brokers = (
+        db.query(GroupBroker).filter(GroupBroker.group_id == group_id).all()
+    )
+    
+    if not group_brokers:
+        return None
+    
+    # Get the broker_account_id from the first sub-broker
+    # (assuming all sub-brokers in a group belong to the same broker account)
+    first_sub_broker_id = group_brokers[0].sub_broker_id
+    sub_broker = (
+        db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.id == first_sub_broker_id)
+        .first()
+    )
+    
+    if not sub_broker or not sub_broker.broker_account_id:
+        return None
+    
+    # Get the broker account and its WebSocket token
+    broker_account = (
+        db.query(BrokerAccount)
+        .filter(BrokerAccount.id == sub_broker.broker_account_id)
+        .first()
+    )
+    
+    if broker_account and broker_account.websocket_access_token:
+        websocket_token = WebSocketTokens(
+            id=broker_account.id,
+            access_token=broker_account.websocket_access_token,
+            md_access_token=broker_account.websocket_md_access_token
+        )
+        return websocket_token
+    
+    return None

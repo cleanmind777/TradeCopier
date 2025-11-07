@@ -217,6 +217,47 @@ const TradingPage: React.FC = () => {
 
   // Typing-only symbol entry (no dropdown)
 
+  // Helper function to filter trading data by selected group and symbol
+  const filterTradingData = (
+    accounts: TradovateAccountsResponse[],
+    positions: TradovatePositionListResponse[],
+    orders: any[]
+  ) => {
+    let filteredAccounts = accounts || [];
+    let filteredPositions = positions || [];
+    let filteredOrders = orders || [];
+
+    // Filter by selected group's account IDs
+    if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+      
+      filteredAccounts = filteredAccounts.filter((a: any) => 
+        groupAccountIds.has(a.accountId)
+      );
+      filteredPositions = filteredPositions.filter((p: any) => 
+        groupAccountIds.has(p.accountId)
+      );
+      filteredOrders = filteredOrders.filter((o: any) => 
+        groupAccountIds.has(o.accountId)
+      );
+    }
+
+    // Filter positions and orders by selected symbol
+    if (symbol && symbol.trim()) {
+      const symbolPrefix = symbol.toUpperCase().slice(0, 2);
+      filteredPositions = filteredPositions.filter((p: any) => 
+        p.symbol && p.symbol.toUpperCase().startsWith(symbolPrefix)
+      );
+      filteredOrders = filteredOrders.filter((o: any) => 
+        o.symbol && o.symbol.toUpperCase().startsWith(symbolPrefix)
+      );
+    }
+
+    return { filteredAccounts, filteredPositions, filteredOrders };
+  };
+
   // Calculate PnL for selected group and symbol
   const calculateGroupPnL = () => {
     if (!selectedGroup) {
@@ -325,41 +366,106 @@ const TradingPage: React.FC = () => {
   }, [selectedGroup, symbol, positions]);
 
   // Fetch accounts, positions, and orders once on mount (single combined request)
+  // Then filter by selected group and symbol
   useEffect(() => {
     const load = async () => {
       if (!user_id) return;
       setIsPageLoading(true);
       const data = await getAllTradingData(user_id);
       if (data) {
-        if (data.accounts) setAccounts(data.accounts);
-        if (data.positions) setPositions(data.positions);
-        if (data.orders) setOrders(data.orders);
+        const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
+          data.accounts || [],
+          data.positions || [],
+          data.orders || []
+        );
+        setAccounts(filteredAccounts);
+        setPositions(filteredPositions);
+        setOrders(filteredOrders);
       }
       setIsPageLoading(false);
     };
     load();
-  }, [user_id]);
+  }, [user_id, selectedGroup, symbol]);
 
   // Subscribe to WebSocket updates for positions, orders, and accounts
+  // Filter by selected group's accounts and selected symbol
   useEffect(() => {
     if (!user_id) return;
 
-    const unsubPositions = tradovateWSClient.onPositions((positions) => {
-      if (positions && positions.length >= 0) {
-        setPositions(positions);
+    const unsubPositions = tradovateWSClient.onPositions((allPositions) => {
+      if (!allPositions || allPositions.length === 0) {
+        setPositions([]);
+        return;
       }
+
+      // Filter by selected group's account IDs
+      let filtered = allPositions;
+      if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+        const groupAccountIds = new Set(
+          selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+        );
+        filtered = allPositions.filter((p: any) => 
+          groupAccountIds.has(p.accountId)
+        );
+      }
+
+      // Filter by selected symbol (if symbol is set)
+      if (symbol && symbol.trim()) {
+        const symbolPrefix = symbol.toUpperCase().slice(0, 2); // e.g., "NQ" from "NQZ5"
+        filtered = filtered.filter((p: any) => 
+          p.symbol && p.symbol.toUpperCase().startsWith(symbolPrefix)
+        );
+      }
+
+      setPositions(filtered);
     });
 
-    const unsubOrders = tradovateWSClient.onOrders((orders) => {
-      if (orders && orders.length >= 0) {
-        setOrders(orders);
+    const unsubOrders = tradovateWSClient.onOrders((allOrders) => {
+      if (!allOrders || allOrders.length === 0) {
+        setOrders([]);
+        return;
       }
+
+      // Filter by selected group's account IDs
+      let filtered = allOrders;
+      if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+        const groupAccountIds = new Set(
+          selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+        );
+        filtered = allOrders.filter((o: any) => 
+          groupAccountIds.has(o.accountId)
+        );
+      }
+
+      // Filter by selected symbol (if symbol is set)
+      if (symbol && symbol.trim()) {
+        const symbolPrefix = symbol.toUpperCase().slice(0, 2);
+        filtered = filtered.filter((o: any) => 
+          o.symbol && o.symbol.toUpperCase().startsWith(symbolPrefix)
+        );
+      }
+
+      setOrders(filtered);
     });
 
-    const unsubAccounts = tradovateWSClient.onAccounts((accounts) => {
-      if (accounts && accounts.length >= 0) {
-        setAccounts(accounts);
+    const unsubAccounts = tradovateWSClient.onAccounts((allAccounts) => {
+      if (!allAccounts || allAccounts.length === 0) {
+        setAccounts([]);
+        return;
       }
+
+      // Filter by selected group's account IDs
+      let filtered = allAccounts;
+      if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+        const groupAccountIds = new Set(
+          selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+        );
+        filtered = allAccounts.filter((a: any) => 
+          groupAccountIds.has(a.accountId)
+        );
+      }
+
+      setAccounts(filtered);
     });
 
     return () => {
@@ -367,7 +473,7 @@ const TradingPage: React.FC = () => {
       unsubOrders();
       unsubAccounts();
     };
-  }, [user_id]);
+  }, [user_id, selectedGroup, symbol]);
 
   // Refresh PnL when positions change (from polling or manual updates)
   const prevPositionsRef = useRef<string>("");
@@ -452,9 +558,14 @@ const TradingPage: React.FC = () => {
       // Optionally refresh once to ensure we have latest state
       const data = await getAllTradingData(user_id);
       if (data) {
-        if (data.accounts) setAccounts(data.accounts);
-        if (data.positions) setPositions(data.positions);
-        if (data.orders) setOrders(data.orders);
+        const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
+          data.accounts || [],
+          data.positions || [],
+          data.orders || []
+        );
+        setAccounts(filteredAccounts);
+        setPositions(filteredPositions);
+        setOrders(filteredOrders);
       }
       
       // Clear stale PnL data to force fresh calculation
@@ -944,9 +1055,14 @@ const TradingPage: React.FC = () => {
       try {
         const data = await getAllTradingData(user_id);
         if (data) {
-          if (data.accounts) setAccounts(data.accounts);
-          if (data.positions) setPositions(data.positions);
-          if (data.orders) setOrders(data.orders);
+          const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
+            data.accounts || [],
+            data.positions || [],
+            data.orders || []
+          );
+          setAccounts(filteredAccounts);
+          setPositions(filteredPositions);
+          setOrders(filteredOrders);
         }
         
         // Clear stale PnL data to force fresh calculation
@@ -1195,14 +1311,16 @@ const TradingPage: React.FC = () => {
 
   useEffect(() => {
     if (user_id) {
-      tradovateWSClient.connect(user_id);
+      // Connect with selected group if available, otherwise use user_id
+      const groupId = selectedGroup?.id;
+      tradovateWSClient.connect(user_id, groupId);
     }
     loadGroups();
 
-    // return () => {
-    //   tradovateWSClient.disconnect();
-    // };
-  }, [user_id]);
+    return () => {
+      tradovateWSClient.disconnect();
+    };
+  }, [user_id, selectedGroup]);
 
   // Subscribe WS quotes for current symbol and update currentPrice
   useEffect(() => {

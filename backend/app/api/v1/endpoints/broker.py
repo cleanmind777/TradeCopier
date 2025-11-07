@@ -28,6 +28,7 @@ from app.services.broker_service import (
     get_accounts,
     exit_position,
     get_token_for_websocket,
+    get_token_for_group_websocket,
     execute_market_order,
     execute_limit_order,
     execute_limit_order_with_sltp
@@ -131,6 +132,14 @@ async def get_Accounts(user_id: UUID, db: Session = Depends(get_db)):
 )
 def get_Tokens_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
     return get_token_for_websocket(db, user_id)
+
+@router.get(
+    "/websockettoken/group/{group_id}",
+    response_model=WebSocketTokens | None,
+    status_code=status.HTTP_200_OK,
+)
+def get_Tokens_for_group_websocket(group_id: UUID, db: Session = Depends(get_db)):
+    return get_token_for_group_websocket(db, group_id)
 
 @router.post(
     "/execute-order/market",

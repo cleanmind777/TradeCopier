@@ -491,6 +491,12 @@ def get_token_for_websocket(
 ) -> WebSocketTokens | None:
     return user_get_tokens_for_websocket(db, user_id)
 
+def get_token_for_group_websocket(
+    db: Session, group_id: UUID
+) -> WebSocketTokens | None:
+    from app.db.repositories.broker_repository import user_get_tokens_for_group
+    return user_get_tokens_for_group(db, group_id)
+
 async def execute_market_order(db: Session, order: MarketOrder):
     db_subroker_accounts = (
         db.query(GroupBroker).filter(GroupBroker.group_id == order.group_id).all()

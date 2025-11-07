@@ -299,6 +299,23 @@ export const getWebSocketToken = async (
   }
 };
 
+export const getWebSocketTokenForGroup = async (
+  group_id: string
+): Promise<Tokens | null> => {
+  try {
+    const response = await axios.get(`${API_BASE}/broker/websockettoken/group/${group_id}`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get Group Tokens:", error.response?.data);
+      // Don't alert for group token errors to avoid spam
+    } else {
+      console.error("Unexpected Get Group Tokens error:", error);
+    }
+    return null;
+  }
+};
+
 export const executeMarketOrder = async (order: MarketOrder) => {
   try {
     const response = await axios.post(`${API_BASE}/broker/execute-order/market`, order);

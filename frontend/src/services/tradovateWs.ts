@@ -1,4 +1,4 @@
-import { getWebSocketToken } from "../api/brokerApi";
+import { getWebSocketToken, getWebSocketTokenForGroup } from "../api/brokerApi";
 
 type QuoteUpdate = {
   bid?: number;
@@ -23,19 +23,24 @@ export class TradovateWSClient {
   private reconnectTimer: any = null;
   private isConnecting = false;
   private userId: string | null = null;
+  private groupId: string | null = null;
   private quoteListeners = new Set<QuoteListener>();
   private positionListeners = new Set<PositionListener>();
   private orderListeners = new Set<OrderListener>();
   private accountListeners = new Set<AccountListener>();
   private messageIdCounter = 10; // Start from 10 to avoid conflicts
 
-  async connect(userId: string) {
+  async connect(userId: string, groupId?: string) {
     if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) return;
     this.isConnecting = true;
     this.userId = userId;
+    this.groupId = groupId || null;
 
     try {
-      const tokens = await getWebSocketToken(userId);
+      // If groupId is provided, get token for that group, otherwise use user_id
+      const tokens = groupId 
+        ? await getWebSocketTokenForGroup(groupId)
+        : await getWebSocketToken(userId);
       if (!tokens?.access_token) {
         this.isConnecting = false;
         return;
@@ -83,6 +88,7 @@ export class TradovateWSClient {
       try { this.ws.close(1000, "client disconnect"); } catch {}
       this.ws = null;
     }
+    this.groupId = null;
   }
 
   onQuote(listener: QuoteListener) {
@@ -163,7 +169,7 @@ export class TradovateWSClient {
     if (!this.userId) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.connect(this.userId!);
+      this.connect(this.userId!, this.groupId || undefined);
     }, 1500);
   }
 
