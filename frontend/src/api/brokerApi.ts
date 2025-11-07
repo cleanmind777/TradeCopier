@@ -191,6 +191,37 @@ export const getAccounts = async (
   }
 };
 
+// Combined function to get all trading data in one request
+export const getAllTradingData = async (
+  user_id: string
+): Promise<{
+  accounts: TradovateAccountsResponse[] | null;
+  positions: TradovatePositionListResponse[] | null;
+  orders: TradovateOrderListResponse[] | null;
+} | null> => {
+  try {
+    const params = { user_id };
+    const [accountsRes, positionsRes, ordersRes] = await Promise.all([
+      axios.get(`${API_BASE}/broker/accounts`, { params }),
+      axios.get(`${API_BASE}/broker/positions`, { params }),
+      axios.get(`${API_BASE}/broker/orders`, { params }),
+    ]);
+    return {
+      accounts: accountsRes.data,
+      positions: positionsRes.data,
+      orders: ordersRes.data,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get All Trading Data:", error.response?.data);
+      // Don't alert for combined call to avoid spam
+    } else {
+      console.error("Unexpected Get All Trading Data error:", error);
+    }
+    return null;
+  }
+};
+
 export const getSubBrokersForGroup = async (
   user_id: string
 ): Promise<SubBrokerSummaryForGet[] | null> => {

@@ -8,9 +8,7 @@ import {
   executeLimitOrder,
   executeLimitOrderWithSLTP,
   executeMarketOrder,
-  getAccounts,
-  getPositions,
-  getOrders,
+  getAllTradingData,
   exitAllPostions,
 } from "../api/brokerApi";
 import { getGroup } from "../api/groupApi";
@@ -326,44 +324,49 @@ const TradingPage: React.FC = () => {
     setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
   }, [selectedGroup, symbol, positions]);
 
-  // Fetch accounts and positions
+  // Fetch accounts, positions, and orders once on mount (single combined request)
   useEffect(() => {
     const load = async () => {
       if (!user_id) return;
       setIsPageLoading(true);
-      const [acc, pos, ord] = await Promise.all([
-        getAccounts(user_id),
-        getPositions(user_id),
-        getOrders(user_id),
-      ]);
-      if (acc) setAccounts(acc);
-      if (pos) setPositions(pos);
-      if (ord) setOrders(ord);
+      const data = await getAllTradingData(user_id);
+      if (data) {
+        if (data.accounts) setAccounts(data.accounts);
+        if (data.positions) setPositions(data.positions);
+        if (data.orders) setOrders(data.orders);
+      }
       setIsPageLoading(false);
     };
     load();
   }, [user_id]);
 
-  // Poll positions, orders, and accounts every 3 seconds to sync with Tradovate
+  // Subscribe to WebSocket updates for positions, orders, and accounts
   useEffect(() => {
     if (!user_id) return;
 
-    const pollInterval = setInterval(async () => {
-      try {
-        const [acc, pos, ord] = await Promise.all([
-          getAccounts(user_id),
-          getPositions(user_id),
-          getOrders(user_id),
-        ]);
-        if (acc) setAccounts(acc);
-        if (pos) setPositions(pos);
-        if (ord) setOrders(ord);
-      } catch (error) {
-        console.error("Error polling positions/orders/accounts:", error);
+    const unsubPositions = tradovateWSClient.onPositions((positions) => {
+      if (positions && positions.length >= 0) {
+        setPositions(positions);
       }
-    }, 3000); // Poll every 3 seconds
+    });
 
-    return () => clearInterval(pollInterval);
+    const unsubOrders = tradovateWSClient.onOrders((orders) => {
+      if (orders && orders.length >= 0) {
+        setOrders(orders);
+      }
+    });
+
+    const unsubAccounts = tradovateWSClient.onAccounts((accounts) => {
+      if (accounts && accounts.length >= 0) {
+        setAccounts(accounts);
+      }
+    });
+
+    return () => {
+      unsubPositions();
+      unsubOrders();
+      unsubAccounts();
+    };
   }, [user_id]);
 
   // Refresh PnL when positions change (from polling or manual updates)
@@ -443,25 +446,16 @@ const TradingPage: React.FC = () => {
         await exitAllPostions(exitList as any);
       }
       // Wait briefly for provider to reflect flatten
-      const waitForFlatPositions = async (retries = 10, delayMs = 500) => {
-        for (let i = 0; i < retries; i++) {
-          const latest = await getPositions(user_id);
-          if (latest) {
-            const anyOpen = latest.some((p: any) => (Number(p.netPos) || 0) !== 0);
-            if (!anyOpen) return latest;
-          }
-          await new Promise((r) => setTimeout(r, delayMs));
-        }
-        return await getPositions(user_id);
-      };
-      const [acc, pos, ord] = await Promise.all([
-        getAccounts(user_id),
-        waitForFlatPositions(),
-        getOrders(user_id),
-      ]);
-      if (acc) setAccounts(acc);
-      if (pos) setPositions(pos);
-      if (ord) setOrders(ord);
+      // WebSocket will update positions automatically, so we just wait a bit
+      await new Promise((r) => setTimeout(r, 2000));
+      
+      // Optionally refresh once to ensure we have latest state
+      const data = await getAllTradingData(user_id);
+      if (data) {
+        if (data.accounts) setAccounts(data.accounts);
+        if (data.positions) setPositions(data.positions);
+        if (data.orders) setOrders(data.orders);
+      }
       
       // Clear stale PnL data to force fresh calculation
       setPnlData({});
@@ -476,7 +470,7 @@ const TradingPage: React.FC = () => {
       // Normalize unrealized PnL to zero for accounts that are now flat to refresh equities immediately
       try {
         const netByAccount: Record<number, number> = {};
-        (pos || []).forEach((p: any) => {
+        (positions || []).forEach((p: any) => {
           const acc = Number(p.accountId);
           netByAccount[acc] = (netByAccount[acc] || 0) + (Number(p.netPos) || 0);
         });
@@ -489,7 +483,7 @@ const TradingPage: React.FC = () => {
           // Check if all group positions are flat FIRST, before updating pnlData
           if (selectedGroup) {
             const groupAccountIds = new Set(selectedGroup.sub_brokers.map(s => s.sub_account_id));
-            const groupNet = (pos || [])
+            const groupNet = (positions || [])
               .filter((p: any) => groupAccountIds.has(p.accountId.toString()))
               .reduce((sum: number, p: any) => sum + (Number(p.netPos) || 0), 0);
             
@@ -945,16 +939,15 @@ const TradingPage: React.FC = () => {
       // Wait briefly for provider to reflect new positions
       await new Promise((r) => setTimeout(r, 1000));
 
-      // Refresh dependent data after order so UI (monitor, netPos, equities, pnls) updates
+      // WebSocket will automatically update positions, orders, and accounts
+      // But refresh once to ensure we have latest state immediately
       try {
-        const [acc, pos, ord] = await Promise.all([
-          getAccounts(user_id),
-          getPositions(user_id),
-          getOrders(user_id),
-        ]);
-        if (acc) setAccounts(acc);
-        if (pos) setPositions(pos);
-        if (ord) setOrders(ord);
+        const data = await getAllTradingData(user_id);
+        if (data) {
+          if (data.accounts) setAccounts(data.accounts);
+          if (data.positions) setPositions(data.positions);
+          if (data.orders) setOrders(data.orders);
+        }
         
         // Clear stale PnL data to force fresh calculation
         setPnlData({});
@@ -967,7 +960,7 @@ const TradingPage: React.FC = () => {
           }, 500);
         }, 300);
       } catch (e) {
-        // Silent fail; SSE/next poll will catch up
+        // Silent fail; WebSocket will catch up
       }
 
       // Reset form
