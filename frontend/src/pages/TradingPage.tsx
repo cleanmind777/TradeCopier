@@ -455,7 +455,17 @@ const TradingPage: React.FC = () => {
     };
 
     const refreshPnLStream = () => {
-      connectToPnLStream();
+      console.log("[TradingPage] Refreshing PnL SSE stream due to WebSocket event");
+      // Close existing connection first
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
+      // Small delay to ensure old connection is fully closed before opening new one
+      setTimeout(() => {
+        connectToPnLStream();
+      }, 100);
     };
 
     // Store in ref for WebSocket listeners
