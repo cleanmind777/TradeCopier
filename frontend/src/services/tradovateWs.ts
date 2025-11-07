@@ -74,8 +74,14 @@ export class TradovateWSClient {
 
       // Use account WebSocket endpoint for positions, orders, and accounts
       // Market data endpoint (wss://md.tradovateapi.com) is only for quotes
-      // Account endpoint (wss://live.tradovateapi.com) is for account operations
-      const ws = new WebSocket("wss://live.tradovateapi.com/v1/websocket");
+      // Account endpoints:
+      //   - wss://live.tradovateapi.com/v1/websocket for live accounts
+      //   - wss://demo.tradovateapi.com/v1/websocket for demo accounts
+      const wsEndpoint = tokens.is_demo 
+        ? "wss://demo.tradovateapi.com/v1/websocket"
+        : "wss://live.tradovateapi.com/v1/websocket";
+      console.log(`[TradovateWS] Connecting to ${tokens.is_demo ? 'demo' : 'live'} WebSocket endpoint: ${wsEndpoint}`);
+      const ws = new WebSocket(wsEndpoint);
       this.ws = ws;
 
       ws.onopen = () => {

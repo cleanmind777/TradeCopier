@@ -264,12 +264,25 @@ def user_get_tokens_for_websocket(
         db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
     )
     for broker in broker_accounts:
+        # Check if any active sub-broker is demo to determine endpoint
+        is_demo = False
+        sub_brokers = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.broker_account_id == broker.id)
+            .filter(SubBrokerAccount.is_active == True)
+            .all()
+        )
+        if sub_brokers:
+            # If any active sub-broker is demo, use demo endpoint
+            is_demo = any(sub.is_demo for sub in sub_brokers)
+        
         # Prefer websocket tokens if available
         if broker.websocket_access_token:
             websocket_token = WebSocketTokens(
                 id=broker.id,
                 access_token=broker.websocket_access_token,
-                md_access_token=broker.websocket_md_access_token
+                md_access_token=broker.websocket_md_access_token,
+                is_demo=is_demo
             )
             return websocket_token
         # Fallback to regular access tokens if websocket tokens don't exist
@@ -277,7 +290,8 @@ def user_get_tokens_for_websocket(
             websocket_token = WebSocketTokens(
                 id=broker.id,
                 access_token=broker.access_token,
-                md_access_token=broker.md_access_token
+                md_access_token=broker.md_access_token,
+                is_demo=is_demo
             )
             return websocket_token
     return None
@@ -319,12 +333,29 @@ def user_get_tokens_for_group(
     if not broker_account:
         return None
     
+    # Check if any sub-broker in the group is demo to determine endpoint
+    is_demo = False
+    if sub_broker:
+        is_demo = sub_broker.is_demo
+    else:
+        # Fallback: check all sub-brokers in the group
+        sub_broker_ids = [gb.sub_broker_id for gb in group_brokers]
+        sub_brokers_in_group = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.id.in_(sub_broker_ids))
+            .all()
+        )
+        if sub_brokers_in_group:
+            # If any sub-broker in group is demo, use demo endpoint
+            is_demo = any(sub.is_demo for sub in sub_brokers_in_group)
+    
     # Prefer websocket tokens if available
     if broker_account.websocket_access_token:
         websocket_token = WebSocketTokens(
             id=broker_account.id,
             access_token=broker_account.websocket_access_token,
-            md_access_token=broker_account.websocket_md_access_token
+            md_access_token=broker_account.websocket_md_access_token,
+            is_demo=is_demo
         )
         return websocket_token
     # Fallback to regular access tokens if websocket tokens don't exist
@@ -332,7 +363,8 @@ def user_get_tokens_for_group(
         websocket_token = WebSocketTokens(
             id=broker_account.id,
             access_token=broker_account.access_token,
-            md_access_token=broker_account.md_access_token
+            md_access_token=broker_account.md_access_token,
+            is_demo=is_demo
         )
         return websocket_token
     
