@@ -349,7 +349,7 @@ const TradingPage: React.FC = () => {
       .filter(a => ids.has(a.accountId))
       .reduce((sum, a) => sum + (a.amount || 0), 0);
     setGroupBalance(total);
-  }, [selectedGroup, accounts]);
+  }, [selectedGroup?.id, accounts]);
 
   // Derive group symbol aggregates (net position and avg net price)
   useEffect(() => {
@@ -363,7 +363,7 @@ const TradingPage: React.FC = () => {
     const weightedPriceNumer = filtered.reduce((sum, p) => sum + (p.netPos || 0) * (p.netPrice || 0), 0);
     const avgPrice = totalQty !== 0 ? weightedPriceNumer / totalQty : 0;
     setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
-  }, [selectedGroup, symbol, positions]);
+  }, [selectedGroup?.id, symbol, positions]);
 
   // Fetch accounts, positions, and orders once on mount only
   // WebSocket will handle updates, and filtering happens in WebSocket listeners
@@ -390,7 +390,19 @@ const TradingPage: React.FC = () => {
   }, [user_id]);
 
   // Subscribe to WebSocket updates for positions, orders, and accounts
-  // Filter by selected group's accounts and selected symbol
+  // Use refs to access current selectedGroup and symbol without re-subscribing
+  const selectedGroupRef = useRef(selectedGroup);
+  const symbolRef = useRef(symbol);
+  
+  useEffect(() => {
+    selectedGroupRef.current = selectedGroup;
+  }, [selectedGroup?.id]);
+  
+  useEffect(() => {
+    symbolRef.current = symbol;
+  }, [symbol]);
+
+  // Subscribe once, filter using refs
   useEffect(() => {
     if (!user_id) return;
 
@@ -400,11 +412,14 @@ const TradingPage: React.FC = () => {
         return;
       }
 
+      const currentGroup = selectedGroupRef.current;
+      const currentSymbol = symbolRef.current;
+
       // Filter by selected group's account IDs
       let filtered = allPositions;
-      if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+      if (currentGroup && currentGroup.sub_brokers.length > 0) {
         const groupAccountIds = new Set(
-          selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+          currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
         );
         filtered = allPositions.filter((p: any) => 
           groupAccountIds.has(p.accountId)
@@ -412,8 +427,8 @@ const TradingPage: React.FC = () => {
       }
 
       // Filter by selected symbol (if symbol is set)
-      if (symbol && symbol.trim()) {
-        const symbolPrefix = symbol.toUpperCase().slice(0, 2); // e.g., "NQ" from "NQZ5"
+      if (currentSymbol && currentSymbol.trim()) {
+        const symbolPrefix = currentSymbol.toUpperCase().slice(0, 2);
         filtered = filtered.filter((p: any) => 
           p.symbol && p.symbol.toUpperCase().startsWith(symbolPrefix)
         );
@@ -428,11 +443,14 @@ const TradingPage: React.FC = () => {
         return;
       }
 
+      const currentGroup = selectedGroupRef.current;
+      const currentSymbol = symbolRef.current;
+
       // Filter by selected group's account IDs
       let filtered = allOrders;
-      if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+      if (currentGroup && currentGroup.sub_brokers.length > 0) {
         const groupAccountIds = new Set(
-          selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+          currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
         );
         filtered = allOrders.filter((o: any) => 
           groupAccountIds.has(o.accountId)
@@ -440,8 +458,8 @@ const TradingPage: React.FC = () => {
       }
 
       // Filter by selected symbol (if symbol is set)
-      if (symbol && symbol.trim()) {
-        const symbolPrefix = symbol.toUpperCase().slice(0, 2);
+      if (currentSymbol && currentSymbol.trim()) {
+        const symbolPrefix = currentSymbol.toUpperCase().slice(0, 2);
         filtered = filtered.filter((o: any) => 
           o.symbol && o.symbol.toUpperCase().startsWith(symbolPrefix)
         );
@@ -456,11 +474,13 @@ const TradingPage: React.FC = () => {
         return;
       }
 
+      const currentGroup = selectedGroupRef.current;
+
       // Filter by selected group's account IDs
       let filtered = allAccounts;
-      if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+      if (currentGroup && currentGroup.sub_brokers.length > 0) {
         const groupAccountIds = new Set(
-          selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+          currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
         );
         filtered = allAccounts.filter((a: any) => 
           groupAccountIds.has(a.accountId)
@@ -475,7 +495,9 @@ const TradingPage: React.FC = () => {
       unsubOrders();
       unsubAccounts();
     };
-  }, [user_id, selectedGroup, symbol]);
+    // Only subscribe once when user_id changes, filtering uses refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user_id]);
 
   // Refresh PnL when positions change (from polling or manual updates)
   const prevPositionsRef = useRef<string>("");
@@ -792,7 +814,7 @@ const TradingPage: React.FC = () => {
   // Update PnL calculations when data changes (including positions)
   useEffect(() => {
     calculateGroupPnL();
-  }, [pnlData, selectedGroup, symbol, positions]);
+  }, [pnlData, selectedGroup?.id, symbol, positions]);
 
   // Reset PnL to 0 when all positions in selected group are flat
   useEffect(() => {
@@ -832,7 +854,7 @@ const TradingPage: React.FC = () => {
         return next;
       });
     }
-  }, [positions, selectedGroup]);
+  }, [positions, selectedGroup?.id]);
 
   // Recalculate PnL when symbol or group changes
   // PnL stream is already connected, just recalculate with filtered data
