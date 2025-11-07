@@ -401,9 +401,44 @@ const TradingPage: React.FC = () => {
     symbolRef.current = symbol;
   }, [symbol]);
 
+  // Ref to store refresh functions so they can be called from WebSocket listeners
+  const refreshDataRef = useRef<{
+    refreshTradingData: () => Promise<void>;
+    refreshPnLStream: () => void;
+  } | null>(null);
+
   // Subscribe once, filter using refs
   useEffect(() => {
     if (!user_id) return;
+
+    // Define refresh functions
+    const refreshTradingData = async () => {
+      try {
+        const data = await getAllTradingData(user_id);
+        if (data) {
+          const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
+            data.accounts || [],
+            data.positions || [],
+            data.orders || []
+          );
+          setAccounts(filteredAccounts);
+          setPositions(filteredPositions);
+          setOrders(filteredOrders);
+        }
+      } catch (error) {
+        console.error("[TradingPage] Error refreshing trading data:", error);
+      }
+    };
+
+    const refreshPnLStream = () => {
+      connectToPnLStream();
+    };
+
+    // Store in ref for WebSocket listeners
+    refreshDataRef.current = {
+      refreshTradingData,
+      refreshPnLStream,
+    };
 
     const unsubPositions = tradovateWSClient.onPositions((allPositions) => {
       if (!allPositions || allPositions.length === 0) {
@@ -434,6 +469,12 @@ const TradingPage: React.FC = () => {
       }
 
       setPositions(filtered);
+
+      // Refresh trading data and PnL stream when position updates are received
+      if (refreshDataRef.current) {
+        refreshDataRef.current.refreshTradingData();
+        refreshDataRef.current.refreshPnLStream();
+      }
     });
 
     const unsubOrders = tradovateWSClient.onOrders((allOrders) => {
@@ -465,6 +506,12 @@ const TradingPage: React.FC = () => {
       }
 
       setOrders(filtered);
+
+      // Refresh trading data and PnL stream when order updates are received
+      if (refreshDataRef.current) {
+        refreshDataRef.current.refreshTradingData();
+        refreshDataRef.current.refreshPnLStream();
+      }
     });
 
     const unsubAccounts = tradovateWSClient.onAccounts((allAccounts) => {
@@ -487,12 +534,19 @@ const TradingPage: React.FC = () => {
       }
 
       setAccounts(filtered);
+
+      // Refresh trading data and PnL stream when account updates are received
+      if (refreshDataRef.current) {
+        refreshDataRef.current.refreshTradingData();
+        refreshDataRef.current.refreshPnLStream();
+      }
     });
 
     return () => {
       unsubPositions();
       unsubOrders();
       unsubAccounts();
+      refreshDataRef.current = null;
     };
     // Only subscribe once when user_id changes, filtering uses refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
