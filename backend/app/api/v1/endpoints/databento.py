@@ -99,6 +99,10 @@ async def stream_price_data(
         symbols: List of symbols to subscribe to (e.g., ['ES.FUT', 'NQ.FUT'])
         request: FastAPI request object for connection management
     """
+    import uuid
+    # Create unique connection ID for this stream
+    connection_id = str(uuid.uuid4())[:8]
+    
     # Create per-connection symbol mapping to avoid cross-contamination
     symbol_mapping = {}
     # Normalize requested symbols for comparison (uppercase, remove .FUT suffix if present)
@@ -111,6 +115,8 @@ async def stream_price_data(
         if not s_upper.endswith('.FUT'):
             requested_symbols_normalized.add(s_upper + '.FUT')
     
+    print(f"🔗 [Connection {connection_id}] Starting stream for symbols: {symbols}")
+    
     try:
         # Check if API key is available
         if not settings.DATABENTO_KEY:
@@ -122,42 +128,49 @@ async def stream_price_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
-        print(f"📊 Dataset: {DATASET}")
-        print(f"📋 Schema: {SCHEMA}")
-        print(f"🎯 Symbols for this connection: {symbols}")
+        print(f"📊 [Connection {connection_id}] Dataset: {DATASET}")
+        print(f"📋 [Connection {connection_id}] Schema: {SCHEMA}")
+        print(f"🎯 [Connection {connection_id}] Symbols for this connection: {symbols}")
         
         # Initialize DataBento Live client
         client = dbt.Live(key=settings.DATABENTO_KEY)
-        print("✅ DataBento client initialized")
+        print(f"✅ [Connection {connection_id}] DataBento client initialized")
         
         # Subscribe to symbols with proper parameters
-        print("🔄 Subscribing to symbols...")
+        print(f"🔄 [Connection {connection_id}] Subscribing to symbols...")
         client.subscribe(
             dataset=DATASET,
             schema=SCHEMA,
             symbols=symbols,
             stype_in="raw_symbol"
         )
-        print(f"✅ Successfully subscribed to symbols: {symbols}")
+        print(f"✅ [Connection {connection_id}] Successfully subscribed to symbols: {symbols}")
 
-        print("🔄 Starting data stream...")
+        print(f"🔄 [Connection {connection_id}] Starting data stream...")
         
-        # Send initial status message
+        # Send initial status message with connection ID
         status_data = {
             "status": "connected",
             "message": "Connected to DataBento, waiting for price data...",
             "symbols": symbols,
+            "connection_id": connection_id,
             "timestamp": datetime.now().isoformat()
         }
-        print(f"📤 Sending status message: {status_data}")
+        print(f"📤 [Connection {connection_id}] Sending status message: {status_data}")
         yield f"data: {json.dumps(status_data)}\n\n"
         
                 
         try:
             for record in client:
-                # Check if client disconnected
+                # Check if client disconnected - do this FIRST before processing any data
                 if await request.is_disconnected():
-                    print(f"❌ Client disconnected, stopping stream for symbols: {symbols}")
+                    print(f"❌ [Connection {connection_id}] Client disconnected, stopping stream for symbols: {symbols}")
+                    # Try to close the DataBento client
+                    try:
+                        if hasattr(client, 'close'):
+                            client.close()
+                    except:
+                        pass
                     break
                 
                 try:
@@ -171,15 +184,19 @@ async def stream_price_data(
                         
                         if instrument_id is not None and symbol is not None:
                             symbol_mapping[instrument_id] = symbol
-                            print(f"🗺️ Symbol mapping: {symbol} -> Instrument ID {instrument_id}")
+                            print(f"🗺️ [Connection {connection_id}] Symbol mapping: {symbol} -> Instrument ID {instrument_id}")
                         
                         continue  # Skip symbol mapping messages for price display
                     
                     elif record_type in ["MBP1Msg", "MBPMsg", "TradeMsg"]:
+                        # Double-check if client disconnected before processing
+                        if await request.is_disconnected():
+                            print(f"❌ [Connection {connection_id}] Client disconnected during processing, stopping")
+                            break
+                        
                         # Handle actual price/trade data
                         # Extract data from MBP1Msg structure
                         # Get instrument_id from record
-                        print(f"📦 Record: {record}")
                         instrument_id = getattr(record, 'instrument_id', None)
                         
                         # Get symbol name from mapping if available
@@ -199,7 +216,7 @@ async def stream_price_data(
                         ]
                         if not any(variant in requested_symbols_normalized for variant in symbol_variants):
                             # Skip data for symbols not requested in this connection
-                            print(f"⏭️ Skipping data for {symbol} (not in requested symbols: {symbols})")
+                            print(f"⏭️ [Connection {connection_id}] Skipping data for {symbol} (not in requested symbols: {symbols})")
                             continue
                         
                         # Get timestamp - try record.hd.ts_event first, then record.ts_event
@@ -276,11 +293,12 @@ async def stream_price_data(
                             "bid_size": bid_size,
                             "ask_size": ask_size,
                             "received_at": datetime.now().isoformat(),
-                            "record_type": record_type
+                            "record_type": record_type,
+                            "connection_id": connection_id  # Include connection ID for debugging
                         }
 
                         # Always send data to frontend (even if price data is None)
-                        print(f"💰 Sending {record_type} data: {data['symbol']} (ID: {data['instrument_id']}) - Bid: {data['bid_price']}, Ask: {data['ask_price']}")
+                        print(f"💰 [Connection {connection_id}] Sending {record_type} data: {data['symbol']} (ID: {data['instrument_id']}) - Bid: {data['bid_price']}, Ask: {data['ask_price']}")
                         yield f"data: {json.dumps(data)}\n\n"
                     
                     else:
@@ -346,7 +364,14 @@ async def stream_price_data(
             
         yield f"data: {json.dumps(detailed_error)}\n\n"
     finally:
-        print("🧹 DataBento connection cleanup completed")
+        print(f"🧹 [Connection {connection_id}] DataBento connection cleanup completed")
+        # Try to close the DataBento client if it exists
+        try:
+            if 'client' in locals() and client:
+                if hasattr(client, 'close'):
+                    client.close()
+        except Exception as e:
+            print(f"⚠️ [Connection {connection_id}] Error closing DataBento client: {e}")
 
 
 @router.post("/sse/current-price")

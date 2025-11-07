@@ -689,12 +689,17 @@ const TradingPage: React.FC = () => {
     currentSymbolRef.current = symbol;
   }, [symbol]);
 
+  // Track connection ID to ignore data from old connections
+  const sseConnectionIdRef = useRef<string | null>(null);
+
   // Subscribe to real-time price stream when symbol changes
   useEffect(() => {
     // Close old connection first and clear price
     if (priceEventSourceRef.current) {
+      console.log(`[TradingPage SSE] Closing old connection (ID: ${sseConnectionIdRef.current})`);
       priceEventSourceRef.current.close();
       priceEventSourceRef.current = null;
+      sseConnectionIdRef.current = null;
     }
     setCurrentPrice({});
 
@@ -722,13 +727,29 @@ const TradingPage: React.FC = () => {
       const currentSymbol = currentSymbolRef.current;
       if (!currentSymbol) return; // Symbol changed while async operation was running
       
+      console.log(`[TradingPage SSE] Creating new connection for symbol: ${currentSymbol}`);
       const es = new EventSource(`${API_BASE}/databento/sse/current-price?symbols=${encodeURIComponent(currentSymbol)}`);
       priceEventSourceRef.current = es;
 
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          if (data.status === "connected" || data.test || data.error) return;
+          
+          // Handle connection status message
+          if (data.status === "connected") {
+            sseConnectionIdRef.current = data.connection_id || null;
+            console.log(`[TradingPage SSE] Connected with connection ID: ${sseConnectionIdRef.current}`);
+            return;
+          }
+          
+          if (data.test || data.error) return;
+          
+          // Ignore data from old connections
+          if (data.connection_id && sseConnectionIdRef.current && data.connection_id !== sseConnectionIdRef.current) {
+            console.log(`[TradingPage SSE] Ignoring data from old connection ${data.connection_id} (current: ${sseConnectionIdRef.current})`);
+            return;
+          }
+          
           // Use ref to get current symbol (not closure value)
           const symbolToCheck = currentSymbolRef.current;
           if (!symbolToCheck) return; // Symbol was cleared
@@ -761,6 +782,7 @@ const TradingPage: React.FC = () => {
         // keep connection light; mark as idle rather than erroring UI
         setIsPriceIdle(true);
         es.close();
+        sseConnectionIdRef.current = null;
       };
     };
 
