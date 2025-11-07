@@ -526,6 +526,9 @@ async def stream_pnl_data(
     Returns:
         SSE stream with real-time PnL data
     """
+    # Create per-connection symbol mapping to avoid cross-contamination
+    symbol_mapping = {}
+    
     try:
         # Check if API key is available
         if not settings.DATABENTO_KEY:
@@ -689,9 +692,15 @@ async def stream_pnl_data(
             latest_prices = {}
             
             for record in client:
-                # Check if client disconnected
+                # Check if client disconnected - do this FIRST before processing any data
                 if await request.is_disconnected():
-                    print("❌ Client disconnected")
+                    print(f"❌ [PnL Stream] Client disconnected for user {user_id}")
+                    # Try to close the DataBento client
+                    try:
+                        if hasattr(client, 'close'):
+                            client.close()
+                    except:
+                        pass
                     break
                 
                 try:
@@ -824,6 +833,13 @@ async def stream_pnl_data(
     
     finally:
         print("🧹 DataBento PnL tracking cleanup completed")
+        # Try to close the DataBento client if it exists
+        try:
+            if 'client' in locals() and client:
+                if hasattr(client, 'close'):
+                    client.close()
+        except Exception as e:
+            print(f"⚠️ Error closing DataBento PnL client: {e}")
 
 
 @router.get("/sse/pnl")
