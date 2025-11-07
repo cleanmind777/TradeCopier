@@ -1,6 +1,7 @@
 import { getWebSocketToken, getWebSocketTokenForGroup } from "../api/brokerApi";
 
 type QuoteUpdate = {
+  symbol?: string;
   bid?: number;
   ask?: number;
   last?: number;
@@ -67,6 +68,12 @@ export class TradovateWSClient {
             this.subscribePositions();
             this.subscribeOrders();
             this.subscribeAccounts();
+            // Resubscribe to all previously subscribed symbols
+            const symbolsToResubscribe = Array.from(this.subscribedSymbols);
+            this.subscribedSymbols.clear(); // Clear first to allow resubscription
+            symbolsToResubscribe.forEach(symbol => {
+              this.subscribeQuotes(symbol);
+            });
           }, 500);
         } catch {
           this.reconnect();
@@ -97,6 +104,7 @@ export class TradovateWSClient {
       this.ws = null;
     }
     this.groupId = null;
+    // Don't clear subscribedSymbols on disconnect - we'll resubscribe on reconnect
   }
 
   onQuote(listener: QuoteListener) {
@@ -104,13 +112,49 @@ export class TradovateWSClient {
     return () => this.quoteListeners.delete(listener);
   }
 
+  private subscribedSymbols = new Set<string>();
+
   subscribeQuotes(symbol: string) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    if (!this.ws) {
+      // If WebSocket doesn't exist, try to connect first
+      if (this.userId) {
+        this.connect(this.userId, this.groupId || undefined);
+      }
+      return;
+    }
+    
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      // If WebSocket is connecting, wait a bit and retry
+      if (this.ws.readyState === WebSocket.CONNECTING) {
+        setTimeout(() => this.subscribeQuotes(symbol), 500);
+      }
+      return;
+    }
+    
     try {
-      const subscribeMsg = `md/subscribeQuote\n2\n\n${JSON.stringify({ symbol })}`;
+      // Only subscribe if not already subscribed
+      if (this.subscribedSymbols.has(symbol)) return;
+      
+      const id = this.messageIdCounter++;
+      const subscribeMsg = `md/subscribeQuote\n${id}\n\n${JSON.stringify({ symbol })}`;
       this.ws.send(subscribeMsg);
+      this.subscribedSymbols.add(symbol);
     } catch {
       this.reconnect();
+    }
+  }
+
+  unsubscribeQuotes(symbol: string) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    try {
+      if (!this.subscribedSymbols.has(symbol)) return;
+      
+      const id = this.messageIdCounter++;
+      const unsubscribeMsg = `md/unsubscribeQuote\n${id}\n\n${JSON.stringify({ symbol })}`;
+      this.ws.send(unsubscribeMsg);
+      this.subscribedSymbols.delete(symbol);
+    } catch {
+      // Ignore errors
     }
   }
 
@@ -207,6 +251,7 @@ export class TradovateWSClient {
             const tradeData = entries.Trade || {};
 
             const update: QuoteUpdate = {
+              symbol: quote.symbol || item.d.symbol || undefined,
               bid: bidData.price ?? undefined,
               ask: askData.price ?? undefined,
               last: tradeData.price ?? undefined,

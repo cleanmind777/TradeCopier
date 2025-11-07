@@ -683,14 +683,22 @@ const TradingPage: React.FC = () => {
     };
   };
 
-  // Subscribe to real-time price stream when symbol changes, but defer
+  // Use ref to track current symbol for SSE handler
+  const currentSymbolRef = useRef(symbol);
   useEffect(() => {
+    currentSymbolRef.current = symbol;
+  }, [symbol]);
+
+  // Subscribe to real-time price stream when symbol changes
+  useEffect(() => {
+    // Close old connection first and clear price
+    if (priceEventSourceRef.current) {
+      priceEventSourceRef.current.close();
+      priceEventSourceRef.current = null;
+    }
+    setCurrentPrice({});
+
     if (!symbol) {
-      if (priceEventSourceRef.current) {
-        priceEventSourceRef.current.close();
-        priceEventSourceRef.current = null;
-      }
-      setCurrentPrice({});
       return;
     }
 
@@ -710,15 +718,20 @@ const TradingPage: React.FC = () => {
         }
       } catch {}
       
-      // Create EventSource - the backend handles subscription automatically
-      const es = new EventSource(`${API_BASE}/databento/sse/current-price?symbols=${encodeURIComponent(symbol)}`);
+      // Create EventSource with current symbol
+      const currentSymbol = currentSymbolRef.current;
+      if (!currentSymbol) return; // Symbol changed while async operation was running
+      
+      const es = new EventSource(`${API_BASE}/databento/sse/current-price?symbols=${encodeURIComponent(currentSymbol)}`);
       priceEventSourceRef.current = es;
 
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
           if (data.status === "connected" || data.test || data.error) return;
-          if (data.symbol === symbol) {
+          // Use ref to get current symbol (not closure value)
+          const symbolToCheck = currentSymbolRef.current;
+          if (data.symbol === symbolToCheck) {
             setCurrentPrice({
               bid: data.bid_price,
               ask: data.ask_price,
@@ -1290,14 +1303,43 @@ const TradingPage: React.FC = () => {
     };
   }, [user_id, selectedGroup?.id]);
 
+  // Track previous symbol to unsubscribe when it changes
+  const prevSymbolRef = useRef<string | null>(null);
+
   // Subscribe WS quotes for current symbol and update currentPrice
   useEffect(() => {
-    if (!user_id || !symbol) return;
+    if (!user_id || !symbol) {
+      // Unsubscribe from previous symbol if exists
+      if (prevSymbolRef.current) {
+        tradovateWSClient.unsubscribeQuotes(prevSymbolRef.current);
+        prevSymbolRef.current = null;
+      }
+      // Clear price when symbol is cleared
+      setCurrentPrice({});
+      return;
+    }
+
+    // Unsubscribe from previous symbol if it changed
+    if (prevSymbolRef.current && prevSymbolRef.current !== symbol) {
+      tradovateWSClient.unsubscribeQuotes(prevSymbolRef.current);
+    }
+
+    // Unsubscribe old listener and clear price when symbol changes
     if (wsUnsubscribeRef.current) {
       wsUnsubscribeRef.current();
       wsUnsubscribeRef.current = null;
     }
+    setCurrentPrice({}); // Clear old symbol's price
+
+    // Update previous symbol ref
+    prevSymbolRef.current = symbol;
+
+    // Subscribe to new symbol
+    const currentSymbol = symbol; // Capture current symbol for closure
     wsUnsubscribeRef.current = tradovateWSClient.onQuote((q) => {
+      // Only update if quote is for current symbol (if symbol is provided in quote)
+      if (q.symbol && q.symbol !== currentSymbol) return;
+      
       setCurrentPrice((prev) => ({
         ...prev,
         bid: typeof q.bid === "number" ? q.bid : prev.bid,
@@ -1307,11 +1349,22 @@ const TradingPage: React.FC = () => {
       lastPriceTsRef.current = Date.now();
       setIsPriceIdle(false);
     });
-    tradovateWSClient.subscribeQuotes(symbol);
+    
+    // Subscribe to quotes for the new symbol
+    // Use a small delay to ensure WebSocket is ready
+    const subscribeTimeout = setTimeout(() => {
+      tradovateWSClient.subscribeQuotes(symbol);
+    }, 200);
+
     return () => {
+      clearTimeout(subscribeTimeout);
       if (wsUnsubscribeRef.current) {
         wsUnsubscribeRef.current();
         wsUnsubscribeRef.current = null;
+      }
+      // Unsubscribe when component unmounts or symbol changes
+      if (prevSymbolRef.current) {
+        tradovateWSClient.unsubscribeQuotes(prevSymbolRef.current);
       }
     };
   }, [user_id, symbol]);
