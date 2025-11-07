@@ -731,7 +731,14 @@ const TradingPage: React.FC = () => {
           if (data.status === "connected" || data.test || data.error) return;
           // Use ref to get current symbol (not closure value)
           const symbolToCheck = currentSymbolRef.current;
-          if (data.symbol === symbolToCheck) {
+          if (!symbolToCheck) return; // Symbol was cleared
+          
+          // Normalize symbols for comparison (handle .FUT suffix variations)
+          const normalizeSymbol = (s: string) => s.toUpperCase().replace('.FUT', '');
+          const dataSymbolNormalized = normalizeSymbol(data.symbol || '');
+          const currentSymbolNormalized = normalizeSymbol(symbolToCheck);
+          
+          if (dataSymbolNormalized === currentSymbolNormalized) {
             setCurrentPrice({
               bid: data.bid_price,
               ask: data.ask_price,
@@ -741,8 +748,13 @@ const TradingPage: React.FC = () => {
             });
             lastPriceTsRef.current = Date.now();
             setIsPriceIdle(false);
+          } else {
+            // Log when we receive data for a different symbol (shouldn't happen with backend filtering)
+            console.log(`[TradingPage SSE] Ignoring data for ${data.symbol} (current: ${symbolToCheck})`);
           }
-        } catch {}
+        } catch (error) {
+          console.error("[TradingPage SSE] Error parsing message:", error);
+        }
       };
 
       es.onerror = () => {

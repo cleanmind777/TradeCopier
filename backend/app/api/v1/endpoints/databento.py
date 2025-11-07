@@ -21,9 +21,6 @@ router = APIRouter()
 # Store user subscriptions by client IP
 user_subscriptions = {}
 
-# Store symbol mapping (instrument_id -> symbol name)
-symbol_mapping = {}
-
 # Configuration constants
 DATASET = "GLBX.MDP3"
 SCHEMA = "mbp-1"
@@ -102,6 +99,18 @@ async def stream_price_data(
         symbols: List of symbols to subscribe to (e.g., ['ES.FUT', 'NQ.FUT'])
         request: FastAPI request object for connection management
     """
+    # Create per-connection symbol mapping to avoid cross-contamination
+    symbol_mapping = {}
+    # Normalize requested symbols for comparison (uppercase, remove .FUT suffix if present)
+    # Also create variants with and without .FUT suffix
+    requested_symbols_normalized = set()
+    for s in symbols:
+        s_upper = s.upper()
+        requested_symbols_normalized.add(s_upper)
+        requested_symbols_normalized.add(s_upper.replace('.FUT', ''))
+        if not s_upper.endswith('.FUT'):
+            requested_symbols_normalized.add(s_upper + '.FUT')
+    
     try:
         # Check if API key is available
         if not settings.DATABENTO_KEY:
@@ -115,7 +124,7 @@ async def stream_price_data(
         
         print(f"📊 Dataset: {DATASET}")
         print(f"📋 Schema: {SCHEMA}")
-        print(f"🎯 Symbols: {symbols}")
+        print(f"🎯 Symbols for this connection: {symbols}")
         
         # Initialize DataBento Live client
         client = dbt.Live(key=settings.DATABENTO_KEY)
@@ -148,7 +157,7 @@ async def stream_price_data(
             for record in client:
                 # Check if client disconnected
                 if await request.is_disconnected():
-                    print("❌ Client disconnected")
+                    print(f"❌ Client disconnected, stopping stream for symbols: {symbols}")
                     break
                 
                 try:
@@ -174,7 +183,24 @@ async def stream_price_data(
                         instrument_id = getattr(record, 'instrument_id', None)
                         
                         # Get symbol name from mapping if available
-                        symbol = symbol_mapping.get(instrument_id, f"Instrument-{instrument_id}")
+                        symbol = symbol_mapping.get(instrument_id, None)
+                        if not symbol:
+                            # Try to get from record directly
+                            symbol = getattr(record, 'stype_in_symbol', None)
+                        if not symbol:
+                            symbol = f"Instrument-{instrument_id}"
+                        
+                        # Filter: Only send data for symbols that were requested in this connection
+                        symbol_upper = symbol.upper()
+                        symbol_variants = [
+                            symbol_upper,
+                            symbol_upper.replace('.FUT', ''),
+                            symbol_upper + '.FUT' if not symbol_upper.endswith('.FUT') else symbol_upper
+                        ]
+                        if not any(variant in requested_symbols_normalized for variant in symbol_variants):
+                            # Skip data for symbols not requested in this connection
+                            print(f"⏭️ Skipping data for {symbol} (not in requested symbols: {symbols})")
+                            continue
                         
                         # Get timestamp - try record.hd.ts_event first, then record.ts_event
                         timestamp = None
@@ -348,24 +374,34 @@ async def subscribe_symbols(request: Request, body: Symbols):
 
 
 @router.get("/sse/current-price")
-async def sse_price_stream(request: Request):
+async def sse_price_stream(request: Request, symbols: str = None):
     """
     SSE endpoint to stream real-time prices for subscribed symbols
+    
+    Args:
+        symbols: Comma-separated list of symbols (e.g., "ES.FUT,NQ.FUT") or single symbol
+                 Can also be set via POST to /sse/current-price (legacy support)
     
     Returns:
         Server-Sent Events stream with real-time price data
     """
-    client_host = request.client.host
-    symbols = user_subscriptions.get(client_host)
+    # Get symbols from query parameter first, fallback to user_subscriptions
+    if symbols:
+        # Parse comma-separated symbols
+        symbol_list = [s.strip() for s in symbols.split(",") if s.strip()]
+    else:
+        # Legacy: try to get from user_subscriptions
+        client_host = request.client.host
+        symbol_list = user_subscriptions.get(client_host)
     
-    if not symbols:
+    if not symbol_list:
         raise HTTPException(
             status_code=400, 
-            detail="No symbols subscribed. Please POST to /sse/current-price first with a symbols list."
+            detail="No symbols provided. Please include ?symbols=SYMBOL in the query string."
         )
 
     # Check market status quickly to avoid slow connects when closed
-    open_flag, reason = await is_market_open(symbols)
+    open_flag, reason = await is_market_open(symbol_list)
     if not open_flag and reason == "missing_api_key":
         async def closed_stream():
             payload = {"status": "market_closed", "reason": reason}
@@ -381,7 +417,7 @@ async def sse_price_stream(request: Request):
         )
 
     return StreamingResponse(
-        stream_price_data(symbols, request),
+        stream_price_data(symbol_list, request),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
