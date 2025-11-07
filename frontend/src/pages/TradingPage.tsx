@@ -3,7 +3,6 @@ import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
-import SymbolsMonitor from "../components/trading/SymbolMonitor";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
 import {
   executeLimitOrder,
@@ -23,7 +22,6 @@ import {
   TradovateAccountsResponse,
   TradovatePositionListResponse,
 } from "../types/broker";
-import { getHistoricalChart } from "../api/databentoApi";
 import LoadingModal from "../components/ui/LoadingModal";
 import { tradovateWSClient } from "../services/tradovateWs";
 
@@ -72,9 +70,6 @@ const TradingPage: React.FC = () => {
   const [isPriceIdle, setIsPriceIdle] = useState<boolean>(false);
   const lastPriceTsRef = useRef<number>(0);
   const wsUnsubscribeRef = useRef<null | (() => void)>(null);
-  
-  // Chart view toggle
-  const [showChart, setShowChart] = useState<boolean>(false);
 
   // Equity per sub-broker (balance + unrealizedPnL)
   const [subBrokerEquities, setSubBrokerEquities] = useState<Record<string, {
@@ -85,8 +80,6 @@ const TradingPage: React.FC = () => {
     equity: number;
   }>>({});
 
-  // Offline PnL fallback
-  const offlinePnlIntervalRef = useRef<number | null>(null);
 
   // SL/TP state
   const [slTpOption, setSlTpOption] = useState<
@@ -525,69 +518,6 @@ const TradingPage: React.FC = () => {
     }
   };
 
-  // Offline PnL calculation using historical last price
-  const calculateOfflinePnL = async () => {
-    try {
-      if (!selectedGroup) return;
-      if (!symbol) return;
-      if (positions.length === 0) return;
-
-      const now = new Date();
-      // Ensure end is at least 2 minutes ago to avoid real-time data issues
-      const endIso = new Date(now.getTime() - 2 * 60 * 1000).toISOString();
-      // Start is 15 minutes before end
-      const startIso = new Date(now.getTime() - 17 * 60 * 1000).toISOString();
-
-      const hist = await getHistoricalChart(symbol, startIso, endIso, "ohlcv-1m");
-      if (!hist || !hist.data || hist.data.length === 0) return;
-      const lastClose = hist.data[hist.data.length - 1].close;
-
-      const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
-      const relevant = positions.filter(p => ids.has(p.accountId) && p.netPos !== 0 && p.symbol?.toUpperCase().startsWith(symbol.toUpperCase().slice(0, 2)));
-
-      let totalPnL = 0;
-      let symbolPnL = 0;
-      for (const p of relevant) {
-        const vpp = getValuePerPoint(p.symbol || symbol);
-        const qty = p.netPos;
-        const entry = p.netPrice || 0;
-        const priceDiff = qty >= 0 ? (lastClose - entry) : (entry - lastClose);
-        const pnl = priceDiff * Math.abs(qty) * vpp;
-        totalPnL += pnl;
-        symbolPnL += pnl;
-      }
-      setGroupPnL(() => ({
-        totalPnL: Math.round(totalPnL * 100) / 100,
-        symbolPnL: Math.round(symbolPnL * 100) / 100,
-        lastUpdate: new Date().toLocaleTimeString(),
-      }));
-    } catch (e) {
-      // Silent fail to avoid UI spam
-    }
-  };
-
-  // Trigger offline PnL when SSE disconnects
-  useEffect(() => {
-    if (isConnectedToPnL) {
-      if (offlinePnlIntervalRef.current) {
-        window.clearInterval(offlinePnlIntervalRef.current);
-        offlinePnlIntervalRef.current = null;
-      }
-      return;
-    }
-    // Immediately compute once, then every 30s
-    calculateOfflinePnL();
-    offlinePnlIntervalRef.current = window.setInterval(() => {
-      calculateOfflinePnL();
-    }, 30000) as any;
-    return () => {
-      if (offlinePnlIntervalRef.current) {
-        window.clearInterval(offlinePnlIntervalRef.current);
-        offlinePnlIntervalRef.current = null;
-      }
-    };
-  }, [isConnectedToPnL, selectedGroup, symbol, positions]);
-
   // Connect to PnL SSE stream
   const connectToPnLStream = () => {
     if (!user_id) return;
@@ -671,20 +601,6 @@ const TradingPage: React.FC = () => {
         const statusJson = await statusRes.json();
         if (!statusJson.open) {
           setIsPriceIdle(true);
-          // Load last historical candle to populate price snapshot
-          const now = new Date();
-          // Ensure end is at least 2 minutes ago to avoid real-time data issues
-          const endIso = new Date(now.getTime() - 2 * 60 * 1000).toISOString();
-          // Start is 30 minutes before end
-          const startIso = new Date(now.getTime() - 32 * 60 * 1000).toISOString();
-          const hRes = await fetch(`${API_BASE}/databento/historical?symbol=${encodeURIComponent(symbol)}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&schema=ohlcv-1m`);
-          const hJson = await hRes.json();
-          const last = hJson?.data?.[hJson.data.length - 1];
-          if (last) {
-            setCurrentPrice({
-              last: last.close,
-            });
-          }
           // Still attempt SSE unless API key is missing
           if (statusJson.reason === 'missing_api_key') {
             return;
@@ -1561,20 +1477,6 @@ const TradingPage: React.FC = () => {
                   )}
                 </div>
                 <div className="w-px h-6 bg-slate-700" />
-                {/* View Chart toggle */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setShowChart(!showChart)}
-                    className={`h-8 px-3 rounded text-sm font-medium ${
-                      showChart 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                        : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                    }`}
-                  >
-                    {showChart ? 'Hide Chart' : 'View Chart'}
-                  </button>
-                </div>
-                <div className="w-px h-6 bg-slate-700" />
                 {/* Action buttons */}
                 <div className="flex items-center gap-2">
                   <button
@@ -1732,12 +1634,6 @@ const TradingPage: React.FC = () => {
             </Card>
           )} */}
           
-          {/* Chart - majority of the page */}
-          {showChart && (
-            <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '420px' }}>
-              <SymbolsMonitor key={symbol} initialSymbol={symbol} compact height={420} />
-            </div>
-          )}
           
           {/* Monitor Tabs (Group Positions, Orders, Accounts) */}
           <div className="mt-4 bg-white rounded-md border border-slate-200 shadow-sm">
