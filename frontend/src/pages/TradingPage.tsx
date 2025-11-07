@@ -220,16 +220,22 @@ const TradingPage: React.FC = () => {
   const filterTradingData = (
     accounts: TradovateAccountsResponse[],
     positions: TradovatePositionListResponse[],
-    orders: any[]
+    orders: any[],
+    currentSymbol?: string,
+    currentGroup?: GroupInfo | null
   ) => {
+    // Use provided parameters or fall back to state
+    const symbolToUse = currentSymbol !== undefined ? currentSymbol : symbol;
+    const groupToUse = currentGroup !== undefined ? currentGroup : selectedGroup;
+    
     let filteredAccounts = accounts || [];
     let filteredPositions = positions || [];
     let filteredOrders = orders || [];
 
     // Filter by selected group's account IDs
-    if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+    if (groupToUse && groupToUse.sub_brokers.length > 0) {
       const groupAccountIds = new Set(
-        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+        groupToUse.sub_brokers.map(s => parseInt(s.sub_account_id))
       );
       
       filteredAccounts = filteredAccounts.filter((a: any) => 
@@ -243,15 +249,28 @@ const TradingPage: React.FC = () => {
       );
     }
 
-    // Filter positions and orders by selected symbol
-    if (symbol && symbol.trim()) {
-      const symbolPrefix = symbol.toUpperCase().slice(0, 2);
-      filteredPositions = filteredPositions.filter((p: any) => 
-        p.symbol && p.symbol.toUpperCase().startsWith(symbolPrefix)
-      );
-      filteredOrders = filteredOrders.filter((o: any) => 
-        o.symbol && o.symbol.toUpperCase().startsWith(symbolPrefix)
-      );
+    // Filter positions and orders by selected symbol (exact match or prefix match)
+    if (symbolToUse && symbolToUse.trim()) {
+      const symbolUpper = symbolToUse.toUpperCase();
+      // Try exact match first, then fall back to prefix match for futures contracts
+      filteredPositions = filteredPositions.filter((p: any) => {
+        if (!p.symbol) return false;
+        const pSymbol = p.symbol.toUpperCase();
+        // Exact match
+        if (pSymbol === symbolUpper) return true;
+        // Prefix match (e.g., "NQ" matches "NQZ5", "NQH6", etc.)
+        const symbolPrefix = symbolUpper.slice(0, 2);
+        return pSymbol.startsWith(symbolPrefix);
+      });
+      filteredOrders = filteredOrders.filter((o: any) => {
+        if (!o.symbol) return false;
+        const oSymbol = o.symbol.toUpperCase();
+        // Exact match
+        if (oSymbol === symbolUpper) return true;
+        // Prefix match
+        const symbolPrefix = symbolUpper.slice(0, 2);
+        return oSymbol.startsWith(symbolPrefix);
+      });
     }
 
     return { filteredAccounts, filteredPositions, filteredOrders };
@@ -416,10 +435,15 @@ const TradingPage: React.FC = () => {
       try {
         const data = await getAllTradingData(user_id);
         if (data) {
+          // Use current symbol and group from refs to ensure we filter correctly
+          const currentSymbol = symbolRef.current;
+          const currentGroup = selectedGroupRef.current;
           const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
             data.accounts || [],
             data.positions || [],
-            data.orders || []
+            data.orders || [],
+            currentSymbol || undefined,
+            currentGroup || undefined
           );
           setAccounts(filteredAccounts);
           setPositions(filteredPositions);
@@ -460,12 +484,18 @@ const TradingPage: React.FC = () => {
         );
       }
 
-      // Filter by selected symbol (if symbol is set)
+      // Filter by selected symbol (if symbol is set) - use exact match or prefix match
       if (currentSymbol && currentSymbol.trim()) {
-        const symbolPrefix = currentSymbol.toUpperCase().slice(0, 2);
-        filtered = filtered.filter((p: any) => 
-          p.symbol && p.symbol.toUpperCase().startsWith(symbolPrefix)
-        );
+        const symbolUpper = currentSymbol.toUpperCase();
+        filtered = filtered.filter((p: any) => {
+          if (!p.symbol) return false;
+          const pSymbol = p.symbol.toUpperCase();
+          // Exact match
+          if (pSymbol === symbolUpper) return true;
+          // Prefix match (e.g., "NQ" matches "NQZ5", "NQH6", etc.)
+          const symbolPrefix = symbolUpper.slice(0, 2);
+          return pSymbol.startsWith(symbolPrefix);
+        });
       }
 
       setPositions(filtered);
@@ -497,12 +527,18 @@ const TradingPage: React.FC = () => {
         );
       }
 
-      // Filter by selected symbol (if symbol is set)
+      // Filter by selected symbol (if symbol is set) - use exact match or prefix match
       if (currentSymbol && currentSymbol.trim()) {
-        const symbolPrefix = currentSymbol.toUpperCase().slice(0, 2);
-        filtered = filtered.filter((o: any) => 
-          o.symbol && o.symbol.toUpperCase().startsWith(symbolPrefix)
-        );
+        const symbolUpper = currentSymbol.toUpperCase();
+        filtered = filtered.filter((o: any) => {
+          if (!o.symbol) return false;
+          const oSymbol = o.symbol.toUpperCase();
+          // Exact match
+          if (oSymbol === symbolUpper) return true;
+          // Prefix match (e.g., "NQ" matches "NQZ5", "NQH6", etc.)
+          const symbolPrefix = symbolUpper.slice(0, 2);
+          return oSymbol.startsWith(symbolPrefix);
+        });
       }
 
       setOrders(filtered);
