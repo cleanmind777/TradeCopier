@@ -515,10 +515,8 @@ const TradingPage: React.FC = () => {
 
     // Refresh function - executes immediately when called from WebSocket updates
     const refreshTradingData = async (immediate = false) => {
-      console.log(`[WS TRIGGER] refreshTradingData called, immediate=${immediate}, isRefreshing=${isRefreshingRef.current}`);
       // Prevent overlapping requests
       if (isRefreshingRef.current) {
-        console.log(`[WS TRIGGER] Refresh already in progress, skipping`);
         return;
       }
 
@@ -529,18 +527,15 @@ const TradingPage: React.FC = () => {
       }
 
       const executeRefresh = async () => {
-        console.log(`[WS TRIGGER] executeRefresh called, isRefreshing=${isRefreshingRef.current}`);
         if (isRefreshingRef.current) {
-          console.log(`[WS TRIGGER] executeRefresh: already refreshing, returning`);
           return;
         }
         
         isRefreshingRef.current = true;
-        console.log(`[WS TRIGGER] executeRefresh: calling getAllTradingData`);
         try {
           const data = await getAllTradingData(user_id);
-          console.log(`[WS TRIGGER] executeRefresh: getAllTradingData returned, data=${data ? 'exists' : 'null'}`);
           if (data) {
+            console.log(`[WS TRIGGER] ✅ API data received: ${data.positions?.length || 0} positions, ${data.orders?.length || 0} orders, ${data.accounts?.length || 0} accounts`);
             // Use current symbol from refs
             const currentSymbol = symbolRef.current;
             const currentGroup = selectedGroupRef.current;
@@ -635,20 +630,16 @@ const TradingPage: React.FC = () => {
     // Define it after refreshDataRef is set so it has access to it
     const handleWebSocketEvent = () => {
       try {
-        console.log(`[WS TRIGGER] WebSocket event received`);
-        
         // Clear any pending refresh
         if (wsRefreshTimerRef.current) {
-          console.log(`[WS TRIGGER] Clearing previous timer`);
           window.clearTimeout(wsRefreshTimerRef.current);
           wsRefreshTimerRef.current = null;
         }
 
         // Debounce: wait 500ms after last WebSocket event, then send ONE API request
-        console.log(`[WS TRIGGER] Setting new timer (500ms)`);
         const timerId = window.setTimeout(() => {
           try {
-            console.log(`[WS TRIGGER] Timer fired - executing API refresh`);
+            console.log(`[WS TRIGGER] ⚡ Timer fired - sending API requests`);
             
             // Clear the timer ref since it's executing
             wsRefreshTimerRef.current = null;
@@ -656,82 +647,63 @@ const TradingPage: React.FC = () => {
             // Use refreshDataRef from closure - it should be set by now
             const refreshFn = refreshDataRef.current;
             if (!refreshFn) {
-              console.log(`[WS TRIGGER] refreshDataRef is null, skipping`);
+              console.log(`[WS TRIGGER] ❌ refreshDataRef is null, skipping`);
               return;
             }
             
             if (isRefreshingRef.current) {
-              console.log(`[WS TRIGGER] Refresh in progress, skipping`);
+              console.log(`[WS TRIGGER] ⏳ Refresh in progress, skipping`);
               return;
             }
             
-            console.log(`[WS TRIGGER] Calling refreshTradingData and refreshPnLStream`);
+            console.log(`[WS TRIGGER] ✅ Calling refreshTradingData and refreshPnLStream`);
             refreshFn.refreshTradingData(true); // true = immediate
             refreshFn.refreshPnLStream();
           } catch (error) {
-            console.log(`[WS TRIGGER] Error in timer callback:`, error);
+            console.log(`[WS TRIGGER] ❌ Error in timer callback:`, error);
           }
         }, 500); // 500ms debounce - all events within this window trigger only one refresh
         
         wsRefreshTimerRef.current = timerId;
-        console.log(`[WS TRIGGER] Timer set with ID: ${timerId}`);
       } catch (error) {
-        console.log(`[WS TRIGGER] Error in handleWebSocketEvent:`, error);
+        console.log(`[WS TRIGGER] ❌ Error in handleWebSocketEvent:`, error);
       }
     };
     
     // Store handler in ref so it's accessible from WebSocket listeners
     handleWebSocketEventRef.current = handleWebSocketEvent;
 
-    const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
-      const positionsArray = Array.isArray(allPositions) ? allPositions : [];
-      console.log(`[WS TRIGGER] Positions event: ${positionsArray.length} items`);
-      
+    const unsubPositions = tradovateWSMultiClient.onPositions((_allPositions) => {
       // Track that WebSocket has sent an event
       wsHasDataRef.current.positions = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
       if (handleWebSocketEventRef.current) {
-        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from positions listener`);
         handleWebSocketEventRef.current();
-      } else {
-        console.log(`[WS TRIGGER] handleWebSocketEventRef.current is null!`);
       }
       
       // DO NOT update state from WebSocket data - only use API data
     });
 
-    const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
-      const ordersArray = Array.isArray(allOrders) ? allOrders : [];
-      console.log(`[WS TRIGGER] Orders event: ${ordersArray.length} items`);
-      
+    const unsubOrders = tradovateWSMultiClient.onOrders((_allOrders) => {
       // Track that WebSocket has sent an event
       wsHasDataRef.current.orders = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
       if (handleWebSocketEventRef.current) {
-        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from orders listener`);
         handleWebSocketEventRef.current();
-      } else {
-        console.log(`[WS TRIGGER] handleWebSocketEventRef.current is null!`);
       }
       
       // DO NOT update state from WebSocket data - only use API data
     });
 
-    const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
-      const accountsArray = Array.isArray(allAccounts) ? allAccounts : [];
-      console.log(`[WS TRIGGER] Accounts event: ${accountsArray.length} items`);
-      
+    const unsubAccounts = tradovateWSMultiClient.onAccounts((_allAccounts) => {
       // Track that WebSocket has sent an event
       wsHasDataRef.current.accounts = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
       if (handleWebSocketEventRef.current) {
-        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from accounts listener`);
         handleWebSocketEventRef.current();
-      } else {
-        console.log(`[WS TRIGGER] handleWebSocketEventRef.current is null!`);
       }
       
       // DO NOT update state from WebSocket data - only use API data
