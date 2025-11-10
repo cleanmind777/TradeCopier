@@ -328,6 +328,9 @@ def user_get_all_tokens_for_websocket(
         broker_accounts = []
         for row in raw_result:
             row_dict = dict(row._mapping)
+            # Debug: print what we got from the database
+            print(f"[WebSocket Tokens] Raw row data: id={row_dict.get('id')}, access_token present={bool(row_dict.get('access_token'))}, md_access_token present={bool(row_dict.get('md_access_token'))}, websocket_access_token present={bool(row_dict.get('websocket_access_token'))}")
+            
             # Create BrokerAccount instance - we need to handle UUID conversion
             from uuid import UUID as UUIDType
             try:
@@ -335,19 +338,31 @@ def user_get_all_tokens_for_websocket(
                     row_dict['id'] = UUIDType(row_dict['id'])
                 if isinstance(row_dict.get('user_id'), str):
                     row_dict['user_id'] = UUIDType(row_dict['user_id'])
-            except:
-                pass
+            except Exception as e:
+                print(f"[WebSocket Tokens] UUID conversion error: {e}")
             
             # Create BrokerAccount object - we'll use the ORM model but populate it manually
             # This creates a detached instance (not in session) which is fine for read-only access
             broker = BrokerAccount()
             for key, value in row_dict.items():
-                if hasattr(broker, key) and value is not None:
+                if hasattr(broker, key):
                     try:
+                        # Set the attribute - set even if None to preserve database state
                         setattr(broker, key, value)
+                        # Debug: verify the attribute was set for token fields
+                        if key in ['access_token', 'md_access_token', 'websocket_access_token', 'websocket_md_access_token']:
+                            actual_value = getattr(broker, key, None)
+                            print(f"[WebSocket Tokens] Set {key} = {bool(actual_value)} (value: {str(actual_value)[:50] if actual_value else 'None'}...)")
                     except Exception as e:
-                        print(f"[WebSocket Tokens] Warning: Could not set {key} on BrokerAccount: {e}")
+                        print(f"[WebSocket Tokens] Warning: Could not set {key} on BrokerAccount: {e}, value type: {type(value)}, value: {str(value)[:50] if value else 'None'}")
             broker_accounts.append(broker)
+            
+            # Final verification - check what we actually have
+            print(f"[WebSocket Tokens] Broker {broker.id} final state:")
+            print(f"  - access_token: {bool(broker.access_token)} ({len(broker.access_token) if broker.access_token else 0} chars)")
+            print(f"  - md_access_token: {bool(broker.md_access_token)} ({len(broker.md_access_token) if broker.md_access_token else 0} chars)")
+            print(f"  - websocket_access_token: {bool(broker.websocket_access_token)} ({len(broker.websocket_access_token) if broker.websocket_access_token else 0} chars)")
+            print(f"  - websocket_md_access_token: {bool(broker.websocket_md_access_token)} ({len(broker.websocket_md_access_token) if broker.websocket_md_access_token else 0} chars)")
         
         print(f"[WebSocket Tokens] Raw SQL query returned {len(broker_accounts)} broker accounts for user {user_id}")
         if len(broker_accounts) > 0:
