@@ -24,9 +24,16 @@ class SingleWSConnection {
   private currentOrders: OrderUpdate[] = [];
   private currentAccounts: AccountUpdate[] = [];
 
-  constructor(brokerAccountId: string, tokens: { access_token: string; md_access_token: string; is_demo: boolean }) {
+  private onUpdateCallback: (() => void) | null = null; // Callback to notify parent of updates
+
+  constructor(brokerAccountId: string, tokens: { access_token: string; md_access_token: string; is_demo: boolean }, onUpdate?: () => void) {
     this.brokerAccountId = brokerAccountId;
     this.tokens = tokens;
+    this.onUpdateCallback = onUpdate || null;
+  }
+  
+  setOnUpdateCallback(callback: () => void) {
+    this.onUpdateCallback = callback;
   }
 
   async connect() {
@@ -200,6 +207,7 @@ class SingleWSConnection {
             
             if (!entity) return;
             
+            // Trigger listeners immediately when we receive order/position/account updates
             if (entityType === "position") {
               this.handlePositionUpdate(entity, eventType);
             } else if (entityType === "order") {
@@ -207,6 +215,7 @@ class SingleWSConnection {
             } else if (entityType === "cashBalance" || entityType === "account") {
               this.handleAccountUpdate(entity, eventType, entityType);
             }
+            // Note: marginSnapshot and other entity types don't trigger updates
           }
           
           // Handle initial sync data (might come as arrays)
@@ -252,13 +261,16 @@ class SingleWSConnection {
       }
       
       this.currentPositions = this.currentPositions.filter((p: any) => !p.archived);
-      console.log(`[TradovateWS-${this.brokerAccountId}] Position ${eventType.toLowerCase()}: ${entity.id}, total: ${this.currentPositions.length}`);
     } else if (eventType === "Deleted" || entity.archived) {
       this.currentPositions = this.currentPositions.filter(
         (p: any) => p.id !== entity.id && 
         !(p.accountId === entity.accountId && p.contractId === entity.contractId)
       );
-      console.log(`[TradovateWS-${this.brokerAccountId}] Position deleted/archived: ${entity.id}`);
+    }
+    
+    // Immediately notify parent to trigger listeners
+    if (this.onUpdateCallback) {
+      this.onUpdateCallback();
     }
   }
 
@@ -277,11 +289,13 @@ class SingleWSConnection {
         const status = o.ordStatus || o.status;
         return status !== "Filled" && status !== "Cancelled" && status !== "Rejected";
       });
-      
-      console.log(`[TradovateWS-${this.brokerAccountId}] Order ${eventType.toLowerCase()}: ${entity.id}, status: ${entity.ordStatus || entity.status}`);
     } else if (eventType === "Deleted" || entity.archived) {
       this.currentOrders = this.currentOrders.filter((o: any) => o.id !== entity.id);
-      console.log(`[TradovateWS-${this.brokerAccountId}] Order deleted/archived: ${entity.id}`);
+    }
+    
+    // Immediately notify parent to trigger listeners
+    if (this.onUpdateCallback) {
+      this.onUpdateCallback();
     }
   }
 
@@ -305,8 +319,6 @@ class SingleWSConnection {
           weekRealizedPnL: entity.weekRealizedPnL,
         });
       }
-      
-      console.log(`[TradovateWS-${this.brokerAccountId}] Account cashBalance updated: ${accountId}`);
     } else if (entityType === "account") {
       const existingIndex = this.currentAccounts.findIndex((a: any) => a.accountId === entity.accountId || a.id === entity.id);
       
@@ -315,8 +327,11 @@ class SingleWSConnection {
       } else {
         this.currentAccounts.push(entity);
       }
-      
-      console.log(`[TradovateWS-${this.brokerAccountId}] Account ${eventType.toLowerCase()}: ${entity.accountId || entity.id}`);
+    }
+    
+    // Immediately notify parent to trigger listeners
+    if (this.onUpdateCallback) {
+      this.onUpdateCallback();
     }
   }
 
@@ -361,9 +376,20 @@ export class TradovateWSMultiClient {
           access_token: tokens.access_token,
           md_access_token: tokens.md_access_token,
           is_demo: tokens.is_demo
+        }, () => {
+          // Immediately trigger aggregation when any connection receives an update
+          this.aggregateAndNotify();
         });
         this.connections.set(tokens.id, connection);
         await connection.connect();
+      } else {
+        // Update callback for existing connection
+        const connection = this.connections.get(tokens.id);
+        if (connection) {
+          connection.setOnUpdateCallback(() => {
+            this.aggregateAndNotify();
+          });
+        }
       }
     }
 
