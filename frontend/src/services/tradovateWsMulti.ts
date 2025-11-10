@@ -397,7 +397,8 @@ export class TradovateWSMultiClient {
   private updateTimer: any = null;
 
   async connectAll(userId: string, tokensList: Array<{ id: string; access_token: string; md_access_token: string; is_demo: boolean }>) {
-    console.log(`[TradovateWSMulti] Connecting to ${tokensList.length} broker account(s)`);
+    console.log(`[TradovateWSMulti] connectAll called with ${tokensList.length} token(s) for user ${userId}`);
+    console.log(`[TradovateWSMulti] Token IDs:`, tokensList.map(t => t.id));
     
     // Disconnect removed accounts
     const currentIds = new Set(tokensList.map(t => t.id));
@@ -410,8 +411,11 @@ export class TradovateWSMultiClient {
     }
 
     // Connect to all accounts
+    let connectedCount = 0;
     for (const tokens of tokensList) {
+      console.log(`[TradovateWSMulti] Processing token for broker account: ${tokens.id}`);
       if (!this.connections.has(tokens.id)) {
+        console.log(`[TradovateWSMulti] Creating new connection for broker account: ${tokens.id}`);
         const connection = new SingleWSConnection(tokens.id, {
           access_token: tokens.access_token,
           md_access_token: tokens.md_access_token,
@@ -422,7 +426,10 @@ export class TradovateWSMultiClient {
         });
         this.connections.set(tokens.id, connection);
         await connection.connect();
+        connectedCount++;
+        console.log(`[TradovateWSMulti] Connected to broker account: ${tokens.id} (${connectedCount}/${tokensList.length})`);
       } else {
+        console.log(`[TradovateWSMulti] Connection already exists for broker account: ${tokens.id}, updating callback`);
         // Update callback for existing connection
         const connection = this.connections.get(tokens.id);
         if (connection) {
@@ -432,6 +439,7 @@ export class TradovateWSMultiClient {
         }
       }
     }
+    console.log(`[TradovateWSMulti] Total connections: ${this.connections.size} (expected: ${tokensList.length})`);
 
     // Don't start periodic aggregation - only notify on actual WebSocket updates
     // The periodic timer was causing too many unnecessary API requests

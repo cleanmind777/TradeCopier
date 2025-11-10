@@ -1604,7 +1604,9 @@ const TradingPage: React.FC = () => {
       prevUserIdRef.current = currentUserId;
       
       // Fetch tokens for all broker accounts and connect
+      console.log(`[TradingPage] Fetching WebSocket tokens for user: ${currentUserId}`);
       getAllWebSocketTokens(currentUserId).then((tokensList) => {
+        console.log(`[TradingPage] Received ${tokensList?.length || 0} WebSocket tokens:`, tokensList);
         if (tokensList && tokensList.length > 0) {
           // Map tokens to ensure is_demo has a default value
           const mappedTokens = tokensList.map(t => ({
@@ -1613,10 +1615,13 @@ const TradingPage: React.FC = () => {
             md_access_token: t.md_access_token,
             is_demo: t.is_demo ?? false
           }));
+          console.log(`[TradingPage] Mapped ${mappedTokens.length} tokens, connecting to WebSocket...`);
           tradovateWSMultiClient.connectAll(currentUserId, mappedTokens);
+        } else {
+          console.log(`[TradingPage] No tokens received or empty list`);
         }
       }).catch((error) => {
-        // Silent error handling
+        console.error(`[TradingPage] Error fetching WebSocket tokens:`, error);
       });
     } else if (!currentUserId) {
       // If userId is cleared, disconnect all
