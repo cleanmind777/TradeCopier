@@ -400,15 +400,22 @@ const TradingPage: React.FC = () => {
       setIsPageLoading(true);
       try {
         const data = await getAllTradingData(user_id);
+        console.log(`[TradingPage] getAllTradingData response:`, data);
+        
         if (data) {
-          console.log(`[TradingPage] Initial data load: ${data.accounts?.length || 0} accounts, ${data.positions?.length || 0} positions, ${data.orders?.length || 0} orders`);
+          // Ensure we have arrays, not null
+          const rawAccounts = Array.isArray(data.accounts) ? data.accounts : [];
+          const rawPositions = Array.isArray(data.positions) ? data.positions : [];
+          const rawOrders = Array.isArray(data.orders) ? data.orders : [];
+          
+          console.log(`[TradingPage] Initial data load: ${rawAccounts.length} accounts, ${rawPositions.length} positions, ${rawOrders.length} orders`);
           
           // For positions: show ALL groups (only filter by symbol if set)
-          let filteredPositions = data.positions || [];
+          let filteredPositions = rawPositions;
           if (symbol && symbol.trim()) {
             const symbolUpper = symbol.toUpperCase();
             filteredPositions = filteredPositions.filter((p: any) => {
-              if (!p.symbol) return false;
+              if (!p || !p.symbol) return false;
               const pSymbol = p.symbol.toUpperCase();
               if (pSymbol === symbolUpper) return true;
               const symbolPrefix = symbolUpper.slice(0, 2);
@@ -418,21 +425,41 @@ const TradingPage: React.FC = () => {
           
           // For accounts: keep ALL accounts (needed for groupMonitorRows realized PnL calculation)
           // Filtering by group will be done in the accounts tab display
-          const allAccounts = data.accounts || [];
+          const allAccounts = rawAccounts;
           
-          // For orders: filter by selected group (for orders tab display)
-          const { filteredOrders } = filterTradingData(
-            [], // accounts already handled above
-            [], // positions already handled above
-            data.orders || [],
-            symbol || undefined,
-            selectedGroup || undefined
-          );
+          // For orders: show ALL orders if no group selected, otherwise filter by group
+          let filteredOrders = rawOrders;
+          if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+            const groupAccountIds = new Set(
+              selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+            );
+            filteredOrders = filteredOrders.filter((o: any) => 
+              o && o.accountId && groupAccountIds.has(Number(o.accountId))
+            );
+          }
+          
+          // Filter orders by symbol if set
+          if (symbol && symbol.trim()) {
+            const symbolUpper = symbol.toUpperCase();
+            filteredOrders = filteredOrders.filter((o: any) => {
+              if (!o || !o.symbol) return false;
+              const oSymbol = o.symbol.toUpperCase();
+              if (oSymbol === symbolUpper) return true;
+              const symbolPrefix = symbolUpper.slice(0, 2);
+              return oSymbol.startsWith(symbolPrefix);
+            });
+          }
           
           console.log(`[TradingPage] After filtering: ${allAccounts.length} accounts (all), ${filteredPositions.length} positions (all groups), ${filteredOrders.length} orders`);
           setAccounts(allAccounts);
           setPositions(filteredPositions);
           setOrders(filteredOrders);
+        } else {
+          console.warn("[TradingPage] getAllTradingData returned null or undefined");
+          // Set empty arrays to ensure UI shows "no data" message
+          setAccounts([]);
+          setPositions([]);
+          setOrders([]);
         }
       } catch (error) {
         console.error("[TradingPage] Error loading initial trading data:", error);
@@ -498,12 +525,17 @@ const TradingPage: React.FC = () => {
             const currentSymbol = symbolRef.current;
             const currentGroup = selectedGroupRef.current;
             
+            // Ensure we have arrays, not null
+            const rawAccounts = Array.isArray(data.accounts) ? data.accounts : [];
+            const rawPositions = Array.isArray(data.positions) ? data.positions : [];
+            const rawOrders = Array.isArray(data.orders) ? data.orders : [];
+            
             // For positions: show ALL groups (only filter by symbol if set)
-            let filteredPositions = data.positions || [];
+            let filteredPositions = rawPositions;
             if (currentSymbol && currentSymbol.trim()) {
               const symbolUpper = currentSymbol.toUpperCase();
               filteredPositions = filteredPositions.filter((p: any) => {
-                if (!p.symbol) return false;
+                if (!p || !p.symbol) return false;
                 const pSymbol = p.symbol.toUpperCase();
                 if (pSymbol === symbolUpper) return true;
                 const symbolPrefix = symbolUpper.slice(0, 2);
@@ -512,16 +544,30 @@ const TradingPage: React.FC = () => {
             }
             
             // For accounts: keep ALL accounts (needed for groupMonitorRows)
-            const allAccounts = data.accounts || [];
+            const allAccounts = rawAccounts;
             
-            // For orders: filter by selected group
-            const { filteredOrders } = filterTradingData(
-              [],
-              [],
-              data.orders || [],
-              currentSymbol || undefined,
-              currentGroup || undefined
-            );
+            // For orders: show ALL orders if no group selected, otherwise filter by group
+            let filteredOrders = rawOrders;
+            if (currentGroup && currentGroup.sub_brokers.length > 0) {
+              const groupAccountIds = new Set(
+                currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+              );
+              filteredOrders = filteredOrders.filter((o: any) => 
+                o && o.accountId && groupAccountIds.has(Number(o.accountId))
+              );
+            }
+            
+            // Filter orders by symbol if set
+            if (currentSymbol && currentSymbol.trim()) {
+              const symbolUpper = currentSymbol.toUpperCase();
+              filteredOrders = filteredOrders.filter((o: any) => {
+                if (!o || !o.symbol) return false;
+                const oSymbol = o.symbol.toUpperCase();
+                if (oSymbol === symbolUpper) return true;
+                const symbolPrefix = symbolUpper.slice(0, 2);
+                return oSymbol.startsWith(symbolPrefix);
+              });
+            }
             
             setAccounts(allAccounts);
             setPositions(filteredPositions);
@@ -559,18 +605,19 @@ const TradingPage: React.FC = () => {
     };
 
     const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
-      console.log(`[TradingPage] WebSocket positions update: ${allPositions?.length || 0} positions`);
+      const positionsArray = Array.isArray(allPositions) ? allPositions : [];
+      console.log(`[TradingPage] WebSocket positions update: ${positionsArray.length} positions`);
       
       // Show ALL positions from ALL groups - no group filtering
       // Only filter by symbol if symbol is set
       const currentSymbol = symbolRef.current;
-      let filtered = allPositions || [];
+      let filtered = positionsArray;
 
       // Filter by selected symbol (if symbol is set) - use exact match or prefix match
       if (currentSymbol && currentSymbol.trim()) {
         const symbolUpper = currentSymbol.toUpperCase();
         filtered = filtered.filter((p: any) => {
-          if (!p.symbol) return false;
+          if (!p || !p.symbol) return false;
           const pSymbol = p.symbol.toUpperCase();
           // Exact match
           if (pSymbol === symbolUpper) return true;
@@ -591,19 +638,20 @@ const TradingPage: React.FC = () => {
     });
 
     const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
-      console.log(`[TradingPage] WebSocket orders update: ${allOrders?.length || 0} orders`);
+      const ordersArray = Array.isArray(allOrders) ? allOrders : [];
+      console.log(`[TradingPage] WebSocket orders update: ${ordersArray.length} orders`);
       
       const currentGroup = selectedGroupRef.current;
       const currentSymbol = symbolRef.current;
 
-      // Filter by selected group's account IDs (only if group is selected)
-      let filtered = allOrders || [];
+      // Show ALL orders if no group selected, otherwise filter by group
+      let filtered = ordersArray;
       if (currentGroup && currentGroup.sub_brokers.length > 0) {
         const groupAccountIds = new Set(
           currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
         );
         filtered = filtered.filter((o: any) => 
-          groupAccountIds.has(o.accountId)
+          o && o.accountId && groupAccountIds.has(Number(o.accountId))
         );
       }
 
@@ -611,7 +659,7 @@ const TradingPage: React.FC = () => {
       if (currentSymbol && currentSymbol.trim()) {
         const symbolUpper = currentSymbol.toUpperCase();
         filtered = filtered.filter((o: any) => {
-          if (!o.symbol) return false;
+          if (!o || !o.symbol) return false;
           const oSymbol = o.symbol.toUpperCase();
           // Exact match
           if (oSymbol === symbolUpper) return true;
@@ -628,12 +676,13 @@ const TradingPage: React.FC = () => {
     });
 
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
-      console.log(`[TradingPage] WebSocket accounts update: ${allAccounts?.length || 0} accounts`);
+      const accountsArray = Array.isArray(allAccounts) ? allAccounts : [];
+      console.log(`[TradingPage] WebSocket accounts update: ${accountsArray.length} accounts`);
       
       // Keep ALL accounts (needed for groupMonitorRows realized PnL calculation)
       // Filtering by group will be done in the accounts tab display
-      console.log(`[TradingPage] Accounts (all groups): ${allAccounts?.length || 0}`);
-      setAccounts(allAccounts || []);
+      console.log(`[TradingPage] Accounts (all groups): ${accountsArray.length}`);
+      setAccounts(accountsArray);
 
       // Don't refresh from API - WebSocket data is sufficient for real-time updates
     });
@@ -781,23 +830,31 @@ const TradingPage: React.FC = () => {
 
   // Connect to PnL SSE stream
   const connectToPnLStream = () => {
-    if (!user_id) return;
+    if (!user_id) {
+      console.warn("[TradingPage] Cannot connect to PnL stream: user_id is missing");
+      return;
+    }
 
     // Close existing connection first
     if (eventSourceRef.current) {
+      console.log("[TradingPage] Closing existing PnL SSE connection");
       eventSourceRef.current.close();
       eventSourceRef.current = null;
       setIsConnectedToPnL(false);
     }
 
     const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-    const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
-    eventSourceRef.current = eventSource;
+    const url = `${API_BASE}/databento/sse/pnl?user_id=${user_id}`;
+    console.log(`[TradingPage] Connecting to PnL SSE stream: ${url}`);
+    
+    try {
+      const eventSource = new EventSource(url);
+      eventSourceRef.current = eventSource;
 
-    eventSource.onopen = () => {
-      console.log("✅ Connected to PnL stream for Trading Page");
-      setIsConnectedToPnL(true);
-    };
+      eventSource.onopen = () => {
+        console.log("✅ Connected to PnL stream for Trading Page");
+        setIsConnectedToPnL(true);
+      };
 
     eventSource.onmessage = (e) => {
       try {
@@ -847,17 +904,28 @@ const TradingPage: React.FC = () => {
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error("❌ PnL SSE error:", error);
-      setIsConnectedToPnL(false);
-      // Attempt to reconnect after a delay
-      setTimeout(() => {
-        if (user_id && !eventSourceRef.current) {
-          console.log("🔄 Attempting to reconnect PnL stream...");
-          connectToPnLStream();
+      eventSource.onerror = (error) => {
+        console.error("❌ PnL SSE error:", error);
+        console.error("❌ EventSource readyState:", eventSource.readyState);
+        setIsConnectedToPnL(false);
+        
+        // Close the connection if it's in a bad state
+        if (eventSource.readyState === EventSource.CLOSED) {
+          eventSourceRef.current = null;
         }
-      }, 5000);
-    };
+        
+        // Attempt to reconnect after a delay
+        setTimeout(() => {
+          if (user_id && !eventSourceRef.current) {
+            console.log("🔄 Attempting to reconnect PnL stream...");
+            connectToPnLStream();
+          }
+        }, 5000);
+      };
+    } catch (error) {
+      console.error("[TradingPage] Error creating EventSource for PnL stream:", error);
+      setIsConnectedToPnL(false);
+    }
   };
 
   // Use ref to track current symbol for SSE handler
