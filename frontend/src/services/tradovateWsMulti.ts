@@ -483,41 +483,47 @@ export class TradovateWSMultiClient {
     if (this.positionListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.positionListeners.size} position listeners`);
       const positionListenersArray = Array.from(this.positionListeners);
-      positionListenersArray.forEach((cb, index) => {
-        console.log(`[TradovateWSMulti] Calling position listener ${index}`);
+      console.log(`[TradovateWSMulti] Converted to array, length: ${positionListenersArray.length}`);
+      for (let i = 0; i < positionListenersArray.length; i++) {
+        const cb = positionListenersArray[i];
+        console.log(`[TradovateWSMulti] Calling position listener ${i}, callback type: ${typeof cb}`);
         try {
           cb(allPositions);
-          console.log(`[TradovateWSMulti] Position listener ${index} completed`);
+          console.log(`[TradovateWSMulti] Position listener ${i} completed`);
         } catch (error) {
-          console.log(`[TradovateWSMulti] Error in position listener ${index}:`, error);
+          console.log(`[TradovateWSMulti] Error in position listener ${i}:`, error);
         }
-      });
+      }
     }
     if (this.orderListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.orderListeners.size} order listeners`);
       const orderListenersArray = Array.from(this.orderListeners);
-      orderListenersArray.forEach((cb, index) => {
-        console.log(`[TradovateWSMulti] Calling order listener ${index}`);
+      console.log(`[TradovateWSMulti] Converted to array, length: ${orderListenersArray.length}`);
+      for (let i = 0; i < orderListenersArray.length; i++) {
+        const cb = orderListenersArray[i];
+        console.log(`[TradovateWSMulti] Calling order listener ${i}, callback type: ${typeof cb}`);
         try {
           cb(allOrders);
-          console.log(`[TradovateWSMulti] Order listener ${index} completed`);
+          console.log(`[TradovateWSMulti] Order listener ${i} completed`);
         } catch (error) {
-          console.log(`[TradovateWSMulti] Error in order listener ${index}:`, error);
+          console.log(`[TradovateWSMulti] Error in order listener ${i}:`, error);
         }
-      });
+      }
     }
     if (this.accountListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.accountListeners.size} account listeners`);
       const accountListenersArray = Array.from(this.accountListeners);
-      accountListenersArray.forEach((cb, index) => {
-        console.log(`[TradovateWSMulti] Calling account listener ${index}`);
+      console.log(`[TradovateWSMulti] Converted to array, length: ${accountListenersArray.length}`);
+      for (let i = 0; i < accountListenersArray.length; i++) {
+        const cb = accountListenersArray[i];
+        console.log(`[TradovateWSMulti] Calling account listener ${i}, callback type: ${typeof cb}`);
         try {
           cb(allAccounts);
-          console.log(`[TradovateWSMulti] Account listener ${index} completed`);
+          console.log(`[TradovateWSMulti] Account listener ${i} completed`);
         } catch (error) {
-          console.log(`[TradovateWSMulti] Error in account listener ${index}:`, error);
+          console.log(`[TradovateWSMulti] Error in account listener ${i}:`, error);
         }
-      });
+      }
     }
   }
 
