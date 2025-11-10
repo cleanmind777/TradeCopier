@@ -209,22 +209,29 @@ class SingleWSConnection {
             
             // Trigger listeners immediately when we receive order/position/account updates
             if (entityType === "position") {
+              console.log(`[TradovateWS-${this.brokerAccountId}] Position ${eventType} received`);
               this.handlePositionUpdate(entity, eventType);
             } else if (entityType === "order") {
+              console.log(`[TradovateWS-${this.brokerAccountId}] Order ${eventType} received`);
               this.handleOrderUpdate(entity, eventType);
             } else if (entityType === "cashBalance" || entityType === "account") {
+              console.log(`[TradovateWS-${this.brokerAccountId}] ${entityType} ${eventType} received`);
               this.handleAccountUpdate(entity, eventType, entityType);
             } else if (entityType === "marginSnapshot") {
               // marginSnapshot indicates account margin changed - trigger account update callback
-              // The marginSnapshot entity has accountId in the id field
+              console.log(`[TradovateWS-${this.brokerAccountId}] marginSnapshot received, triggering callback`);
               if (this.onUpdateCallback) {
                 this.onUpdateCallback();
+              } else {
+                console.log(`[TradovateWS-${this.brokerAccountId}] onUpdateCallback is null!`);
               }
             } else if (entityType === "auditUserAction") {
               // auditUserAction indicates a trade action (BuyMarket, SellMarket, etc.) - trigger update
-              // This means positions/orders likely changed, so trigger all updates
+              console.log(`[TradovateWS-${this.brokerAccountId}] auditUserAction received, triggering callback`);
               if (this.onUpdateCallback) {
                 this.onUpdateCallback();
+              } else {
+                console.log(`[TradovateWS-${this.brokerAccountId}] onUpdateCallback is null!`);
               }
             }
           }
@@ -280,8 +287,11 @@ class SingleWSConnection {
     }
     
     // Immediately notify parent to trigger listeners
+    console.log(`[TradovateWS-${this.brokerAccountId}] handlePositionUpdate: calling onUpdateCallback`);
     if (this.onUpdateCallback) {
       this.onUpdateCallback();
+    } else {
+      console.log(`[TradovateWS-${this.brokerAccountId}] handlePositionUpdate: onUpdateCallback is null!`);
     }
   }
 
@@ -305,8 +315,11 @@ class SingleWSConnection {
     }
     
     // Immediately notify parent to trigger listeners
+    console.log(`[TradovateWS-${this.brokerAccountId}] handleOrderUpdate: calling onUpdateCallback`);
     if (this.onUpdateCallback) {
       this.onUpdateCallback();
+    } else {
+      console.log(`[TradovateWS-${this.brokerAccountId}] handleOrderUpdate: onUpdateCallback is null!`);
     }
   }
 
@@ -341,8 +354,11 @@ class SingleWSConnection {
     }
     
     // Immediately notify parent to trigger listeners
+    console.log(`[TradovateWS-${this.brokerAccountId}] handleAccountUpdate: calling onUpdateCallback`);
     if (this.onUpdateCallback) {
       this.onUpdateCallback();
+    } else {
+      console.log(`[TradovateWS-${this.brokerAccountId}] handleAccountUpdate: onUpdateCallback is null!`);
     }
   }
 
@@ -440,6 +456,8 @@ export class TradovateWSMultiClient {
   }
 
   private aggregateAndNotify() {
+    console.log(`[TradovateWSMulti] aggregateAndNotify called - ${this.positionListeners.size} position listeners, ${this.orderListeners.size} order listeners, ${this.accountListeners.size} account listeners`);
+    
     // Aggregate positions from all connections
     const allPositions: PositionUpdate[] = [];
     for (const connection of this.connections.values()) {
@@ -458,15 +476,20 @@ export class TradovateWSMultiClient {
       allAccounts.push(...connection.getAccounts());
     }
 
+    console.log(`[TradovateWSMulti] Aggregated: ${allPositions.length} positions, ${allOrders.length} orders, ${allAccounts.length} accounts`);
+
     // Always notify listeners if they exist, even if arrays are empty
     // This ensures UI updates when positions/orders/accounts are cleared
     if (this.positionListeners.size > 0) {
+      console.log(`[TradovateWSMulti] Notifying ${this.positionListeners.size} position listeners`);
       this.positionListeners.forEach((cb) => cb(allPositions));
     }
     if (this.orderListeners.size > 0) {
+      console.log(`[TradovateWSMulti] Notifying ${this.orderListeners.size} order listeners`);
       this.orderListeners.forEach((cb) => cb(allOrders));
     }
     if (this.accountListeners.size > 0) {
+      console.log(`[TradovateWSMulti] Notifying ${this.accountListeners.size} account listeners`);
       this.accountListeners.forEach((cb) => cb(allAccounts));
     }
   }
