@@ -515,6 +515,7 @@ const TradingPage: React.FC = () => {
   const refreshTimerRef = useRef<number | null>(null);
   const pnlRefreshTimerRef = useRef<number | null>(null);
   const isRefreshingRef = useRef<boolean>(false);
+  const wsRefreshTimerRef = useRef<number | null>(null); // Debounce timer for WebSocket-triggered refreshes
 
   // Subscribe once, filter using refs
   useEffect(() => {
@@ -639,6 +640,24 @@ const TradingPage: React.FC = () => {
       refreshPnLStream,
     };
 
+    // Single debounced function to handle all WebSocket events
+    const handleWebSocketEvent = () => {
+      // Clear any pending refresh
+      if (wsRefreshTimerRef.current) {
+        window.clearTimeout(wsRefreshTimerRef.current);
+        wsRefreshTimerRef.current = null;
+      }
+
+      // Debounce: wait 500ms after last WebSocket event, then send ONE API request
+      wsRefreshTimerRef.current = window.setTimeout(() => {
+        if (refreshDataRef.current && !isRefreshingRef.current) {
+          console.log(`[TradingPage] WebSocket event detected - triggering single API refresh and PnL SSE reconnect`);
+          refreshDataRef.current.refreshTradingData(true); // true = immediate
+          refreshDataRef.current.refreshPnLStream();
+        }
+      }, 500); // 500ms debounce - all events within this window trigger only one refresh
+    };
+
     const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
       const positionsArray = Array.isArray(allPositions) ? allPositions : [];
       console.log(`[TradingPage] WebSocket positions event received: ${positionsArray.length} positions`);
@@ -646,13 +665,8 @@ const TradingPage: React.FC = () => {
       // Track that WebSocket has sent an event
       wsHasDataRef.current.positions = true;
       
-      // Use WebSocket event ONLY as a trigger - don't use WebSocket data
-      // Trigger API refresh and PnL SSE reconnect immediately
-      if (refreshDataRef.current) {
-        console.log(`[TradingPage] WebSocket positions event detected - triggering immediate API refresh and PnL SSE reconnect`);
-        refreshDataRef.current.refreshTradingData(true); // true = immediate
-        refreshDataRef.current.refreshPnLStream();
-      }
+      // Trigger debounced refresh (will combine with other WebSocket events)
+      handleWebSocketEvent();
       
       // DO NOT update state from WebSocket data - only use API data
     });
@@ -664,13 +678,8 @@ const TradingPage: React.FC = () => {
       // Track that WebSocket has sent an event
       wsHasDataRef.current.orders = true;
       
-      // Use WebSocket event ONLY as a trigger - don't use WebSocket data
-      // Trigger API refresh and PnL SSE reconnect immediately
-      if (refreshDataRef.current) {
-        console.log(`[TradingPage] WebSocket orders event detected - triggering immediate API refresh and PnL SSE reconnect`);
-        refreshDataRef.current.refreshTradingData(true); // true = immediate
-        refreshDataRef.current.refreshPnLStream();
-      }
+      // Trigger debounced refresh (will combine with other WebSocket events)
+      handleWebSocketEvent();
       
       // DO NOT update state from WebSocket data - only use API data
     });
@@ -682,13 +691,8 @@ const TradingPage: React.FC = () => {
       // Track that WebSocket has sent an event
       wsHasDataRef.current.accounts = true;
       
-      // Use WebSocket event ONLY as a trigger - don't use WebSocket data
-      // Trigger API refresh and PnL SSE reconnect immediately
-      if (refreshDataRef.current) {
-        console.log(`[TradingPage] WebSocket accounts event detected - triggering immediate API refresh and PnL SSE reconnect`);
-        refreshDataRef.current.refreshTradingData(true); // true = immediate
-        refreshDataRef.current.refreshPnLStream();
-      }
+      // Trigger debounced refresh (will combine with other WebSocket events)
+      handleWebSocketEvent();
       
       // DO NOT update state from WebSocket data - only use API data
     });
@@ -706,6 +710,10 @@ const TradingPage: React.FC = () => {
       if (pnlRefreshTimerRef.current) {
         window.clearTimeout(pnlRefreshTimerRef.current);
         pnlRefreshTimerRef.current = null;
+      }
+      if (wsRefreshTimerRef.current) {
+        window.clearTimeout(wsRefreshTimerRef.current);
+        wsRefreshTimerRef.current = null;
       }
       isRefreshingRef.current = false;
     };
