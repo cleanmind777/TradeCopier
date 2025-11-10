@@ -626,48 +626,42 @@ const TradingPage: React.FC = () => {
       refreshPnLStream,
     };
 
-    // Single debounced function to handle all WebSocket events
-    // Define it after refreshDataRef is set so it has access to it
+    // Throttled function to handle all WebSocket events
+    // Fire immediately on first event, then ignore events for 500ms
     const handleWebSocketEvent = () => {
       try {
-        // Clear any pending refresh
+        // If there's already a timer, we're in the throttle window - ignore this event
         if (wsRefreshTimerRef.current) {
-          console.log(`[WS TRIGGER] Clearing previous timer (ID: ${wsRefreshTimerRef.current})`);
+          // Timer is already set, meaning we're in the throttle window
+          // Just reset the timer to extend the window
           window.clearTimeout(wsRefreshTimerRef.current);
           wsRefreshTimerRef.current = null;
         }
 
-        // Debounce: wait 500ms after last WebSocket event, then send ONE API request
-        console.log(`[WS TRIGGER] Setting new timer (500ms delay)`);
-        const timerId = window.setTimeout(() => {
-          try {
-            console.log(`[WS TRIGGER] ⚡ Timer fired - sending API requests`);
-            
-            // Clear the timer ref since it's executing
-            wsRefreshTimerRef.current = null;
-            
-            // Use refreshDataRef from closure - it should be set by now
-            const refreshFn = refreshDataRef.current;
-            if (!refreshFn) {
-              console.log(`[WS TRIGGER] ❌ refreshDataRef is null, skipping`);
-              return;
-            }
-            
-            if (isRefreshingRef.current) {
-              console.log(`[WS TRIGGER] ⏳ Refresh in progress, skipping`);
-              return;
-            }
-            
-            console.log(`[WS TRIGGER] ✅ Calling refreshTradingData and refreshPnLStream`);
-            refreshFn.refreshTradingData(true); // true = immediate
-            refreshFn.refreshPnLStream();
-          } catch (error) {
-            console.log(`[WS TRIGGER] ❌ Error in timer callback:`, error);
-          }
-        }, 500); // 500ms debounce - all events within this window trigger only one refresh
+        // If we're already refreshing, skip
+        if (isRefreshingRef.current) {
+          return;
+        }
+
+        // Fire immediately on first event
+        console.log(`[WS TRIGGER] ⚡ Immediate trigger - sending API requests`);
         
-        wsRefreshTimerRef.current = timerId;
-        console.log(`[WS TRIGGER] Timer set with ID: ${timerId}`);
+        const refreshFn = refreshDataRef.current;
+        if (!refreshFn) {
+          console.log(`[WS TRIGGER] ❌ refreshDataRef is null, skipping`);
+          return;
+        }
+        
+        refreshFn.refreshTradingData(true); // true = immediate
+        refreshFn.refreshPnLStream();
+
+        // Set throttle timer - ignore events for next 500ms
+        console.log(`[WS TRIGGER] Setting throttle timer (500ms)`);
+        wsRefreshTimerRef.current = window.setTimeout(() => {
+          wsRefreshTimerRef.current = null;
+          console.log(`[WS TRIGGER] Throttle window ended`);
+        }, 500);
+        
       } catch (error) {
         console.log(`[WS TRIGGER] ❌ Error in handleWebSocketEvent:`, error);
       }
