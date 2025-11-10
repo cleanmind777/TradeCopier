@@ -496,6 +496,9 @@ const TradingPage: React.FC = () => {
   const selectedGroupRef = useRef(selectedGroup);
   const symbolRef = useRef(symbol);
   
+  // Track if WebSocket has sent initial data (to prevent empty arrays from overwriting API data)
+  const wsHasDataRef = useRef({ positions: false, orders: false, accounts: false });
+  
   useEffect(() => {
     selectedGroupRef.current = selectedGroup;
   }, [selectedGroup?.id]);
@@ -516,6 +519,9 @@ const TradingPage: React.FC = () => {
   // Subscribe once, filter using refs
   useEffect(() => {
     if (!user_id) return;
+
+    // Reset WebSocket data flags when user changes
+    wsHasDataRef.current = { positions: false, orders: false, accounts: false };
 
     // Define debounced refresh function - only refresh from API when necessary
     // WebSocket updates should be sufficient for real-time data
@@ -627,6 +633,18 @@ const TradingPage: React.FC = () => {
       const positionsArray = Array.isArray(allPositions) ? allPositions : [];
       console.log(`[TradingPage] WebSocket positions update: ${positionsArray.length} positions`);
       
+      // Only update if WebSocket has data OR if we've already received data from WebSocket before
+      // This prevents empty arrays from overwriting initial API data
+      if (positionsArray.length > 0) {
+        wsHasDataRef.current.positions = true;
+      }
+      
+      // Only update state if WebSocket has sent data at least once
+      if (!wsHasDataRef.current.positions && positionsArray.length === 0) {
+        console.log(`[TradingPage] Skipping WebSocket positions update - no data yet, keeping API data`);
+        return;
+      }
+      
       // Show ALL positions from ALL groups - no group filtering
       // Only filter by symbol if symbol is set
       const currentSymbol = symbolRef.current;
@@ -659,6 +677,17 @@ const TradingPage: React.FC = () => {
     const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
       const ordersArray = Array.isArray(allOrders) ? allOrders : [];
       console.log(`[TradingPage] WebSocket orders update: ${ordersArray.length} orders`);
+      
+      // Only update if WebSocket has data OR if we've already received data from WebSocket before
+      if (ordersArray.length > 0) {
+        wsHasDataRef.current.orders = true;
+      }
+      
+      // Only update state if WebSocket has sent data at least once
+      if (!wsHasDataRef.current.orders && ordersArray.length === 0) {
+        console.log(`[TradingPage] Skipping WebSocket orders update - no data yet, keeping API data`);
+        return;
+      }
       
       const currentGroup = selectedGroupRef.current;
       const currentSymbol = symbolRef.current;
@@ -697,6 +726,17 @@ const TradingPage: React.FC = () => {
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
       const accountsArray = Array.isArray(allAccounts) ? allAccounts : [];
       console.log(`[TradingPage] WebSocket accounts update: ${accountsArray.length} accounts`);
+      
+      // Only update if WebSocket has data OR if we've already received data from WebSocket before
+      if (accountsArray.length > 0) {
+        wsHasDataRef.current.accounts = true;
+      }
+      
+      // Only update state if WebSocket has sent data at least once
+      if (!wsHasDataRef.current.accounts && accountsArray.length === 0) {
+        console.log(`[TradingPage] Skipping WebSocket accounts update - no data yet, keeping API data`);
+        return;
+      }
       
       // Keep ALL accounts (needed for groupMonitorRows realized PnL calculation)
       // Filtering by group will be done in the accounts tab display
