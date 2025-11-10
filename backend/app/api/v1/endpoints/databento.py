@@ -513,7 +513,8 @@ async def get_available_symbols():
 async def stream_pnl_data(
     user_id: UUID,
     request: Request,
-    db: Session
+    positions: list[dict],
+    contract_details_cache: dict[int, dict]
 ) -> AsyncGenerator[str, None]:
     """
     Stream real-time profit and loss (PnL) data for user's positions using DataBento Live API
@@ -521,7 +522,8 @@ async def stream_pnl_data(
     Args:
         user_id: User ID to fetch positions for
         request: FastAPI request object for connection management
-        db: Database session
+        positions: List of position dictionaries (already fetched, no DB session needed)
+        contract_details_cache: Dictionary mapping contract_id to contract details (valuePerPoint, tickSize, symbol)
         
     Returns:
         SSE stream with real-time PnL data
@@ -540,9 +542,7 @@ async def stream_pnl_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
-        # Fetch user's positions (may be Pydantic models or dicts if cached)
-        positions = await get_positions(db, user_id)
-        
+        # Use positions passed in (already fetched, no DB query needed)
         if not positions or len(positions) == 0:
             error_data = {
                 "error": "No open positions",
@@ -552,11 +552,9 @@ async def stream_pnl_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
-        # Helpers to read attrs from model or dict
+        # Helpers to read attrs from dict (positions are already converted to dicts)
         def _get(p, key):
-            if isinstance(p, dict):
-                return p.get(key)
-            return getattr(p, key, None)
+            return p.get(key)
 
         # Extract unique symbols from positions
         symbols = list({(_get(pos, 'symbol')) for pos in positions if (_get(pos, 'netPos') or 0) != 0})
@@ -576,76 +574,23 @@ async def stream_pnl_data(
         # Store position data for PnL calculation grouped by symbol
         # Some users may have multiple positions for the same symbol across accounts
         symbol_to_positions: dict[str, list[dict]] = {}
-        contract_details_cache: dict[int, dict] = {}  # Cache contract details by contractId
         
         for pos in positions:
             net_pos = _get(pos, 'netPos') or 0
             if net_pos != 0:
-                # Get contract details if not cached
                 contract_id = _get(pos, 'contractId')
                 account_id = _get(pos, 'accountId')
                 symbol_name = _get(pos, 'symbol')
                 account_nickname = _get(pos, 'accountNickname')
                 account_display = _get(pos, 'accountDisplayName')
                 net_price = _get(pos, 'netPrice') or 0
-                if contract_id not in contract_details_cache:
-                    try:
-                        # Get broker account for this position
-                        db_sub_broker_account = (
-                            db.query(SubBrokerAccount)
-                            .filter(SubBrokerAccount.sub_account_id == str(account_id))
-                            .first()
-                        )
-                        
-                        if db_sub_broker_account:
-                            db_broker_account = (
-                                db.query(BrokerAccount)
-                                .filter(BrokerAccount.user_broker_id == db_sub_broker_account.user_broker_id)
-                                .first()
-                            )
-                            
-                            if db_broker_account:
-                                # Get contract item details
-                                contract_item = await get_contract_item(
-                                    contract_id, db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
-                                )
-                                
-                                if contract_item:
-                                    # Get product details for multiplier
-                                    contract_maturity = await get_contract_maturity_item(
-                                        contract_item["contractMaturityId"], db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
-                                    )
-                                    
-                                    if contract_maturity:
-                                        product_item = await get_product_item(
-                                            contract_maturity["productId"], db_broker_account.access_token, is_demo=db_sub_broker_account.is_demo
-                                        )
-                                        
-                                        if product_item:
-                                            contract_details_cache[contract_id] = {
-                                                "valuePerPoint": product_item.get("valuePerPoint", 50),  # Default ES multiplier
-                                                "tickSize": product_item.get("tickSize", 0.25),  # Default ES tick size
-                                                "symbol": contract_item.get("name", symbol_name)
-                                            }
-                                            print(f"📊 Contract {contract_id} details: {contract_details_cache[contract_id]}")
-                                        else:
-                                            print(f"⚠️ Could not get product details for contract {contract_id}")
-                                    else:
-                                        print(f"⚠️ Could not get contract maturity for contract {contract_id}")
-                                else:
-                                    print(f"⚠️ Could not get contract item for contract {contract_id}")
-                            else:
-                                print(f"⚠️ Could not find broker account for sub-broker {account_id}")
-                        else:
-                            print(f"⚠️ Could not find sub-broker account for account {account_id}")
-                    except Exception as e:
-                        print(f"❌ Error fetching contract details for {contract_id}: {e}")
-                        # Use default values if we can't fetch contract details
-                        contract_details_cache[contract_id] = {
-                            "valuePerPoint": 50,  # Default ES multiplier
-                            "tickSize": 0.25,  # Default ES tick size
-                            "symbol": symbol_name
-                        }
+                
+                # Get contract details from cache (already fetched before stream started)
+                contract_details = contract_details_cache.get(contract_id, {
+                    "valuePerPoint": 50,  # Default ES multiplier
+                    "tickSize": 0.25,  # Default ES tick size
+                    "symbol": symbol_name
+                })
                 
                 symbol_to_positions.setdefault(symbol_name, []).append({
                     "accountId": account_id,
@@ -854,12 +799,101 @@ async def sse_pnl_stream(
     Returns:
         Server-Sent Events stream with real-time PnL data
     """
-    # Derive symbols from positions for quick market status check
+    # Fetch positions data and contract details BEFORE starting the stream
+    # This allows us to close the database session immediately
+    positions_dict = []
+    contract_details_cache = {}
+    
     try:
         positions = await get_positions(db, user_id)
-        symbols = list({p.symbol for p in positions if getattr(p, "netPos", 0) != 0}) or []
-    except Exception:
+        # Convert Pydantic models to dicts for serialization
+        for pos in positions:
+            if isinstance(pos, dict):
+                positions_dict.append(pos)
+            else:
+                # Convert Pydantic model to dict
+                positions_dict.append({
+                    "id": getattr(pos, "id", None),
+                    "accountId": getattr(pos, "accountId", None),
+                    "contractId": getattr(pos, "contractId", None),
+                    "accountNickname": getattr(pos, "accountNickname", None),
+                    "symbol": getattr(pos, "symbol", None),
+                    "netPos": getattr(pos, "netPos", 0),
+                    "netPrice": getattr(pos, "netPrice", 0),
+                    "bought": getattr(pos, "bought", 0),
+                    "boughtValue": getattr(pos, "boughtValue", 0),
+                    "sold": getattr(pos, "sold", 0),
+                    "soldValue": getattr(pos, "soldValue", 0),
+                    "accountDisplayName": getattr(pos, "accountDisplayName", None),
+                })
+        
+        # Fetch contract details for all positions while we still have the DB session
+        account_ids = {str(p.get("accountId") or getattr(p, "accountId", None)) for p in positions_dict if (p.get("netPos") or getattr(p, "netPos", 0) or 0) != 0}
+        if account_ids:
+            sub_accounts = (
+                db.query(SubBrokerAccount)
+                .filter(SubBrokerAccount.sub_account_id.in_(list(account_ids)))
+                .all()
+            )
+            sub_map = {s.sub_account_id: s for s in sub_accounts}
+            
+            # Get unique contract IDs
+            unique_contracts = {}
+            for pos in positions_dict:
+                net_pos = pos.get("netPos") or 0
+                if net_pos != 0:
+                    contract_id = pos.get("contractId")
+                    account_id = str(pos.get("accountId"))
+                    if contract_id and account_id in sub_map:
+                        sba = sub_map[account_id]
+                        key = (sba.is_demo, contract_id)
+                        if key not in unique_contracts:
+                            unique_contracts[key] = {
+                                "contract_id": contract_id,
+                                "is_demo": sba.is_demo,
+                                "broker_account": db.query(BrokerAccount)
+                                    .filter(BrokerAccount.user_broker_id == sba.user_broker_id)
+                                    .first()
+                            }
+            
+            # Fetch contract details for all unique contracts
+            for (is_demo, contract_id), info in unique_contracts.items():
+                if info["broker_account"]:
+                    try:
+                        contract_item = await get_contract_item(
+                            contract_id, info["broker_account"].access_token, is_demo=is_demo
+                        )
+                        if contract_item:
+                            contract_maturity = await get_contract_maturity_item(
+                                contract_item["contractMaturityId"], info["broker_account"].access_token, is_demo=is_demo
+                            )
+                            if contract_maturity:
+                                product_item = await get_product_item(
+                                    contract_maturity["productId"], info["broker_account"].access_token, is_demo=is_demo
+                                )
+                                if product_item:
+                                    contract_details_cache[contract_id] = {
+                                        "valuePerPoint": product_item.get("valuePerPoint", 50),
+                                        "tickSize": product_item.get("tickSize", 0.25),
+                                        "symbol": contract_item.get("name", "")
+                                    }
+                    except Exception as e:
+                        print(f"⚠️ Error fetching contract details for {contract_id}: {e}")
+                        # Use defaults
+                        contract_details_cache[contract_id] = {
+                            "valuePerPoint": 50,
+                            "tickSize": 0.25,
+                            "symbol": ""
+                        }
+        
+        symbols = list({p.get("symbol") for p in positions_dict if (p.get("netPos") or 0) != 0}) or []
+    except Exception as e:
+        print(f"⚠️ Error fetching positions for PnL stream: {e}")
+        positions_dict = []
         symbols = []
+    
+    # Database session will be automatically closed when the dependency exits
+    
     if symbols:
         open_flag, reason = await is_market_open(symbols)
         if not open_flag and reason == "missing_api_key":
@@ -876,8 +910,9 @@ async def sse_pnl_stream(
                 }
             )
 
+    # Pass positions_dict and contract_details_cache instead of db session to avoid holding connection
     return StreamingResponse(
-        stream_pnl_data(user_id, request, db),
+        stream_pnl_data(user_id, request, positions_dict, contract_details_cache),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
