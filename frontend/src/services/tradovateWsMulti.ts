@@ -482,6 +482,7 @@ export class TradovateWSMultiClient {
     // This ensures UI updates when positions/orders/accounts are cleared
     if (this.positionListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.positionListeners.size} position listeners`);
+      console.log(`[TradovateWSMulti] DEBUG: positionListeners Set contents:`, Array.from(this.positionListeners).map((cb, i) => `Listener ${i}: ${typeof cb}`));
       const positionListenersArray = Array.from(this.positionListeners);
       console.log(`[TradovateWSMulti] Converted to array, length: ${positionListenersArray.length}`);
       for (let i = 0; i < positionListenersArray.length; i++) {
@@ -494,6 +495,8 @@ export class TradovateWSMultiClient {
           console.log(`[TradovateWSMulti] Error in position listener ${i}:`, error);
         }
       }
+    } else {
+      console.log(`[TradovateWSMulti] No position listeners to notify`);
     }
     if (this.orderListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.orderListeners.size} order listeners`);
