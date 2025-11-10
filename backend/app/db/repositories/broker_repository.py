@@ -44,6 +44,7 @@ async def user_add_broker(db: Session, broker_add: BrokerAdd) -> BrokerInfo:
     db.add(db_broker)
     db.commit()
     db.refresh(db_broker)
+    print(f"[Add Broker] Committed broker account {db_broker.id} for user {broker_add.user_id}")
     return db_broker
 
 
@@ -302,47 +303,22 @@ def user_get_all_tokens_for_websocket(
     """Get WebSocket tokens for all broker accounts for a user"""
     from app.utils.tradovate import get_renew_token
     from app.db.repositories.broker_repository import user_refresh_websocket_token
-    from sqlalchemy.future import select
     import asyncio
     
     # IMPORTANT: Ensure we see newly added broker accounts without needing to restart backend.
-    # Use raw SQL query to completely bypass ORM caching and connection pooling issues.
-    # This ensures we always query the database directly and see the latest committed data.
+    # With pool_reset_on_return='commit' in the engine config, connections should be properly reset.
+    # Each FastAPI request gets a new session, so we should see committed data.
     
-    from sqlalchemy import text
+    # Simple query - the session is fresh for each request, and the engine resets connections
+    broker_accounts = (
+        db.query(BrokerAccount)
+        .filter(BrokerAccount.user_id == user_id)
+        .all()
+    )
     
-    # Rollback any pending transaction first to ensure clean state
-    try:
-        db.rollback()
-    except Exception:
-        pass
-    
-    # Use raw SQL query with from_statement() to bypass ORM caching while still getting proper ORM objects
-    # This is the most reliable way to ensure we see newly added broker accounts
-    try:
-        # Use from_statement() to execute raw SQL but get proper ORM objects
-        sql_stmt = text("SELECT * FROM broker_accounts WHERE user_id = :user_id")
-        broker_accounts = (
-            db.query(BrokerAccount)
-            .from_statement(sql_stmt)
-            .params(user_id=str(user_id))
-            .all()
-        )
-        print(f"[WebSocket Tokens] Found {len(broker_accounts)} broker accounts using raw SQL with from_statement")
-    except Exception as e:
-        # Fallback to standard ORM query if raw SQL fails
-        print(f"[WebSocket Tokens] Raw SQL with from_statement failed: {e}, using standard ORM query")
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        # Use select() with execute() for the fallback
-        stmt = select(BrokerAccount).where(BrokerAccount.user_id == user_id)
-        result = db.execute(stmt)
-        broker_accounts = result.scalars().all()
-        print(f"[WebSocket Tokens] Found {len(broker_accounts)} broker accounts using standard ORM query")
-    
-    print(f"[WebSocket Tokens] Found {len(broker_accounts)} broker accounts for user {user_id}")
+    print(f"[WebSocket Tokens] Query returned {len(broker_accounts)} broker accounts for user {user_id}")
+    if len(broker_accounts) > 0:
+        print(f"[WebSocket Tokens] Broker account IDs: {[str(b.id) for b in broker_accounts]}")
     tokens_list = []
     for broker in broker_accounts:
         # Check if any active sub-broker is demo to determine endpoint
