@@ -94,6 +94,7 @@ const TradingPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"positions" | "orders" | "accounts">("positions");
 
   // Aggregated group-position monitoring rows by symbol for ALL groups and ALL symbols
+  // Shows positions from all groups, or "All" if no groups are loaded
   const groupMonitorRows = useMemo(() => {
     if (positions.length === 0) return [] as Array<{
       groupName: string;
@@ -113,8 +114,8 @@ const TradingPage: React.FC = () => {
       totalAccounts: number;
     }> = [];
 
+    // If no groups loaded, show all positions under "All" group
     if (groups.length === 0) {
-      // Fallback: no groups loaded; aggregate ALL positions by symbol under a single "All" group
       const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
       positions.forEach((p) => {
         const sym = (p.symbol || "").toUpperCase();
@@ -122,7 +123,12 @@ const TradingPage: React.FC = () => {
         symbolToPositions.get(sym)!.push(p);
       });
 
-      const realizedPnLTotal = accounts.reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
+      // Get all accounts for realized PnL calculation
+      const allAccountsMap = new Map<number, TradovateAccountsResponse>();
+      accounts.forEach((a) => {
+        allAccountsMap.set(a.accountId, a);
+      });
+      const realizedPnLTotal = Array.from(allAccountsMap.values()).reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
 
       for (const [sym, list] of symbolToPositions.entries()) {
         const totalNetPos = list.reduce((sum, p) => sum + (p.netPos || 0), 0);
@@ -386,6 +392,8 @@ const TradingPage: React.FC = () => {
 
   // Fetch accounts, positions, and orders on mount and when symbol changes
   // Reload all data when symbol changes (like first loading)
+  // Positions: Show ALL groups (only filter by symbol if set)
+  // Accounts/Orders: Filter by selected group (for toolbar display)
   useEffect(() => {
     const load = async () => {
       if (!user_id) return;
@@ -394,13 +402,35 @@ const TradingPage: React.FC = () => {
         const data = await getAllTradingData(user_id);
         if (data) {
           console.log(`[TradingPage] Initial data load: ${data.accounts?.length || 0} accounts, ${data.positions?.length || 0} positions, ${data.orders?.length || 0} orders`);
-          const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
-            data.accounts || [],
-            data.positions || [],
-            data.orders || []
+          
+          // For positions: show ALL groups (only filter by symbol if set)
+          let filteredPositions = data.positions || [];
+          if (symbol && symbol.trim()) {
+            const symbolUpper = symbol.toUpperCase();
+            filteredPositions = filteredPositions.filter((p: any) => {
+              if (!p.symbol) return false;
+              const pSymbol = p.symbol.toUpperCase();
+              if (pSymbol === symbolUpper) return true;
+              const symbolPrefix = symbolUpper.slice(0, 2);
+              return pSymbol.startsWith(symbolPrefix);
+            });
+          }
+          
+          // For accounts: keep ALL accounts (needed for groupMonitorRows realized PnL calculation)
+          // Filtering by group will be done in the accounts tab display
+          const allAccounts = data.accounts || [];
+          
+          // For orders: filter by selected group (for orders tab display)
+          const { filteredOrders } = filterTradingData(
+            [], // accounts already handled above
+            [], // positions already handled above
+            data.orders || [],
+            symbol || undefined,
+            selectedGroup || undefined
           );
-          console.log(`[TradingPage] After filtering: ${filteredAccounts.length} accounts, ${filteredPositions.length} positions, ${filteredOrders.length} orders`);
-          setAccounts(filteredAccounts);
+          
+          console.log(`[TradingPage] After filtering: ${allAccounts.length} accounts (all), ${filteredPositions.length} positions (all groups), ${filteredOrders.length} orders`);
+          setAccounts(allAccounts);
           setPositions(filteredPositions);
           setOrders(filteredOrders);
         }
@@ -464,17 +494,36 @@ const TradingPage: React.FC = () => {
         try {
           const data = await getAllTradingData(user_id);
           if (data) {
-            // Use current symbol and group from refs to ensure we filter correctly
+            // Use current symbol from refs
             const currentSymbol = symbolRef.current;
             const currentGroup = selectedGroupRef.current;
-            const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
-              data.accounts || [],
-              data.positions || [],
+            
+            // For positions: show ALL groups (only filter by symbol if set)
+            let filteredPositions = data.positions || [];
+            if (currentSymbol && currentSymbol.trim()) {
+              const symbolUpper = currentSymbol.toUpperCase();
+              filteredPositions = filteredPositions.filter((p: any) => {
+                if (!p.symbol) return false;
+                const pSymbol = p.symbol.toUpperCase();
+                if (pSymbol === symbolUpper) return true;
+                const symbolPrefix = symbolUpper.slice(0, 2);
+                return pSymbol.startsWith(symbolPrefix);
+              });
+            }
+            
+            // For accounts: keep ALL accounts (needed for groupMonitorRows)
+            const allAccounts = data.accounts || [];
+            
+            // For orders: filter by selected group
+            const { filteredOrders } = filterTradingData(
+              [],
+              [],
               data.orders || [],
               currentSymbol || undefined,
               currentGroup || undefined
             );
-            setAccounts(filteredAccounts);
+            
+            setAccounts(allAccounts);
             setPositions(filteredPositions);
             setOrders(filteredOrders);
           }
@@ -512,19 +561,10 @@ const TradingPage: React.FC = () => {
     const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
       console.log(`[TradingPage] WebSocket positions update: ${allPositions?.length || 0} positions`);
       
-      const currentGroup = selectedGroupRef.current;
+      // Show ALL positions from ALL groups - no group filtering
+      // Only filter by symbol if symbol is set
       const currentSymbol = symbolRef.current;
-
-      // Filter by selected group's account IDs (only if group is selected)
       let filtered = allPositions || [];
-      if (currentGroup && currentGroup.sub_brokers.length > 0) {
-        const groupAccountIds = new Set(
-          currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
-        );
-        filtered = filtered.filter((p: any) => 
-          groupAccountIds.has(p.accountId)
-        );
-      }
 
       // Filter by selected symbol (if symbol is set) - use exact match or prefix match
       if (currentSymbol && currentSymbol.trim()) {
@@ -540,7 +580,7 @@ const TradingPage: React.FC = () => {
         });
       }
 
-      console.log(`[TradingPage] Filtered positions: ${filtered.length}`);
+      console.log(`[TradingPage] Positions (all groups): ${filtered.length}`);
       setPositions(filtered);
 
       // Only refresh PnL stream when positions change (debounced)
@@ -590,21 +630,10 @@ const TradingPage: React.FC = () => {
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
       console.log(`[TradingPage] WebSocket accounts update: ${allAccounts?.length || 0} accounts`);
       
-      const currentGroup = selectedGroupRef.current;
-
-      // Filter by selected group's account IDs (only if group is selected)
-      let filtered = allAccounts || [];
-      if (currentGroup && currentGroup.sub_brokers.length > 0) {
-        const groupAccountIds = new Set(
-          currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
-        );
-        filtered = filtered.filter((a: any) => 
-          groupAccountIds.has(a.accountId)
-        );
-      }
-
-      console.log(`[TradingPage] Filtered accounts: ${filtered.length}`);
-      setAccounts(filtered);
+      // Keep ALL accounts (needed for groupMonitorRows realized PnL calculation)
+      // Filtering by group will be done in the accounts tab display
+      console.log(`[TradingPage] Accounts (all groups): ${allAccounts?.length || 0}`);
+      setAccounts(allAccounts || []);
 
       // Don't refresh from API - WebSocket data is sufficient for real-time updates
     });
@@ -1990,36 +2019,49 @@ const TradingPage: React.FC = () => {
                     </tbody>
                   </table>
                 )}
-                {activeTab === 'accounts' && (
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="text-left font-semibold px-3 py-2">Account</th>
-                        <th className="text-left font-semibold px-3 py-2">Display</th>
-                        <th className="text-right font-semibold px-3 py-2">Amount</th>
-                        <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
-                        <th className="text-right font-semibold px-3 py-2">Week PnL</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {accounts.length > 0 ? (
-                        accounts.map((account) => (
-                          <tr key={account.id} className="border-b last:border-0">
-                            <td className="px-3 py-2">{account.accountNickname}</td>
-                            <td className="px-3 py-2">{account.accountDisplayName}</td>
-                            <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
-                            <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
-                            <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
-                          </tr>
-                        ))
-                      ) : (
+                {activeTab === 'accounts' && (() => {
+                  // Filter accounts by selected group for display (if group is selected)
+                  let displayAccounts = accounts;
+                  if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
+                    const groupAccountIds = new Set(
+                      selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+                    );
+                    displayAccounts = accounts.filter((a: any) => 
+                      groupAccountIds.has(a.accountId)
+                    );
+                  }
+                  
+                  return (
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-slate-600">
                         <tr>
-                          <td colSpan={5} className="px-3 py-4 text-center text-slate-500">No accounts found</td>
+                          <th className="text-left font-semibold px-3 py-2">Account</th>
+                          <th className="text-left font-semibold px-3 py-2">Display</th>
+                          <th className="text-right font-semibold px-3 py-2">Amount</th>
+                          <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
+                          <th className="text-right font-semibold px-3 py-2">Week PnL</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
+                      </thead>
+                      <tbody>
+                        {displayAccounts.length > 0 ? (
+                          displayAccounts.map((account) => (
+                            <tr key={account.id} className="border-b last:border-0">
+                              <td className="px-3 py-2">{account.accountNickname}</td>
+                              <td className="px-3 py-2">{account.accountDisplayName}</td>
+                              <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
+                              <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
+                              <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="px-3 py-4 text-center text-slate-500">No accounts found</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  );
+                })()}
                       </div>
                       </div>
 
