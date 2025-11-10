@@ -304,13 +304,28 @@ def user_get_all_tokens_for_websocket(
     from app.db.repositories.broker_repository import user_refresh_websocket_token
     import asyncio
     
-    # IMPORTANT: Expire all cached objects to ensure we see newly added broker accounts
-    # This prevents the need to restart the backend after adding a new account
-    db.expire_all()
+    # IMPORTANT: Force a fresh database connection to see newly added broker accounts.
+    # The issue is that connection pooling might reuse a connection that has stale data
+    # in its transaction cache. By invalidating the connection, we force SQLAlchemy to
+    # get a fresh connection from the pool, which will see the latest committed data.
+    try:
+        # Invalidate the current connection to force a fresh one
+        db.connection().invalidate()
+    except Exception:
+        # If invalidation fails, just continue - the query should still work
+        pass
     
+    # Ensure session is clean
+    db.expire_all()
+    db.commit()  # Commit any pending operations to ensure clean state
+    
+    # Query for broker accounts - the connection invalidation above ensures we get fresh data
     broker_accounts = (
-        db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
+        db.query(BrokerAccount)
+        .filter(BrokerAccount.user_id == user_id)
+        .all()
     )
+    
     print(f"[WebSocket Tokens] Found {len(broker_accounts)} broker accounts for user {user_id}")
     tokens_list = []
     for broker in broker_accounts:
