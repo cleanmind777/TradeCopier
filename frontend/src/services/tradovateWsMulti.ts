@@ -433,10 +433,8 @@ export class TradovateWSMultiClient {
       }
     }
 
-    // Start periodic aggregation if not already started
-    if (!this.updateTimer) {
-      this.startAggregation();
-    }
+    // Don't start periodic aggregation - only notify on actual WebSocket updates
+    // The periodic timer was causing too many unnecessary API requests
     
     // Immediately trigger aggregation to notify listeners with current state
     // This ensures UI gets initial data even if WebSocket hasn't received updates yet
@@ -457,16 +455,8 @@ export class TradovateWSMultiClient {
     }
   }
 
-  private startAggregation() {
-    if (this.updateTimer) {
-      clearInterval(this.updateTimer);
-    }
-    // Aggregate and notify listeners every 500ms to reduce overhead
-    // WebSocket updates are already real-time, so we don't need 100ms polling
-    this.updateTimer = setInterval(() => {
-      this.aggregateAndNotify();
-    }, 500);
-  }
+  // Removed periodic aggregation - only notify on actual WebSocket updates
+  // This prevents unnecessary API requests when there are no real updates
 
   private aggregateAndNotify() {
     console.log(`[TradovateWSMulti] aggregateAndNotify called - ${this.positionListeners.size} position listeners, ${this.orderListeners.size} order listeners, ${this.accountListeners.size} account listeners`);
