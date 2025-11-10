@@ -429,15 +429,17 @@ async def get_sub_brokers_for_group(
 
 def exit_position(db: Session, exit_position_data: ExitPosition):
     # Use the same string conversion as in exit_Position
+    # IMPORTANT: Filter by is_active=True to match exit_Position query
     account_id_str = str(exit_position_data.accountId)
     
     db_sub_broker = (
         db.query(SubBrokerAccount)
         .filter(SubBrokerAccount.sub_account_id == account_id_str)
+        .filter(SubBrokerAccount.is_active == True)  # Only use active accounts
         .first()
     )
     if db_sub_broker is None:
-        print(f"[FLATTEN DEBUG] Sub broker account not found for accountId {account_id_str}")
+        print(f"[FLATTEN DEBUG] Sub broker account not found for accountId {account_id_str} (is_active=True)")
         return {"error": "Sub broker account not found", "accountId": exit_position_data.accountId}
     
     # Get the broker account for this sub-broker account

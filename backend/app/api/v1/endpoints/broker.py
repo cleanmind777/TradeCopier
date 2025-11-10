@@ -107,21 +107,35 @@ async def exit_Position(
     
     # First, identify which broker accounts are involved
     # Use the same string conversion logic as exit_position
+    # IMPORTANT: Filter by is_active=True to match exit_position query
     account_ids = [str(pos.accountId) for pos in exit_positions_data]
     sub_brokers = (
         db.query(SubBrokerAccount)
         .filter(SubBrokerAccount.sub_account_id.in_(account_ids))
+        .filter(SubBrokerAccount.is_active == True)  # Only use active accounts
         .all()
     )
     
     # Create mapping: accountId (as string) -> broker_id for quick lookup
     # Ensure we use the same string format as exit_position will use
+    # If there are duplicates (same accountId pointing to different brokers), use the first one
+    # and log a warning - this indicates a data integrity issue
     account_to_broker = {}
     for sb in sub_brokers:
         # Normalize account_id to string to match exit_position query
         account_id_str = str(sb.sub_account_id)
-        account_to_broker[account_id_str] = sb.broker_account_id
-        print(f"[FLATTEN DEBUG] Mapping: accountId {account_id_str} -> broker {sb.broker_account_id}")
+        
+        # If we already have a mapping for this accountId, log a warning
+        if account_id_str in account_to_broker:
+            existing_broker_id = account_to_broker[account_id_str]
+            if existing_broker_id != sb.broker_account_id:
+                print(f"[FLATTEN DEBUG] WARNING: Duplicate SubBrokerAccount found for accountId {account_id_str}")
+                print(f"[FLATTEN DEBUG]   Existing: broker {existing_broker_id}")
+                print(f"[FLATTEN DEBUG]   New: broker {sb.broker_account_id}")
+                print(f"[FLATTEN DEBUG]   Using first mapping (broker {existing_broker_id})")
+        else:
+            account_to_broker[account_id_str] = sb.broker_account_id
+            print(f"[FLATTEN DEBUG] Mapping: accountId {account_id_str} -> broker {sb.broker_account_id}")
     
     # Group by broker_account_id and refresh tokens for each unique broker
     broker_ids = set(sb.broker_account_id for sb in sub_brokers)
@@ -148,9 +162,12 @@ async def exit_Position(
                 refreshed_brokers.add(broker_id)
                 print(f"[FLATTEN DEBUG] Pre-refreshed token for broker {broker_id}, token_preview={new_tokens.access_token[:20]}...")
             else:
-                print(f"[FLATTEN DEBUG] Token refresh returned None for broker {broker_id}")
+                print(f"[FLATTEN DEBUG] Token refresh returned None for broker {broker_id} - token may be expired/invalid")
+                # Even if refresh returns None, we should still try to use the existing token
+                # The exit_position function will try to refresh it again
         except Exception as e:
             print(f"[FLATTEN DEBUG] Could not pre-refresh token for broker {broker_id}: {e}")
+            # Continue - exit_position will try to refresh it
     
     print(f"[FLATTEN DEBUG] Successfully pre-refreshed {len(refreshed_brokers)}/{len(broker_ids)} brokers")
     
