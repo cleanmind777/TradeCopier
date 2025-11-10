@@ -428,18 +428,24 @@ async def get_sub_brokers_for_group(
 
 
 def exit_position(db: Session, exit_position_data: ExitPosition):
+    # Use the same string conversion as in exit_Position
+    account_id_str = str(exit_position_data.accountId)
+    
     db_sub_broker = (
         db.query(SubBrokerAccount)
-        .filter(SubBrokerAccount.sub_account_id == str(exit_position_data.accountId))
+        .filter(SubBrokerAccount.sub_account_id == account_id_str)
         .first()
     )
     if db_sub_broker is None:
+        print(f"[FLATTEN DEBUG] Sub broker account not found for accountId {account_id_str}")
         return {"error": "Sub broker account not found", "accountId": exit_position_data.accountId}
     
     # Get the broker account for this sub-broker account
     # IMPORTANT: Always query fresh from database to ensure we get the latest token
     # This is critical when multiple positions share the same broker account
     broker_id = db_sub_broker.broker_account_id
+    
+    print(f"[FLATTEN DEBUG] accountId={account_id_str}, found broker_id={broker_id} from SubBrokerAccount")
     
     # Expire any cached broker account object to force fresh query
     # This ensures we get the token that was just refreshed in exitall endpoint
@@ -452,9 +458,10 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
         .first()
     )
     if db_broker is None:
+        print(f"[FLATTEN DEBUG] Broker account {broker_id} not found in database")
         return {"error": "Broker account not found", "broker_account_id": broker_id}
     
-    print(f"[FLATTEN DEBUG] accountId={exit_position_data.accountId}, broker_id={db_broker.id}, symbol={exit_position_data.symbol}, token_preview={db_broker.access_token[:20] if db_broker.access_token else 'None'}...")
+    print(f"[FLATTEN DEBUG] accountId={account_id_str}, broker_id={db_broker.id}, symbol={exit_position_data.symbol}, token_preview={db_broker.access_token[:20] if db_broker.access_token else 'None'}...")
     
     # Get access token from the fresh query
     access_token = db_broker.access_token

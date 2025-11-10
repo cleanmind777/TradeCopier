@@ -106,6 +106,7 @@ async def exit_Position(
     from app.models.broker_account import SubBrokerAccount, BrokerAccount
     
     # First, identify which broker accounts are involved
+    # Use the same string conversion logic as exit_position
     account_ids = [str(pos.accountId) for pos in exit_positions_data]
     sub_brokers = (
         db.query(SubBrokerAccount)
@@ -113,27 +114,45 @@ async def exit_Position(
         .all()
     )
     
-    # Create mapping: accountId -> broker_id for quick lookup
-    account_to_broker = {sb.sub_account_id: sb.broker_account_id for sb in sub_brokers}
+    # Create mapping: accountId (as string) -> broker_id for quick lookup
+    # Ensure we use the same string format as exit_position will use
+    account_to_broker = {}
+    for sb in sub_brokers:
+        # Normalize account_id to string to match exit_position query
+        account_id_str = str(sb.sub_account_id)
+        account_to_broker[account_id_str] = sb.broker_account_id
+        print(f"[FLATTEN DEBUG] Mapping: accountId {account_id_str} -> broker {sb.broker_account_id}")
     
     # Group by broker_account_id and refresh tokens for each unique broker
     broker_ids = set(sb.broker_account_id for sb in sub_brokers)
     print(f"[FLATTEN DEBUG] Found {len(broker_ids)} unique broker accounts: {list(broker_ids)}")
     
     # Pre-refresh tokens for each unique broker
+    refreshed_brokers = set()
     for broker_id in broker_ids:
         db_broker = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
-        if db_broker and db_broker.access_token:
-            try:
-                from app.utils.tradovate import get_renew_token
-                new_tokens = get_renew_token(db_broker.access_token)
-                if new_tokens:
-                    db_broker.access_token = new_tokens.access_token
-                    db_broker.md_access_token = new_tokens.md_access_token
-                    db.commit()
-                    print(f"[FLATTEN DEBUG] Pre-refreshed token for broker {broker_id}, token_preview={new_tokens.access_token[:20]}...")
-            except Exception as e:
-                print(f"[FLATTEN DEBUG] Could not pre-refresh token for broker {broker_id}: {e}")
+        if not db_broker:
+            print(f"[FLATTEN DEBUG] Broker {broker_id} not found in database")
+            continue
+        if not db_broker.access_token:
+            print(f"[FLATTEN DEBUG] Broker {broker_id} has no access_token")
+            continue
+        try:
+            from app.utils.tradovate import get_renew_token
+            new_tokens = get_renew_token(db_broker.access_token)
+            if new_tokens:
+                db_broker.access_token = new_tokens.access_token
+                db_broker.md_access_token = new_tokens.md_access_token
+                db.commit()
+                db.refresh(db_broker)  # Ensure the object is refreshed
+                refreshed_brokers.add(broker_id)
+                print(f"[FLATTEN DEBUG] Pre-refreshed token for broker {broker_id}, token_preview={new_tokens.access_token[:20]}...")
+            else:
+                print(f"[FLATTEN DEBUG] Token refresh returned None for broker {broker_id}")
+        except Exception as e:
+            print(f"[FLATTEN DEBUG] Could not pre-refresh token for broker {broker_id}: {e}")
+    
+    print(f"[FLATTEN DEBUG] Successfully pre-refreshed {len(refreshed_brokers)}/{len(broker_ids)} brokers")
     
     errors: list[dict] = []
     # Now process each position - each will use its own broker's token
