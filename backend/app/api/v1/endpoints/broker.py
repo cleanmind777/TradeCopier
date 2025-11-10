@@ -99,7 +99,7 @@ async def exit_Position(
     if not exit_positions_data:
         raise HTTPException(status_code=404, detail="Positions not found")
     
-    print(f"[Backend] Processing {len(exit_positions_data)} exit positions")
+    print(f"[FLATTEN DEBUG] Processing {len(exit_positions_data)} exit positions")
     
     # Group positions by broker account to refresh tokens once per broker
     # This ensures each broker's token is refreshed before processing any positions from that broker
@@ -113,10 +113,14 @@ async def exit_Position(
         .all()
     )
     
+    # Create mapping: accountId -> broker_id for quick lookup
+    account_to_broker = {sb.sub_account_id: sb.broker_account_id for sb in sub_brokers}
+    
     # Group by broker_account_id and refresh tokens for each unique broker
     broker_ids = set(sb.broker_account_id for sb in sub_brokers)
-    print(f"[Backend] Found {len(broker_ids)} unique broker accounts for exit positions")
+    print(f"[FLATTEN DEBUG] Found {len(broker_ids)} unique broker accounts: {list(broker_ids)}")
     
+    # Pre-refresh tokens for each unique broker
     for broker_id in broker_ids:
         db_broker = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
         if db_broker and db_broker.access_token:
@@ -127,14 +131,15 @@ async def exit_Position(
                     db_broker.access_token = new_tokens.access_token
                     db_broker.md_access_token = new_tokens.md_access_token
                     db.commit()
-                    db.refresh(db_broker)
-                    print(f"[Backend] Pre-refreshed token for broker {broker_id}")
+                    print(f"[FLATTEN DEBUG] Pre-refreshed token for broker {broker_id}, token_preview={new_tokens.access_token[:20]}...")
             except Exception as e:
-                print(f"[Backend] Warning: Could not pre-refresh token for broker {broker_id}: {e}")
+                print(f"[FLATTEN DEBUG] Could not pre-refresh token for broker {broker_id}: {e}")
     
     errors: list[dict] = []
-    # Now process each position (tokens are already refreshed)
+    # Now process each position - each will use its own broker's token
     for exit_position_data in exit_positions_data:
+        expected_broker_id = account_to_broker.get(str(exit_position_data.accountId))
+        print(f"[FLATTEN DEBUG] Processing accountId {exit_position_data.accountId}, expected broker {expected_broker_id}")
         response = exit_position(db, exit_position_data)
         if response is None:
             errors.append({"error": "Exit order failed", "accountId": exit_position_data.accountId, "symbol": exit_position_data.symbol})
