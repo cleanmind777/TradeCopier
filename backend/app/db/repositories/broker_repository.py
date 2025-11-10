@@ -307,6 +307,7 @@ def user_get_all_tokens_for_websocket(
     broker_accounts = (
         db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
     )
+    print(f"[WebSocket Tokens] Found {len(broker_accounts)} broker accounts for user {user_id}")
     tokens_list = []
     for broker in broker_accounts:
         # Check if any active sub-broker is demo to determine endpoint
@@ -367,6 +368,10 @@ def user_get_all_tokens_for_websocket(
                 is_demo=is_demo
             )
             tokens_list.append(websocket_token)
+            print(f"[WebSocket Tokens] Added token for broker {broker.id} (is_demo: {is_demo})")
+        else:
+            print(f"[WebSocket Tokens] Skipping broker {broker.id} - missing tokens (access_token: {bool(access_token_to_use)}, md_access_token: {bool(md_access_token_to_use)})")
+    print(f"[WebSocket Tokens] Returning {len(tokens_list)} tokens for user {user_id}")
     return tokens_list
 
 def user_get_tokens_for_group(

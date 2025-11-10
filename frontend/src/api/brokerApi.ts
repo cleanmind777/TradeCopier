@@ -321,16 +321,24 @@ export const getAllWebSocketTokens = async (
 ): Promise<Tokens[] | null> => {
   try {
     const params = { user_id };
+    console.log(`[brokerApi] Fetching WebSocket tokens from ${API_BASE}/broker/websockettoken/all for user: ${user_id}`);
     const response = await axios.get(`${API_BASE}/broker/websockettoken/all`, {
       params,
     });
+    console.log(`[brokerApi] Received response:`, response.data);
+    console.log(`[brokerApi] Response type:`, typeof response.data, Array.isArray(response.data));
+    if (response.data) {
+      console.log(`[brokerApi] Response length:`, Array.isArray(response.data) ? response.data.length : 'not an array');
+    }
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      console.error("Get All Tokens:", error.response?.data);
+      console.error("[brokerApi] Get All Tokens Error:", error.response?.data);
+      console.error("[brokerApi] Error Status:", error.response?.status);
+      console.error("[brokerApi] Error Headers:", error.response?.headers);
       // Don't alert to avoid spam
     } else {
-      console.error("Unexpected Get All Tokens error:", error);
+      console.error("[brokerApi] Unexpected Get All Tokens error:", error);
     }
     return null;
   }

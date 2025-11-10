@@ -247,7 +247,9 @@ def get_Tokens_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
     status_code=status.HTTP_200_OK,
 )
 def get_All_Tokens_for_websocket(user_id: UUID, db: Session = Depends(get_db)):
-    return get_all_tokens_for_websocket(db, user_id)
+    tokens = get_all_tokens_for_websocket(db, user_id)
+    print(f"[WebSocket Tokens API] Returning {len(tokens)} tokens for user {user_id}")
+    return tokens
 
 @router.get(
     "/websockettoken/group/{group_id}",
