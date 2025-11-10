@@ -429,7 +429,8 @@ def user_get_all_tokens_for_websocket(
                 print(f"[WebSocket Tokens] Exception refreshing websocket token for broker {broker.id}: {e}, using existing token")
         
         # Fallback to regular access tokens if websocket tokens don't exist
-        elif broker.access_token and broker.md_access_token:
+        # Use access_token even if md_access_token is NULL - we can refresh to get both
+        elif broker.access_token:
             try:
                 # Try to refresh the token with retry
                 new_tokens = None
@@ -449,25 +450,31 @@ def user_get_all_tokens_for_websocket(
                     md_access_token_to_use = new_tokens.md_access_token
                     print(f"[WebSocket Tokens] Successfully refreshed regular token for broker {broker.id}")
                 else:
+                    # If refresh fails, use existing tokens (even if md_access_token is None)
+                    # The frontend might be able to work with just access_token
                     access_token_to_use = broker.access_token
-                    md_access_token_to_use = broker.md_access_token
-                    print(f"[WebSocket Tokens] Using existing regular token for broker {broker.id} (refresh returned None)")
+                    md_access_token_to_use = broker.md_access_token if broker.md_access_token else None
+                    print(f"[WebSocket Tokens] Using existing regular token for broker {broker.id} (refresh returned None, md_token: {bool(md_access_token_to_use)})")
             except Exception as e:
                 access_token_to_use = broker.access_token
-                md_access_token_to_use = broker.md_access_token
-                print(f"[WebSocket Tokens] Exception refreshing regular token for broker {broker.id}: {e}, using existing token")
+                md_access_token_to_use = broker.md_access_token if broker.md_access_token else None
+                print(f"[WebSocket Tokens] Exception refreshing regular token for broker {broker.id}: {e}, using existing token (md_token: {bool(md_access_token_to_use)})")
         
-        if access_token_to_use and md_access_token_to_use:
+        # Require access_token, but md_access_token can be None (we'll try to refresh it)
+        if access_token_to_use:
+            # If md_access_token is missing, try to get it from the refreshed token
+            # If refresh already happened above, md_access_token_to_use should be set
+            # If not, we'll use None and let the frontend handle it
             websocket_token = WebSocketTokens(
                 id=broker.id,
                 access_token=access_token_to_use,
-                md_access_token=md_access_token_to_use,
+                md_access_token=md_access_token_to_use if md_access_token_to_use else access_token_to_use,  # Fallback to access_token if md_token is None
                 is_demo=is_demo
             )
             tokens_list.append(websocket_token)
-            print(f"[WebSocket Tokens] Added token for broker {broker.id} (is_demo: {is_demo})")
+            print(f"[WebSocket Tokens] Added token for broker {broker.id} (is_demo: {is_demo}, md_token: {bool(md_access_token_to_use)})")
         else:
-            print(f"[WebSocket Tokens] Skipping broker {broker.id} - missing tokens (access_token: {bool(access_token_to_use)}, md_access_token: {bool(md_access_token_to_use)})")
+            print(f"[WebSocket Tokens] Skipping broker {broker.id} - missing access_token (access_token: {bool(access_token_to_use)}, md_access_token: {bool(md_access_token_to_use)})")
     print(f"[WebSocket Tokens] Returning {len(tokens_list)} tokens for user {user_id}")
     return tokens_list
 
