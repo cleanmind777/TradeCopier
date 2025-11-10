@@ -482,10 +482,12 @@ export class TradovateWSMultiClient {
     // This ensures UI updates when positions/orders/accounts are cleared
     if (this.positionListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.positionListeners.size} position listeners`);
-      this.positionListeners.forEach((cb, index) => {
+      const positionListenersArray = Array.from(this.positionListeners);
+      positionListenersArray.forEach((cb, index) => {
         console.log(`[TradovateWSMulti] Calling position listener ${index}`);
         try {
           cb(allPositions);
+          console.log(`[TradovateWSMulti] Position listener ${index} completed`);
         } catch (error) {
           console.log(`[TradovateWSMulti] Error in position listener ${index}:`, error);
         }
@@ -493,10 +495,12 @@ export class TradovateWSMultiClient {
     }
     if (this.orderListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.orderListeners.size} order listeners`);
-      this.orderListeners.forEach((cb, index) => {
+      const orderListenersArray = Array.from(this.orderListeners);
+      orderListenersArray.forEach((cb, index) => {
         console.log(`[TradovateWSMulti] Calling order listener ${index}`);
         try {
           cb(allOrders);
+          console.log(`[TradovateWSMulti] Order listener ${index} completed`);
         } catch (error) {
           console.log(`[TradovateWSMulti] Error in order listener ${index}:`, error);
         }
@@ -504,10 +508,12 @@ export class TradovateWSMultiClient {
     }
     if (this.accountListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.accountListeners.size} account listeners`);
-      this.accountListeners.forEach((cb, index) => {
+      const accountListenersArray = Array.from(this.accountListeners);
+      accountListenersArray.forEach((cb, index) => {
         console.log(`[TradovateWSMulti] Calling account listener ${index}`);
         try {
           cb(allAccounts);
+          console.log(`[TradovateWSMulti] Account listener ${index} completed`);
         } catch (error) {
           console.log(`[TradovateWSMulti] Error in account listener ${index}:`, error);
         }
