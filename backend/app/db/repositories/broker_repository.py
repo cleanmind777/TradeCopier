@@ -329,36 +329,64 @@ def user_get_all_tokens_for_websocket(
         # Prefer websocket tokens if available, but refresh them first
         if broker.websocket_access_token:
             try:
-                # Try to refresh the token
-                new_tokens = get_renew_token(broker.websocket_access_token)
+                # Try to refresh the token with retry
+                new_tokens = None
+                for attempt in range(2):  # Try twice
+                    try:
+                        new_tokens = get_renew_token(broker.websocket_access_token)
+                        if new_tokens:
+                            break
+                    except Exception as e:
+                        if attempt == 0:
+                            print(f"[WebSocket Tokens] Token refresh attempt {attempt + 1} failed for broker {broker.id}: {e}")
+                        else:
+                            print(f"[WebSocket Tokens] Token refresh failed for broker {broker.id} after 2 attempts: {e}")
+                
                 if new_tokens:
                     # Update in database (async function needs to be called properly)
                     # For now, use the refreshed tokens directly
                     access_token_to_use = new_tokens.access_token
                     md_access_token_to_use = new_tokens.md_access_token
+                    print(f"[WebSocket Tokens] Successfully refreshed websocket token for broker {broker.id}")
                 else:
                     # Use existing token if refresh failed
                     access_token_to_use = broker.websocket_access_token
                     md_access_token_to_use = broker.websocket_md_access_token
-            except Exception:
+                    print(f"[WebSocket Tokens] Using existing websocket token for broker {broker.id} (refresh returned None)")
+            except Exception as e:
                 # Fallback to existing token
                 access_token_to_use = broker.websocket_access_token
                 md_access_token_to_use = broker.websocket_md_access_token
+                print(f"[WebSocket Tokens] Exception refreshing websocket token for broker {broker.id}: {e}, using existing token")
         
         # Fallback to regular access tokens if websocket tokens don't exist
         elif broker.access_token and broker.md_access_token:
             try:
-                # Try to refresh the token
-                new_tokens = get_renew_token(broker.access_token)
+                # Try to refresh the token with retry
+                new_tokens = None
+                for attempt in range(2):  # Try twice
+                    try:
+                        new_tokens = get_renew_token(broker.access_token)
+                        if new_tokens:
+                            break
+                    except Exception as e:
+                        if attempt == 0:
+                            print(f"[WebSocket Tokens] Token refresh attempt {attempt + 1} failed for broker {broker.id}: {e}")
+                        else:
+                            print(f"[WebSocket Tokens] Token refresh failed for broker {broker.id} after 2 attempts: {e}")
+                
                 if new_tokens:
                     access_token_to_use = new_tokens.access_token
                     md_access_token_to_use = new_tokens.md_access_token
+                    print(f"[WebSocket Tokens] Successfully refreshed regular token for broker {broker.id}")
                 else:
                     access_token_to_use = broker.access_token
                     md_access_token_to_use = broker.md_access_token
-            except Exception:
+                    print(f"[WebSocket Tokens] Using existing regular token for broker {broker.id} (refresh returned None)")
+            except Exception as e:
                 access_token_to_use = broker.access_token
                 md_access_token_to_use = broker.md_access_token
+                print(f"[WebSocket Tokens] Exception refreshing regular token for broker {broker.id}: {e}, using existing token")
         
         if access_token_to_use and md_access_token_to_use:
             websocket_token = WebSocketTokens(

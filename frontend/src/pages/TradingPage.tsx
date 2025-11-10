@@ -1595,6 +1595,9 @@ const TradingPage: React.FC = () => {
 
   // Connect WebSocket to all broker accounts when user_id changes
   const prevUserIdRef = useRef<string | null>(null);
+  const tokenFetchAttemptRef = useRef<number>(0);
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000; // 1 second
   
   useEffect(() => {
     const currentUserId = user_id;
@@ -1602,54 +1605,86 @@ const TradingPage: React.FC = () => {
     // Only connect if userId actually changed
     if (currentUserId && prevUserIdRef.current !== currentUserId) {
       prevUserIdRef.current = currentUserId;
+      tokenFetchAttemptRef.current = 0;
       
-      // Fetch tokens for all broker accounts and connect
-      console.log(`[TradingPage] Fetching WebSocket tokens for user: ${currentUserId}`);
-      getAllWebSocketTokens(currentUserId).then((tokensList) => {
-        console.log(`[TradingPage] Received ${tokensList?.length || 0} WebSocket tokens:`, tokensList);
-        if (tokensList && Array.isArray(tokensList) && tokensList.length > 0) {
-          // Filter out any invalid tokens and map to ensure all required fields are present
-          const validTokens = tokensList.filter(t => 
-            t && 
-            t.id && 
-            t.access_token && 
-            t.md_access_token
-          );
+      // Fetch tokens for all broker accounts and connect with retry logic
+      const fetchTokensWithRetry = async (attempt: number = 0): Promise<void> => {
+        console.log(`[TradingPage] Fetching WebSocket tokens for user: ${currentUserId} (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        
+        try {
+          const tokensList = await getAllWebSocketTokens(currentUserId);
+          console.log(`[TradingPage] Received ${tokensList?.length || 0} WebSocket tokens:`, tokensList);
           
-          if (validTokens.length === 0) {
-            console.error(`[TradingPage] No valid tokens found. All tokens are missing required fields.`);
-            console.error(`[TradingPage] Token structure:`, tokensList.map(t => ({
-              hasId: !!t?.id,
-              hasAccessToken: !!t?.access_token,
-              hasMdToken: !!t?.md_access_token,
-              keys: t ? Object.keys(t) : []
-            })));
-            return;
+          if (tokensList && Array.isArray(tokensList) && tokensList.length > 0) {
+            // Filter out any invalid tokens and map to ensure all required fields are present
+            const validTokens = tokensList.filter(t => 
+              t && 
+              t.id && 
+              t.access_token && 
+              t.md_access_token
+            );
+            
+            if (validTokens.length === 0) {
+              console.error(`[TradingPage] No valid tokens found. All tokens are missing required fields.`);
+              console.error(`[TradingPage] Token structure:`, tokensList.map(t => ({
+                hasId: !!t?.id,
+                hasAccessToken: !!t?.access_token,
+                hasMdToken: !!t?.md_access_token,
+                keys: t ? Object.keys(t) : []
+              })));
+              
+              // Retry if we haven't exceeded max retries
+              if (attempt < MAX_RETRIES - 1) {
+                console.log(`[TradingPage] Retrying token fetch in ${RETRY_DELAY}ms...`);
+                setTimeout(() => fetchTokensWithRetry(attempt + 1), RETRY_DELAY);
+              }
+              return;
+            }
+            
+            // Map tokens to ensure is_demo has a default value
+            const mappedTokens = validTokens.map(t => ({
+              id: String(t.id), // Ensure id is a string
+              access_token: t.access_token,
+              md_access_token: t.md_access_token,
+              is_demo: t.is_demo ?? false
+            }));
+            
+            console.log(`[TradingPage] Mapped ${mappedTokens.length} valid tokens, connecting to WebSocket...`);
+            tradovateWSMultiClient.connectAll(currentUserId, mappedTokens);
+            tokenFetchAttemptRef.current = 0; // Reset on success
+          } else {
+            console.error(`[TradingPage] No tokens received or empty list. Response:`, tokensList);
+            
+            // Retry if we haven't exceeded max retries
+            if (attempt < MAX_RETRIES - 1) {
+              console.log(`[TradingPage] Retrying token fetch in ${RETRY_DELAY}ms...`);
+              setTimeout(() => fetchTokensWithRetry(attempt + 1), RETRY_DELAY);
+            } else {
+              console.error(`[TradingPage] Failed to fetch tokens after ${MAX_RETRIES} attempts`);
+            }
+          }
+        } catch (error: any) {
+          console.error(`[TradingPage] Error fetching WebSocket tokens (attempt ${attempt + 1}):`, error);
+          if (error.response) {
+            console.error(`[TradingPage] API Error Response:`, error.response.data);
+            console.error(`[TradingPage] API Error Status:`, error.response.status);
           }
           
-          // Map tokens to ensure is_demo has a default value
-          const mappedTokens = validTokens.map(t => ({
-            id: String(t.id), // Ensure id is a string
-            access_token: t.access_token,
-            md_access_token: t.md_access_token,
-            is_demo: t.is_demo ?? false
-          }));
-          
-          console.log(`[TradingPage] Mapped ${mappedTokens.length} valid tokens, connecting to WebSocket...`);
-          tradovateWSMultiClient.connectAll(currentUserId, mappedTokens);
-        } else {
-          console.error(`[TradingPage] No tokens received or empty list. Response:`, tokensList);
+          // Retry if we haven't exceeded max retries and it's not a 4xx error (client error)
+          if (attempt < MAX_RETRIES - 1 && (!error.response || error.response.status >= 500)) {
+            console.log(`[TradingPage] Retrying token fetch in ${RETRY_DELAY}ms...`);
+            setTimeout(() => fetchTokensWithRetry(attempt + 1), RETRY_DELAY);
+          } else {
+            console.error(`[TradingPage] Failed to fetch tokens after ${attempt + 1} attempts`);
+          }
         }
-      }).catch((error) => {
-        console.error(`[TradingPage] Error fetching WebSocket tokens:`, error);
-        if (error.response) {
-          console.error(`[TradingPage] API Error Response:`, error.response.data);
-          console.error(`[TradingPage] API Error Status:`, error.response.status);
-        }
-      });
+      };
+      
+      fetchTokensWithRetry(0);
     } else if (!currentUserId) {
       // If userId is cleared, disconnect all
       prevUserIdRef.current = null;
+      tokenFetchAttemptRef.current = 0;
       tradovateWSMultiClient.disconnectAll();
     }
 
