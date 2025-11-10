@@ -262,8 +262,12 @@ const DashboardPage: React.FC = () => {
     return () => {
       if (idleInterval) window.clearInterval(idleInterval);
       if (timeoutId) window.clearTimeout(timeoutId);
-      // Note: We don't close the EventSource here when positions change
-      // because we're reconnecting in the start() function
+      // Close EventSource when component unmounts (user leaves DashboardPage)
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
     };
   }, [user_id, positions, isInitialLoad]);
 

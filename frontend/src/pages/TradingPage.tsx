@@ -1625,10 +1625,8 @@ const TradingPage: React.FC = () => {
     }
 
     return () => {
-      // Only disconnect on unmount
-      if (!user_id) {
-        tradovateWSMultiClient.disconnectAll();
-      }
+      // Disconnect WebSocket when component unmounts (user leaves TradingPage)
+      tradovateWSMultiClient.disconnectAll();
     };
   }, [user_id]);
 
