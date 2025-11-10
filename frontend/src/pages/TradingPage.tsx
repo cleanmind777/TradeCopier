@@ -157,57 +157,76 @@ const TradingPage: React.FC = () => {
         });
       }
     } else {
-      // Loop through ALL groups
+      // Create a map of accountId -> group name for quick lookup
+      const accountToGroupMap = new Map<number, string>();
       for (const group of groups) {
-        const accountIdSet = new Set(
-          group.sub_brokers.map((s) => parseInt(s.sub_account_id))
-        );
+        group.sub_brokers.forEach((s) => {
+          const accountId = parseInt(s.sub_account_id);
+          accountToGroupMap.set(accountId, group.name);
+        });
+      }
 
-        // Group positions by symbol for accounts in this group
-        const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
-        positions
-          .filter((p) => accountIdSet.has(Number(p.accountId)))
-          .forEach((p) => {
-            const sym = (p.symbol || "").toUpperCase();
-            if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
-            symbolToPositions.get(sym)!.push(p);
-          });
+      // Group positions by (groupName, symbol) - show ALL positions
+      const groupSymbolToPositions = new Map<string, TradovatePositionListResponse[]>();
+      positions.forEach((p) => {
+        const accountId = Number(p.accountId);
+        const groupName = accountToGroupMap.get(accountId) || "All"; // Use "All" for accounts not in any group
+        const sym = (p.symbol || "").toUpperCase();
+        const key = `${groupName}:${sym}`;
+        if (!groupSymbolToPositions.has(key)) {
+          groupSymbolToPositions.set(key, []);
+        }
+        groupSymbolToPositions.get(key)!.push(p);
+      });
+
+      // Process each (group, symbol) combination
+      for (const [key, list] of groupSymbolToPositions.entries()) {
+        const [groupName, sym] = key.split(":");
+        
+        // Get account IDs for this group (or all accounts if "All")
+        let groupAccountIds: Set<number>;
+        if (groupName === "All") {
+          // For "All" group, use all account IDs from positions in this list
+          groupAccountIds = new Set(list.map(p => Number(p.accountId)));
+        } else {
+          const group = groups.find(g => g.name === groupName);
+          groupAccountIds = new Set(
+            group?.sub_brokers.map((s) => parseInt(s.sub_account_id)) || []
+          );
+        }
 
         // Sum realized PnL across accounts in group
         const realizedPnLTotal = accounts
-          .filter((a) => accountIdSet.has(Number(a.accountId)))
+          .filter((a) => groupAccountIds.has(Number(a.accountId)))
           .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
 
-        // For each symbol in this group
-        for (const [sym, list] of symbolToPositions.entries()) {
-          // Open Position: total net position (sum of netPos values)
-          const totalNetPos = list.reduce((sum, p) => sum + (Number(p.netPos) || 0), 0);
+        // Open Position: total net position (sum of netPos values)
+        const totalNetPos = list.reduce((sum, p) => sum + (Number(p.netPos) || 0), 0);
 
-          // Open PnL: sum from live pnlData if available
-          let openPnLSum = 0;
-          list.forEach((p) => {
-            const key1 = `${p.symbol}:${p.accountId}`;
-            const live = pnlData[key1];
-            if (live && typeof live.unrealizedPnL === "number") {
-              openPnLSum += live.unrealizedPnL;
-            }
-          });
+        // Open PnL: sum from live pnlData if available
+        let openPnLSum = 0;
+        list.forEach((p) => {
+          const key1 = `${p.symbol}:${p.accountId}`;
+          const live = pnlData[key1];
+          if (live && typeof live.unrealizedPnL === "number") {
+            openPnLSum += live.unrealizedPnL;
+          }
+        });
 
-          // Count unique accounts in this group that have a non-zero position for this symbol
-          const accountsWithPositions = new Set<number>();
-          list.forEach((p) => {
-            if ((Number(p.netPos) || 0) !== 0) accountsWithPositions.add(Number(p.accountId));
-          });
+        // Count unique accounts that have a non-zero position for this symbol
+        const accountsWithPositions = new Set<number>();
+        list.forEach((p) => {
+          if ((Number(p.netPos) || 0) !== 0) accountsWithPositions.add(Number(p.accountId));
+        });
 
-          rows.push({
-            groupName: group.name,
-            symbol: sym,
-            openPositions: totalNetPos, // Total net position for this group/symbol
-            openPnL: openPnLSum,
-            realizedPnL: realizedPnLTotal,
-            totalAccounts: accountsWithPositions.size,
-          });
-        }
+        rows.push({
+          groupName: groupName,
+          symbol: sym,
+          openPositions: totalNetPos,
+          openPnL: openPnLSum,
+          realizedPnL: realizedPnLTotal,
+          totalAccounts: accountsWithPositions.size,
+        });
       }
     }
 
@@ -2021,6 +2040,12 @@ const TradingPage: React.FC = () => {
               </div>
                       </div>
             <div className="p-3 overflow-x-auto">
+              {/* Debug info - remove in production */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mb-2 text-xs text-gray-500">
+                  Debug: positions={positions.length}, orders={orders.length}, accounts={accounts.length}, groupMonitorRows={groupMonitorRows.length}
+                </div>
+              )}
               {activeTab === 'positions' && (
                 groupMonitorRows.length > 0 ? (
                   <table className="w-full text-sm">
