@@ -517,7 +517,25 @@ async def execute_market_order(db: Session, order: MarketOrder):
         except Exception as e:
             errors.append({"error": f"Invalid order payload: {e}", "sub_broker_id": str(subbroker.sub_broker_id)})
             continue
+        # Get access token and refresh if needed
         access_token = db_broker_account.access_token
+        if not access_token:
+            errors.append({"error": "No access token available", "sub_broker_id": str(subbroker.sub_broker_id)})
+            continue
+        
+        # Try to refresh token before using it
+        try:
+            new_tokens = get_renew_token(access_token)
+            if new_tokens:
+                access_token = new_tokens.access_token
+                # Update token in database for future use
+                db_broker_account.access_token = new_tokens.access_token
+                db_broker_account.md_access_token = new_tokens.md_access_token
+                db.commit()
+                print(f"[Backend] Refreshed access token for broker {db_broker_account.id} before market order execution")
+        except Exception as e:
+            print(f"[Backend] Warning: Could not refresh token for broker {db_broker_account.id}: {e}, using existing token")
+        
         is_demo = db_subbroker_account.is_demo
         response = await tradovate_execute_market_order(tradovate_order, access_token, is_demo)
         if response is None or (isinstance(response, dict) and response.get("error")):
@@ -547,7 +565,26 @@ async def execute_limit_order(db: Session, order: LimitOrder):
         db_broker_account = (
             db.query(BrokerAccount).filter(BrokerAccount.id == db_subroker_account.broker_account_id).first()
         )
+        if not db_broker_account:
+            continue
+        # Get access token and refresh if needed
         access_token = db_broker_account.access_token
+        if not access_token:
+            continue
+        
+        # Try to refresh token before using it
+        try:
+            new_tokens = get_renew_token(access_token)
+            if new_tokens:
+                access_token = new_tokens.access_token
+                # Update token in database for future use
+                db_broker_account.access_token = new_tokens.access_token
+                db_broker_account.md_access_token = new_tokens.md_access_token
+                db.commit()
+                print(f"[Backend] Refreshed access token for broker {db_broker_account.id} before limit order execution")
+        except Exception as e:
+            print(f"[Backend] Warning: Could not refresh token for broker {db_broker_account.id}: {e}, using existing token")
+        
         is_demo = db_subroker_account.is_demo
         response = await tradovate_execute_limit_order(tradovate_order, access_token, is_demo)
     
@@ -587,7 +624,26 @@ async def execute_limit_order_with_sltp(db: Session, order: LimitOrderWithSLTP):
         db_broker_account = (
             db.query(BrokerAccount).filter(BrokerAccount.id == db_subroker_account.broker_account_id).first()
         )
+        if not db_broker_account:
+            continue
+        # Get access token and refresh if needed
         access_token = db_broker_account.access_token
+        if not access_token:
+            continue
+        
+        # Try to refresh token before using it
+        try:
+            new_tokens = get_renew_token(access_token)
+            if new_tokens:
+                access_token = new_tokens.access_token
+                # Update token in database for future use
+                db_broker_account.access_token = new_tokens.access_token
+                db_broker_account.md_access_token = new_tokens.md_access_token
+                db.commit()
+                print(f"[Backend] Refreshed access token for broker {db_broker_account.id} before SLTP order execution")
+        except Exception as e:
+            print(f"[Backend] Warning: Could not refresh token for broker {db_broker_account.id}: {e}, using existing token")
+        
         is_demo = db_subroker_account.is_demo
         response = await tradovate_execute_limit_order_with_sltp(tradovate_order, access_token, is_demo)
     

@@ -1607,21 +1607,45 @@ const TradingPage: React.FC = () => {
       console.log(`[TradingPage] Fetching WebSocket tokens for user: ${currentUserId}`);
       getAllWebSocketTokens(currentUserId).then((tokensList) => {
         console.log(`[TradingPage] Received ${tokensList?.length || 0} WebSocket tokens:`, tokensList);
-        if (tokensList && tokensList.length > 0) {
+        if (tokensList && Array.isArray(tokensList) && tokensList.length > 0) {
+          // Filter out any invalid tokens and map to ensure all required fields are present
+          const validTokens = tokensList.filter(t => 
+            t && 
+            t.id && 
+            t.access_token && 
+            t.md_access_token
+          );
+          
+          if (validTokens.length === 0) {
+            console.error(`[TradingPage] No valid tokens found. All tokens are missing required fields.`);
+            console.error(`[TradingPage] Token structure:`, tokensList.map(t => ({
+              hasId: !!t?.id,
+              hasAccessToken: !!t?.access_token,
+              hasMdToken: !!t?.md_access_token,
+              keys: t ? Object.keys(t) : []
+            })));
+            return;
+          }
+          
           // Map tokens to ensure is_demo has a default value
-          const mappedTokens = tokensList.map(t => ({
-            id: t.id,
+          const mappedTokens = validTokens.map(t => ({
+            id: String(t.id), // Ensure id is a string
             access_token: t.access_token,
             md_access_token: t.md_access_token,
             is_demo: t.is_demo ?? false
           }));
-          console.log(`[TradingPage] Mapped ${mappedTokens.length} tokens, connecting to WebSocket...`);
+          
+          console.log(`[TradingPage] Mapped ${mappedTokens.length} valid tokens, connecting to WebSocket...`);
           tradovateWSMultiClient.connectAll(currentUserId, mappedTokens);
         } else {
-          console.log(`[TradingPage] No tokens received or empty list`);
+          console.error(`[TradingPage] No tokens received or empty list. Response:`, tokensList);
         }
       }).catch((error) => {
         console.error(`[TradingPage] Error fetching WebSocket tokens:`, error);
+        if (error.response) {
+          console.error(`[TradingPage] API Error Response:`, error.response.data);
+          console.error(`[TradingPage] API Error Status:`, error.response.status);
+        }
       });
     } else if (!currentUserId) {
       // If userId is cleared, disconnect all
