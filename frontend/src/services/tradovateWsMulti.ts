@@ -214,8 +214,19 @@ class SingleWSConnection {
               this.handleOrderUpdate(entity, eventType);
             } else if (entityType === "cashBalance" || entityType === "account") {
               this.handleAccountUpdate(entity, eventType, entityType);
+            } else if (entityType === "marginSnapshot") {
+              // marginSnapshot indicates account margin changed - trigger account update callback
+              // The marginSnapshot entity has accountId in the id field
+              if (this.onUpdateCallback) {
+                this.onUpdateCallback();
+              }
+            } else if (entityType === "auditUserAction") {
+              // auditUserAction indicates a trade action (BuyMarket, SellMarket, etc.) - trigger update
+              // This means positions/orders likely changed, so trigger all updates
+              if (this.onUpdateCallback) {
+                this.onUpdateCallback();
+              }
             }
-            // Note: marginSnapshot and other entity types don't trigger updates
           }
           
           // Handle initial sync data (might come as arrays)
