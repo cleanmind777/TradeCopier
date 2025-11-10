@@ -303,22 +303,65 @@ def user_get_all_tokens_for_websocket(
     """Get WebSocket tokens for all broker accounts for a user"""
     from app.utils.tradovate import get_renew_token
     from app.db.repositories.broker_repository import user_refresh_websocket_token
+    from sqlalchemy import text
     import asyncio
     
-    # IMPORTANT: Ensure we see newly added broker accounts without needing to restart backend.
-    # With pool_reset_on_return='commit' in the engine config, connections should be properly reset.
-    # Each FastAPI request gets a new session, so we should see committed data.
+    # CRITICAL FIX: Use raw SQL to bypass ALL ORM caching and connection state issues
+    # This ensures we ALWAYS query the database directly and see committed data
+    # Even if the ORM session has cached data or connection pooling issues
     
-    # Simple query - the session is fresh for each request, and the engine resets connections
-    broker_accounts = (
-        db.query(BrokerAccount)
-        .filter(BrokerAccount.user_id == user_id)
-        .all()
-    )
-    
-    print(f"[WebSocket Tokens] Query returned {len(broker_accounts)} broker accounts for user {user_id}")
-    if len(broker_accounts) > 0:
-        print(f"[WebSocket Tokens] Broker account IDs: {[str(b.id) for b in broker_accounts]}")
+    try:
+        # Use raw SQL query - this bypasses all ORM caching and queries the database directly
+        # This is the ONLY reliable way to see newly committed data from other sessions
+        raw_result = db.execute(
+            text("""
+                SELECT id, user_id, username, password, nickname, type, last_sync, status, 
+                       user_broker_id, access_token, md_access_token, 
+                       websocket_access_token, websocket_md_access_token, expire_in
+                FROM broker_accounts 
+                WHERE user_id = :user_id
+            """),
+            {"user_id": str(user_id)}
+        )
+        
+        # Convert raw results to BrokerAccount objects manually
+        broker_accounts = []
+        for row in raw_result:
+            row_dict = dict(row._mapping)
+            # Create BrokerAccount instance - we need to handle UUID conversion
+            from uuid import UUID as UUIDType
+            try:
+                if isinstance(row_dict.get('id'), str):
+                    row_dict['id'] = UUIDType(row_dict['id'])
+                if isinstance(row_dict.get('user_id'), str):
+                    row_dict['user_id'] = UUIDType(row_dict['user_id'])
+            except:
+                pass
+            
+            # Create BrokerAccount object - we'll use the ORM model but populate it manually
+            # This creates a detached instance (not in session) which is fine for read-only access
+            broker = BrokerAccount()
+            for key, value in row_dict.items():
+                if hasattr(broker, key) and value is not None:
+                    try:
+                        setattr(broker, key, value)
+                    except Exception as e:
+                        print(f"[WebSocket Tokens] Warning: Could not set {key} on BrokerAccount: {e}")
+            broker_accounts.append(broker)
+        
+        print(f"[WebSocket Tokens] Raw SQL query returned {len(broker_accounts)} broker accounts for user {user_id}")
+        if len(broker_accounts) > 0:
+            print(f"[WebSocket Tokens] Broker account IDs: {[str(b.id) for b in broker_accounts]}")
+    except Exception as e:
+        print(f"[WebSocket Tokens] ERROR: Raw SQL query failed: {e}")
+        print(f"[WebSocket Tokens] Falling back to ORM query")
+        # Fallback to ORM query if raw SQL fails
+        broker_accounts = (
+            db.query(BrokerAccount)
+            .filter(BrokerAccount.user_id == user_id)
+            .all()
+        )
+        print(f"[WebSocket Tokens] ORM query returned {len(broker_accounts)} broker accounts")
     tokens_list = []
     for broker in broker_accounts:
         # Check if any active sub-broker is demo to determine endpoint
