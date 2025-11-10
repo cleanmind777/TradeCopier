@@ -118,21 +118,52 @@ async def exit_Position(
     
     # Create mapping: accountId (as string) -> broker_id for quick lookup
     # Ensure we use the same string format as exit_position will use
-    # If there are duplicates (same accountId pointing to different brokers), use the first one
-    # and log a warning - this indicates a data integrity issue
+    # If there are duplicates (same accountId pointing to different brokers), prefer the one with a refreshable token
     account_to_broker = {}
     for sb in sub_brokers:
         # Normalize account_id to string to match exit_position query
         account_id_str = str(sb.sub_account_id)
         
-        # If we already have a mapping for this accountId, log a warning
+        # If we already have a mapping for this accountId, check which broker has a valid token
         if account_id_str in account_to_broker:
             existing_broker_id = account_to_broker[account_id_str]
             if existing_broker_id != sb.broker_account_id:
                 print(f"[FLATTEN DEBUG] WARNING: Duplicate SubBrokerAccount found for accountId {account_id_str}")
                 print(f"[FLATTEN DEBUG]   Existing: broker {existing_broker_id}")
                 print(f"[FLATTEN DEBUG]   New: broker {sb.broker_account_id}")
-                print(f"[FLATTEN DEBUG]   Using first mapping (broker {existing_broker_id})")
+                
+                # Check which broker has a refreshable token
+                existing_broker = db.query(BrokerAccount).filter(BrokerAccount.id == existing_broker_id).first()
+                new_broker = db.query(BrokerAccount).filter(BrokerAccount.id == sb.broker_account_id).first()
+                
+                existing_token_valid = False
+                new_token_valid = False
+                
+                if existing_broker and existing_broker.access_token:
+                    try:
+                        from app.utils.tradovate import get_renew_token
+                        test_refresh = get_renew_token(existing_broker.access_token)
+                        existing_token_valid = test_refresh is not None
+                    except:
+                        pass
+                
+                if new_broker and new_broker.access_token:
+                    try:
+                        from app.utils.tradovate import get_renew_token
+                        test_refresh = get_renew_token(new_broker.access_token)
+                        new_token_valid = test_refresh is not None
+                    except:
+                        pass
+                
+                # Prefer the broker with a valid, refreshable token
+                if new_token_valid and not existing_token_valid:
+                    account_to_broker[account_id_str] = sb.broker_account_id
+                    print(f"[FLATTEN DEBUG]   Using NEW broker {sb.broker_account_id} (has refreshable token)")
+                elif existing_token_valid and not new_token_valid:
+                    print(f"[FLATTEN DEBUG]   Using EXISTING broker {existing_broker_id} (has refreshable token)")
+                else:
+                    # Both or neither have valid tokens, use the first one
+                    print(f"[FLATTEN DEBUG]   Using first mapping (broker {existing_broker_id})")
         else:
             account_to_broker[account_id_str] = sb.broker_account_id
             print(f"[FLATTEN DEBUG] Mapping: accountId {account_id_str} -> broker {sb.broker_account_id}")

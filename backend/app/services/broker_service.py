@@ -432,14 +432,55 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
     # IMPORTANT: Filter by is_active=True to match exit_Position query
     account_id_str = str(exit_position_data.accountId)
     
-    db_sub_broker = (
+    # Get all active SubBrokerAccount records for this accountId
+    # If there are duplicates, prefer the one with a refreshable token
+    sub_brokers = (
         db.query(SubBrokerAccount)
         .filter(SubBrokerAccount.sub_account_id == account_id_str)
         .filter(SubBrokerAccount.is_active == True)  # Only use active accounts
-        .first()
+        .all()
     )
-    if db_sub_broker is None:
+    
+    if not sub_brokers:
         print(f"[FLATTEN DEBUG] Sub broker account not found for accountId {account_id_str} (is_active=True)")
+        return {"error": "Sub broker account not found", "accountId": exit_position_data.accountId}
+    
+    # If there are multiple records, prefer the one with a refreshable token
+    db_sub_broker = None
+    if len(sub_brokers) == 1:
+        db_sub_broker = sub_brokers[0]
+    else:
+        print(f"[FLATTEN DEBUG] Found {len(sub_brokers)} active SubBrokerAccount records for accountId {account_id_str}, selecting best one")
+        # Find the SubBrokerAccount with a refreshable token
+        best_sub_broker = None
+        best_broker = None
+        best_token_valid = False
+        
+        for sb in sub_brokers:
+            broker = db.query(BrokerAccount).filter(BrokerAccount.id == sb.broker_account_id).first()
+            if broker and broker.access_token:
+                try:
+                    from app.utils.tradovate import get_renew_token
+                    test_refresh = get_renew_token(broker.access_token)
+                    if test_refresh is not None:
+                        # This broker has a refreshable token
+                        if not best_token_valid:
+                            best_sub_broker = sb
+                            best_broker = broker
+                            best_token_valid = True
+                            print(f"[FLATTEN DEBUG]   Selected broker {sb.broker_account_id} (has refreshable token)")
+                except:
+                    pass
+        
+        # If we found one with a valid token, use it; otherwise use the first one
+        if best_sub_broker:
+            db_sub_broker = best_sub_broker
+        else:
+            db_sub_broker = sub_brokers[0]
+            print(f"[FLATTEN DEBUG]   No broker with refreshable token found, using first one (broker {db_sub_broker.broker_account_id})")
+    
+    if db_sub_broker is None:
+        print(f"[FLATTEN DEBUG] Could not determine SubBrokerAccount for accountId {account_id_str}")
         return {"error": "Sub broker account not found", "accountId": exit_position_data.accountId}
     
     # Get the broker account for this sub-broker account
