@@ -435,6 +435,9 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
     )
     if db_sub_broker is None:
         return {"error": "Sub broker account not found", "accountId": exit_position_data.accountId}
+    
+    # Get the broker account for this sub-broker account
+    # Use merge to ensure we get the latest version from database (important for concurrent updates)
     db_broker = (
         db.query(BrokerAccount)
         .filter(BrokerAccount.id == db_sub_broker.broker_account_id)
@@ -442,7 +445,33 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
     )
     if db_broker is None:
         return {"error": "Broker account not found", "broker_account_id": db_sub_broker.broker_account_id}
+    
+    print(f"[Backend] Processing exit position for accountId {exit_position_data.accountId}, broker {db_broker.id}, symbol {exit_position_data.symbol}")
+    
+    # Get access token and refresh if needed BEFORE placing order
+    # Always refresh the broker object from database to get latest token (important if multiple positions share same broker)
+    db.refresh(db_broker)
     access_token = db_broker.access_token
+    if not access_token:
+        return {"error": "No access token available", "accountId": exit_position_data.accountId}
+    
+    # Try to refresh token before using it
+    try:
+        new_tokens = get_renew_token(access_token)
+        if new_tokens:
+            access_token = new_tokens.access_token
+            # Update token in database for future use
+            db_broker.access_token = new_tokens.access_token
+            db_broker.md_access_token = new_tokens.md_access_token
+            db.commit()
+            # Refresh again to ensure we have the latest value
+            db.refresh(db_broker)
+            print(f"[Backend] Refreshed access token for broker {db_broker.id} (accountId {exit_position_data.accountId}) before exit position")
+        else:
+            print(f"[Backend] Token refresh returned None for broker {db_broker.id}, using existing token")
+    except Exception as e:
+        print(f"[Backend] Warning: Could not refresh token for broker {db_broker.id}: {e}, using existing token")
+    
     # Build full payload including accountSpec as required by provider
     order_payload = {
         "accountId": int(db_sub_broker.sub_account_id),
@@ -454,18 +483,25 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
         "isAutomated": bool(exit_position_data.isAutomated),
     }
     response = place_order(access_token, db_sub_broker.is_demo, order_payload)
+    
+    # If we still get a 401 error after refresh, try one more time with a fresh refresh
     if isinstance(response, dict) and response.get("status") == 401:
-        # Try to renew token and retry once
-        new_tokens = get_renew_token(access_token)
-        if new_tokens:
-            try:
-                db_broker.access_token = new_tokens.access_token
-                db_broker.md_access_token = new_tokens.md_access_token
-                db.commit()
-                db.refresh(db_broker)
-            except Exception:
-                db.rollback()
-            return place_order(db_broker.access_token, db_sub_broker.is_demo, order_payload)
+        print(f"[Backend] Still got 401 after token refresh, attempting one more refresh")
+        try:
+            new_tokens = get_renew_token(access_token)
+            if new_tokens:
+                try:
+                    db_broker.access_token = new_tokens.access_token
+                    db_broker.md_access_token = new_tokens.md_access_token
+                    db.commit()
+                    db.refresh(db_broker)
+                    response = place_order(db_broker.access_token, db_sub_broker.is_demo, order_payload)
+                except Exception as e:
+                    db.rollback()
+                    print(f"[Backend] Error updating token in database: {e}")
+        except Exception as e:
+            print(f"[Backend] Error refreshing token on retry: {e}")
+    
     return response
 
 

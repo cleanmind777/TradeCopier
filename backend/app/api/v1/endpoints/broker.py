@@ -98,7 +98,42 @@ async def exit_Position(
 ):
     if not exit_positions_data:
         raise HTTPException(status_code=404, detail="Positions not found")
+    
+    print(f"[Backend] Processing {len(exit_positions_data)} exit positions")
+    
+    # Group positions by broker account to refresh tokens once per broker
+    # This ensures each broker's token is refreshed before processing any positions from that broker
+    from app.models.broker_account import SubBrokerAccount, BrokerAccount
+    
+    # First, identify which broker accounts are involved
+    account_ids = [str(pos.accountId) for pos in exit_positions_data]
+    sub_brokers = (
+        db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.sub_account_id.in_(account_ids))
+        .all()
+    )
+    
+    # Group by broker_account_id and refresh tokens for each unique broker
+    broker_ids = set(sb.broker_account_id for sb in sub_brokers)
+    print(f"[Backend] Found {len(broker_ids)} unique broker accounts for exit positions")
+    
+    for broker_id in broker_ids:
+        db_broker = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
+        if db_broker and db_broker.access_token:
+            try:
+                from app.utils.tradovate import get_renew_token
+                new_tokens = get_renew_token(db_broker.access_token)
+                if new_tokens:
+                    db_broker.access_token = new_tokens.access_token
+                    db_broker.md_access_token = new_tokens.md_access_token
+                    db.commit()
+                    db.refresh(db_broker)
+                    print(f"[Backend] Pre-refreshed token for broker {broker_id}")
+            except Exception as e:
+                print(f"[Backend] Warning: Could not pre-refresh token for broker {broker_id}: {e}")
+    
     errors: list[dict] = []
+    # Now process each position (tokens are already refreshed)
     for exit_position_data in exit_positions_data:
         response = exit_position(db, exit_position_data)
         if response is None:
