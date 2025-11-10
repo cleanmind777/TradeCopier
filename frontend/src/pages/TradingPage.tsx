@@ -320,9 +320,6 @@ const TradingPage: React.FC = () => {
     // Get sub-broker account IDs from selected group
     const groupAccountIds = selectedGroup.sub_brokers.map(sub => sub.sub_account_id);
     
-    console.log("🔍 Calculating PnL for group:", selectedGroup.name);
-    console.log("📊 Group account IDs:", groupAccountIds);
-    console.log("📈 Available PnL data keys:", Object.keys(pnlData));
 
     // Calculate PnL for all positions in the group
     Object.values(pnlData).forEach((data: any) => {
@@ -340,12 +337,9 @@ const TradingPage: React.FC = () => {
         const pnl = data.unrealizedPnL || 0;
         totalPnL += pnl;
         
-        console.log(`💰 Account ${accountIdStr} (${data.symbol}): $${pnl}`);
-        
         // If symbol matches, add to symbol-specific PnL
         if (symbol && data.symbol === symbol) {
           symbolPnL += pnl;
-          console.log(`🎯 Symbol ${symbol} PnL: $${pnl}`);
         }
         
         // Track the latest update time
@@ -355,7 +349,6 @@ const TradingPage: React.FC = () => {
       }
     });
 
-    console.log(`📊 Total Group PnL: $${totalPnL}, Symbol PnL: $${symbolPnL}`);
 
     setGroupPnL({
       totalPnL: Math.round(totalPnL * 100) / 100, // Round to 2 decimal places
@@ -419,15 +412,12 @@ const TradingPage: React.FC = () => {
       setIsPageLoading(true);
       try {
         const data = await getAllTradingData(user_id);
-        console.log(`[TradingPage] getAllTradingData response:`, data);
         
         if (data) {
           // Ensure we have arrays, not null
           const rawAccounts = Array.isArray(data.accounts) ? data.accounts : [];
           const rawPositions = Array.isArray(data.positions) ? data.positions : [];
           const rawOrders = Array.isArray(data.orders) ? data.orders : [];
-          
-          console.log(`[TradingPage] Initial data load: ${rawAccounts.length} accounts, ${rawPositions.length} positions, ${rawOrders.length} orders`);
           
           // For positions: show ALL groups (only filter by symbol if set)
           let filteredPositions = rawPositions;
@@ -469,19 +459,17 @@ const TradingPage: React.FC = () => {
             });
           }
           
-          console.log(`[TradingPage] After filtering: ${allAccounts.length} accounts (all), ${filteredPositions.length} positions (all groups), ${filteredOrders.length} orders`);
           setAccounts(allAccounts);
           setPositions(filteredPositions);
           setOrders(filteredOrders);
         } else {
-          console.warn("[TradingPage] getAllTradingData returned null or undefined");
           // Set empty arrays to ensure UI shows "no data" message
           setAccounts([]);
           setPositions([]);
           setOrders([]);
         }
       } catch (error) {
-        console.error("[TradingPage] Error loading initial trading data:", error);
+        // Silent error handling
       } finally {
         setIsPageLoading(false);
       }
@@ -516,6 +504,7 @@ const TradingPage: React.FC = () => {
   const pnlRefreshTimerRef = useRef<number | null>(null);
   const isRefreshingRef = useRef<boolean>(false);
   const wsRefreshTimerRef = useRef<number | null>(null); // Debounce timer for WebSocket-triggered refreshes
+  const handleWebSocketEventRef = useRef<(() => void) | null>(null); // Ref to store WebSocket event handler
 
   // Subscribe once, filter using refs
   useEffect(() => {
@@ -528,7 +517,6 @@ const TradingPage: React.FC = () => {
     const refreshTradingData = async (immediate = false) => {
       // Prevent overlapping requests
       if (isRefreshingRef.current) {
-        console.log("[TradingPage] Refresh already in progress, skipping");
         return;
       }
 
@@ -543,7 +531,6 @@ const TradingPage: React.FC = () => {
         
         isRefreshingRef.current = true;
         try {
-          console.log("[TradingPage] Refreshing trading data from API...");
           const data = await getAllTradingData(user_id);
           if (data) {
             // Use current symbol from refs
@@ -554,8 +541,6 @@ const TradingPage: React.FC = () => {
             const rawAccounts = Array.isArray(data.accounts) ? data.accounts : [];
             const rawPositions = Array.isArray(data.positions) ? data.positions : [];
             const rawOrders = Array.isArray(data.orders) ? data.orders : [];
-            
-            console.log(`[TradingPage] API refresh: ${rawAccounts.length} accounts, ${rawPositions.length} positions, ${rawOrders.length} orders`);
             
             // For positions: show ALL groups (only filter by symbol if set)
             let filteredPositions = rawPositions;
@@ -599,10 +584,9 @@ const TradingPage: React.FC = () => {
             setAccounts(allAccounts);
             setPositions(filteredPositions);
             setOrders(filteredOrders);
-            console.log(`[TradingPage] API refresh complete: ${allAccounts.length} accounts, ${filteredPositions.length} positions, ${filteredOrders.length} orders`);
           }
         } catch (error) {
-          console.error("[TradingPage] Error refreshing trading data:", error);
+          // Silent error handling
         } finally {
           isRefreshingRef.current = false;
         }
@@ -627,7 +611,6 @@ const TradingPage: React.FC = () => {
 
       // Debounce: only reconnect after 1 second of no updates
       pnlRefreshTimerRef.current = window.setTimeout(() => {
-        console.log("[TradingPage] Refreshing PnL SSE stream due to WebSocket event");
         if (user_id) {
           connectToPnLStream();
         }
@@ -641,75 +624,82 @@ const TradingPage: React.FC = () => {
     };
 
     // Single debounced function to handle all WebSocket events
+    // Define it after refreshDataRef is set so it has access to it
     const handleWebSocketEvent = () => {
-      console.log(`[TradingPage] handleWebSocketEvent called - refreshDataRef exists: ${!!refreshDataRef.current}, isRefreshing: ${isRefreshingRef.current}`);
+      console.log(`[WS TRIGGER] WebSocket event received`);
       
       // Clear any pending refresh
       if (wsRefreshTimerRef.current) {
-        console.log(`[TradingPage] Clearing previous WebSocket refresh timer`);
         window.clearTimeout(wsRefreshTimerRef.current);
         wsRefreshTimerRef.current = null;
       }
 
       // Debounce: wait 500ms after last WebSocket event, then send ONE API request
-      console.log(`[TradingPage] Setting WebSocket refresh timer (500ms debounce)`);
       wsRefreshTimerRef.current = window.setTimeout(() => {
-        console.log(`[TradingPage] WebSocket debounce timer fired - refreshDataRef: ${!!refreshDataRef.current}, isRefreshing: ${isRefreshingRef.current}`);
+        console.log(`[WS TRIGGER] Timer fired - executing API refresh`);
         
-        if (!refreshDataRef.current) {
-          console.warn(`[TradingPage] refreshDataRef.current is null, cannot refresh`);
+        // Use refreshDataRef from closure - it should be set by now
+        const refreshFn = refreshDataRef.current;
+        if (!refreshFn) {
+          console.log(`[WS TRIGGER] refreshDataRef is null, skipping`);
           return;
         }
         
         if (isRefreshingRef.current) {
-          console.log(`[TradingPage] Refresh already in progress, skipping WebSocket-triggered refresh`);
+          console.log(`[WS TRIGGER] Refresh in progress, skipping`);
           return;
         }
         
-        console.log(`[TradingPage] WebSocket event detected - triggering single API refresh and PnL SSE reconnect`);
-        refreshDataRef.current.refreshTradingData(true); // true = immediate
-        refreshDataRef.current.refreshPnLStream();
+        console.log(`[WS TRIGGER] Calling refreshTradingData and refreshPnLStream`);
+        refreshFn.refreshTradingData(true); // true = immediate
+        refreshFn.refreshPnLStream();
       }, 500); // 500ms debounce - all events within this window trigger only one refresh
     };
+    
+    // Store handler in ref so it's accessible from WebSocket listeners
+    handleWebSocketEventRef.current = handleWebSocketEvent;
 
     const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
       const positionsArray = Array.isArray(allPositions) ? allPositions : [];
-      console.log(`[TradingPage] WebSocket positions event received: ${positionsArray.length} positions`);
+      console.log(`[WS TRIGGER] Positions event: ${positionsArray.length} items`);
       
       // Track that WebSocket has sent an event
       wsHasDataRef.current.positions = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
-      console.log(`[TradingPage] Calling handleWebSocketEvent from positions listener`);
-      handleWebSocketEvent();
+      if (handleWebSocketEventRef.current) {
+        handleWebSocketEventRef.current();
+      }
       
       // DO NOT update state from WebSocket data - only use API data
     });
 
     const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
       const ordersArray = Array.isArray(allOrders) ? allOrders : [];
-      console.log(`[TradingPage] WebSocket orders event received: ${ordersArray.length} orders`);
+      console.log(`[WS TRIGGER] Orders event: ${ordersArray.length} items`);
       
       // Track that WebSocket has sent an event
       wsHasDataRef.current.orders = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
-      console.log(`[TradingPage] Calling handleWebSocketEvent from orders listener`);
-      handleWebSocketEvent();
+      if (handleWebSocketEventRef.current) {
+        handleWebSocketEventRef.current();
+      }
       
       // DO NOT update state from WebSocket data - only use API data
     });
 
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
       const accountsArray = Array.isArray(allAccounts) ? allAccounts : [];
-      console.log(`[TradingPage] WebSocket accounts event received: ${accountsArray.length} accounts`);
+      console.log(`[WS TRIGGER] Accounts event: ${accountsArray.length} items`);
       
       // Track that WebSocket has sent an event
       wsHasDataRef.current.accounts = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
-      console.log(`[TradingPage] Calling handleWebSocketEvent from accounts listener`);
-      handleWebSocketEvent();
+      if (handleWebSocketEventRef.current) {
+        handleWebSocketEventRef.current();
+      }
       
       // DO NOT update state from WebSocket data - only use API data
     });
@@ -719,6 +709,8 @@ const TradingPage: React.FC = () => {
       unsubOrders();
       unsubAccounts();
       refreshDataRef.current = null;
+      handleWebSocketEventRef.current = null;
+      
       // Clear any pending timers
       if (refreshTimerRef.current) {
         window.clearTimeout(refreshTimerRef.current);
@@ -732,6 +724,14 @@ const TradingPage: React.FC = () => {
         window.clearTimeout(wsRefreshTimerRef.current);
         wsRefreshTimerRef.current = null;
       }
+      
+      // Disconnect PnL SSE when leaving TradingPage
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
+      
       isRefreshingRef.current = false;
     };
     // Only subscribe once when user_id changes, filtering uses refs
@@ -767,7 +767,6 @@ const TradingPage: React.FC = () => {
     }
 
     prevPositionsRef.current = positionsHash;
-    console.log("🔄 Positions changed - reconnecting PnL stream to track new positions");
 
     // Clear stale PnL data for positions that no longer exist
     setPnlData((prev) => {
@@ -853,7 +852,7 @@ const TradingPage: React.FC = () => {
         }
       } catch {}
     } catch (e) {
-      console.error("Flatten all failed", e);
+      // Silent error handling
     } finally {
       setIsOrdering(false);
     }
@@ -862,13 +861,11 @@ const TradingPage: React.FC = () => {
   // Connect to PnL SSE stream
   const connectToPnLStream = () => {
     if (!user_id) {
-      console.warn("[TradingPage] Cannot connect to PnL stream: user_id is missing");
       return;
     }
 
     // Close existing connection first
     if (eventSourceRef.current) {
-      console.log("[TradingPage] Closing existing PnL SSE connection");
       eventSourceRef.current.close();
       eventSourceRef.current = null;
       setIsConnectedToPnL(false);
@@ -876,14 +873,12 @@ const TradingPage: React.FC = () => {
 
     const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
     const url = `${API_BASE}/databento/sse/pnl?user_id=${user_id}`;
-    console.log(`[TradingPage] Connecting to PnL SSE stream: ${url}`);
     
     try {
       const eventSource = new EventSource(url);
       eventSourceRef.current = eventSource;
 
       eventSource.onopen = () => {
-        console.log("✅ Connected to PnL stream for Trading Page");
         setIsConnectedToPnL(true);
       };
 
@@ -893,21 +888,18 @@ const TradingPage: React.FC = () => {
         
         // Check for status messages
         if (data.status === "connected") {
-          console.log("✅ PnL stream connected:", data);
           setIsConnectedToPnL(true);
           return;
         }
 
         // Check for errors
         if (data.error) {
-          console.error("❌ PnL stream error:", data);
           setIsConnectedToPnL(false);
           return;
         }
 
         // Check for market closed status
         if (data.status === "market_closed") {
-          console.log("⚠️ Market closed:", data);
           setIsConnectedToPnL(false);
           return;
         }
@@ -915,15 +907,6 @@ const TradingPage: React.FC = () => {
         // Update PnL data; key by symbol+account to avoid overwriting
         if (data.symbol && data.unrealizedPnL !== undefined) {
           const key = data.positionKey || `${data.symbol}:${data.accountId}`;
-          console.log(`📊 Received PnL data:`, {
-            key,
-            symbol: data.symbol,
-            accountId: data.accountId,
-            unrealizedPnL: data.unrealizedPnL,
-            netPos: data.netPos,
-            entryPrice: data.entryPrice,
-            currentPrice: data.currentPrice
-          });
           
           setPnlData(prev => ({
             ...prev,
@@ -931,13 +914,11 @@ const TradingPage: React.FC = () => {
           }));
         }
       } catch (error) {
-        console.error("Error parsing PnL data:", error);
+        // Silent error handling
       }
     };
 
       eventSource.onerror = (error) => {
-        console.error("❌ PnL SSE error:", error);
-        console.error("❌ EventSource readyState:", eventSource.readyState);
         setIsConnectedToPnL(false);
         
         // Close the connection if it's in a bad state
@@ -948,13 +929,11 @@ const TradingPage: React.FC = () => {
         // Attempt to reconnect after a delay
         setTimeout(() => {
           if (user_id && !eventSourceRef.current) {
-            console.log("🔄 Attempting to reconnect PnL stream...");
             connectToPnLStream();
           }
         }, 5000);
       };
     } catch (error) {
-      console.error("[TradingPage] Error creating EventSource for PnL stream:", error);
       setIsConnectedToPnL(false);
     }
   };
@@ -972,7 +951,6 @@ const TradingPage: React.FC = () => {
   useEffect(() => {
     // Close old connection first and clear price
     if (priceEventSourceRef.current) {
-      console.log(`[TradingPage SSE] Closing old connection (ID: ${sseConnectionIdRef.current})`);
       priceEventSourceRef.current.close();
       priceEventSourceRef.current = null;
       sseConnectionIdRef.current = null;
@@ -1003,7 +981,6 @@ const TradingPage: React.FC = () => {
       const currentSymbol = currentSymbolRef.current;
       if (!currentSymbol) return; // Symbol changed while async operation was running
       
-      console.log(`[TradingPage SSE] Creating new connection for symbol: ${currentSymbol}`);
       const es = new EventSource(`${API_BASE}/databento/sse/current-price?symbols=${encodeURIComponent(currentSymbol)}`);
       priceEventSourceRef.current = es;
 
@@ -1014,7 +991,6 @@ const TradingPage: React.FC = () => {
           // Handle connection status message
           if (data.status === "connected") {
             sseConnectionIdRef.current = data.connection_id || null;
-            console.log(`[TradingPage SSE] Connected with connection ID: ${sseConnectionIdRef.current}`);
             return;
           }
           
@@ -1022,7 +998,6 @@ const TradingPage: React.FC = () => {
           
           // Ignore data from old connections
           if (data.connection_id && sseConnectionIdRef.current && data.connection_id !== sseConnectionIdRef.current) {
-            console.log(`[TradingPage SSE] Ignoring data from old connection ${data.connection_id} (current: ${sseConnectionIdRef.current})`);
             return;
           }
           
@@ -1047,10 +1022,9 @@ const TradingPage: React.FC = () => {
             setIsPriceIdle(false);
           } else {
             // Log when we receive data for a different symbol (shouldn't happen with backend filtering)
-            console.log(`[TradingPage SSE] Ignoring data for ${data.symbol} (current: ${symbolToCheck})`);
           }
         } catch (error) {
-          console.error("[TradingPage SSE] Error parsing message:", error);
+          // Silent error handling
         }
       };
 
@@ -1159,7 +1133,6 @@ const TradingPage: React.FC = () => {
       groupPositions.every((p: any) => Number(p.netPos) === 0);
 
     if (allFlat) {
-      console.log("✅ All positions flat - resetting toolbar PnL to 0");
       setGroupPnL({
         totalPnL: 0,
         symbolPnL: 0,
@@ -1196,8 +1169,12 @@ const TradingPage: React.FC = () => {
     connectToPnLStream();
     
     return () => {
-      // Only close on unmount or when user_id changes, not on symbol/group changes
-      // This allows the stream to continue running when symbol/group changes
+      // Disconnect PnL SSE when component unmounts or user_id changes
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user_id]);
@@ -1212,7 +1189,7 @@ const TradingPage: React.FC = () => {
         setSelectedGroup(userGroups[0]);
       }
     } catch (error) {
-      console.error("Error loading groups:", error);
+      // Silent error handling
     }
   };
 
@@ -1290,8 +1267,7 @@ const TradingPage: React.FC = () => {
           quantity: parseInt(orderQuantity),
           action: action,
         };
-        const response = await executeMarketOrder(order);
-        console.log("Market Order: ", response);
+        await executeMarketOrder(order);
       }
       if (orderType === "limit") {
         if (slValue == 0 && tpValue == 0) {
@@ -1303,8 +1279,7 @@ const TradingPage: React.FC = () => {
             action: action,
             price: parseFloat(limitPrice),
           };
-          const response = await executeLimitOrder(order);
-          console.log("Limit Order: ", response);
+          await executeLimitOrder(order);
         }
         else {
           const order: LimitOrderWithSLTP = {
@@ -1319,8 +1294,7 @@ const TradingPage: React.FC = () => {
               tp: tpValue
             }
           };
-          const response = await executeLimitOrderWithSLTP(order);
-          console.log("Limit Order: ", response);
+          await executeLimitOrderWithSLTP(order);
         }
       }
       // Calculate SL/TP values
@@ -1372,7 +1346,7 @@ const TradingPage: React.FC = () => {
         `Order submitted for ${action} ${orderQuantity} contracts across ${selectedGroup.sub_brokers.length} sub-brokers`
       );
     } catch (error) {
-      console.error("Error executing order:", error);
+      // Silent error handling
       alert("Error executing order. Please try again.");
     } finally {
       setIsOrdering(false);
@@ -1608,13 +1582,11 @@ const TradingPage: React.FC = () => {
     
     // Only connect if userId actually changed
     if (currentUserId && prevUserIdRef.current !== currentUserId) {
-      console.log(`[TradingPage] WebSocket connection triggered for all accounts: userId=${currentUserId}`);
       prevUserIdRef.current = currentUserId;
       
       // Fetch tokens for all broker accounts and connect
       getAllWebSocketTokens(currentUserId).then((tokensList) => {
         if (tokensList && tokensList.length > 0) {
-          console.log(`[TradingPage] Connecting to ${tokensList.length} broker account(s)`);
           // Map tokens to ensure is_demo has a default value
           const mappedTokens = tokensList.map(t => ({
             id: t.id,
@@ -1623,11 +1595,9 @@ const TradingPage: React.FC = () => {
             is_demo: t.is_demo ?? false
           }));
           tradovateWSMultiClient.connectAll(currentUserId, mappedTokens);
-        } else {
-          console.warn(`[TradingPage] No WebSocket tokens found for user ${currentUserId}`);
         }
       }).catch((error) => {
-        console.error(`[TradingPage] Error fetching WebSocket tokens:`, error);
+        // Silent error handling
       });
     } else if (!currentUserId) {
       // If userId is cleared, disconnect all
