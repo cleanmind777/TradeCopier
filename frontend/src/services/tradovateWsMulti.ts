@@ -347,8 +347,13 @@ export class TradovateWSMultiClient {
       }
     }
 
-    // Start periodic aggregation
-    this.startAggregation();
+    // Start periodic aggregation if not already started
+    if (!this.updateTimer) {
+      this.startAggregation();
+    }
+    
+    // Immediately trigger aggregation to notify listeners with current state
+    this.aggregateAndNotify();
   }
 
   disconnectAll() {
@@ -392,14 +397,15 @@ export class TradovateWSMultiClient {
       allAccounts.push(...connection.getAccounts());
     }
 
-    // Notify listeners
-    if (allPositions.length > 0 || this.positionListeners.size > 0) {
+    // Always notify listeners if they exist, even if arrays are empty
+    // This ensures UI updates when positions/orders/accounts are cleared
+    if (this.positionListeners.size > 0) {
       this.positionListeners.forEach((cb) => cb(allPositions));
     }
-    if (allOrders.length > 0 || this.orderListeners.size > 0) {
+    if (this.orderListeners.size > 0) {
       this.orderListeners.forEach((cb) => cb(allOrders));
     }
-    if (allAccounts.length > 0 || this.accountListeners.size > 0) {
+    if (this.accountListeners.size > 0) {
       this.accountListeners.forEach((cb) => cb(allAccounts));
     }
   }

@@ -457,16 +457,13 @@ const TradingPage: React.FC = () => {
 
     const refreshPnLStream = () => {
       console.log("[TradingPage] Refreshing PnL SSE stream due to WebSocket event");
-      // Close existing connection first
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-        setIsConnectedToPnL(false);
-      }
-      // Small delay to ensure old connection is fully closed before opening new one
+      // Reconnect PnL stream to get updated positions
+      // Small delay to ensure positions are updated first
       setTimeout(() => {
-        connectToPnLStream();
-      }, 100);
+        if (user_id) {
+          connectToPnLStream();
+        }
+      }, 500);
     };
 
     // Store in ref for WebSocket listeners
@@ -476,8 +473,13 @@ const TradingPage: React.FC = () => {
     };
 
     const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
+      // Handle empty arrays - set to empty and return early
       if (!allPositions || allPositions.length === 0) {
         setPositions([]);
+        // Still refresh PnL stream to clear stale data
+        if (refreshDataRef.current) {
+          refreshDataRef.current.refreshPnLStream();
+        }
         return;
       }
 
@@ -519,6 +521,7 @@ const TradingPage: React.FC = () => {
     });
 
     const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
+      // Handle empty arrays - set to empty and return early
       if (!allOrders || allOrders.length === 0) {
         setOrders([]);
         return;
@@ -554,14 +557,14 @@ const TradingPage: React.FC = () => {
 
       setOrders(filtered);
 
-      // Refresh trading data and PnL stream when order updates are received
+      // Refresh trading data when order updates are received
       if (refreshDataRef.current) {
         refreshDataRef.current.refreshTradingData();
-        refreshDataRef.current.refreshPnLStream();
       }
     });
 
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
+      // Handle empty arrays - set to empty and return early
       if (!allAccounts || allAccounts.length === 0) {
         setAccounts([]);
         return;
@@ -582,10 +585,9 @@ const TradingPage: React.FC = () => {
 
       setAccounts(filtered);
 
-      // Refresh trading data and PnL stream when account updates are received
+      // Refresh trading data when account updates are received
       if (refreshDataRef.current) {
         refreshDataRef.current.refreshTradingData();
-        refreshDataRef.current.refreshPnLStream();
       }
     });
 
@@ -724,9 +726,11 @@ const TradingPage: React.FC = () => {
   const connectToPnLStream = () => {
     if (!user_id) return;
 
-    // Close existing connection
+    // Close existing connection first
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      setIsConnectedToPnL(false);
     }
 
     const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
@@ -734,7 +738,7 @@ const TradingPage: React.FC = () => {
     eventSourceRef.current = eventSource;
 
     eventSource.onopen = () => {
-      console.log("Connected to PnL stream for Trading Page");
+      console.log("✅ Connected to PnL stream for Trading Page");
       setIsConnectedToPnL(true);
     };
 
@@ -745,12 +749,21 @@ const TradingPage: React.FC = () => {
         // Check for status messages
         if (data.status === "connected") {
           console.log("✅ PnL stream connected:", data);
+          setIsConnectedToPnL(true);
           return;
         }
 
         // Check for errors
         if (data.error) {
           console.error("❌ PnL stream error:", data);
+          setIsConnectedToPnL(false);
+          return;
+        }
+
+        // Check for market closed status
+        if (data.status === "market_closed") {
+          console.log("⚠️ Market closed:", data);
+          setIsConnectedToPnL(false);
           return;
         }
 
@@ -778,8 +791,15 @@ const TradingPage: React.FC = () => {
     };
 
     eventSource.onerror = (error) => {
-      console.error("PnL SSE error:", error);
+      console.error("❌ PnL SSE error:", error);
       setIsConnectedToPnL(false);
+      // Attempt to reconnect after a delay
+      setTimeout(() => {
+        if (user_id && !eventSourceRef.current) {
+          console.log("🔄 Attempting to reconnect PnL stream...");
+          connectToPnLStream();
+        }
+      }, 5000);
     };
   };
 
@@ -1003,28 +1023,28 @@ const TradingPage: React.FC = () => {
     }
   }, [positions, selectedGroup?.id]);
 
-  // Connect/reconnect PnL stream when user_id, symbol, or group changes
-  // This ensures fresh data is loaded when symbol changes (like first loading)
+  // Connect/reconnect PnL stream when user_id changes or when positions change
+  // PnL stream should work independently of selected symbol/group - it tracks all positions
   useEffect(() => {
-    if (user_id && symbol && selectedGroup) {
-      // Clear stale PnL data for fresh calculation
-      setPnlData({});
-      // Connect/reconnect PnL stream to get fresh data
-      connectToPnLStream();
-      // Recalculate with current filtered positions after a brief delay
-      setTimeout(() => {
-        calculateGroupPnL();
-      }, 500);
-    }
-    
-    return () => {
+    if (!user_id) {
+      // Close connection if user_id is cleared
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
       }
+      return;
+    }
+
+    // Connect/reconnect PnL stream - it will track all positions for the user
+    connectToPnLStream();
+    
+    return () => {
+      // Only close on unmount or when user_id changes, not on symbol/group changes
+      // This allows the stream to continue running when symbol/group changes
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user_id, symbol, selectedGroup?.id]);
+  }, [user_id]);
 
   // Load user groups
   const loadGroups = async () => {
