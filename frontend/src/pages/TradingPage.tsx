@@ -509,7 +509,7 @@ const TradingPage: React.FC = () => {
 
   // Ref to store refresh functions and debounce timers
   const refreshDataRef = useRef<{
-    refreshTradingData: () => Promise<void>;
+    refreshTradingData: (immediate?: boolean) => Promise<void>;
     refreshPnLStream: () => void;
   } | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
@@ -523,27 +523,26 @@ const TradingPage: React.FC = () => {
     // Reset WebSocket data flags when user changes
     wsHasDataRef.current = { positions: false, orders: false, accounts: false };
 
-    // Define debounced refresh function - only refresh from API when necessary
-    // WebSocket updates should be sufficient for real-time data
-    const refreshTradingData = async () => {
+    // Refresh function - executes immediately when called from WebSocket updates
+    const refreshTradingData = async (immediate = false) => {
       // Prevent overlapping requests
       if (isRefreshingRef.current) {
         console.log("[TradingPage] Refresh already in progress, skipping");
         return;
       }
 
-      // Clear any pending refresh
+      // Clear any pending refresh timer
       if (refreshTimerRef.current) {
         window.clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
       }
 
-      // Debounce: only refresh after 2 seconds of no WebSocket updates
-      refreshTimerRef.current = window.setTimeout(async () => {
+      const executeRefresh = async () => {
         if (isRefreshingRef.current) return;
         
         isRefreshingRef.current = true;
         try {
+          console.log("[TradingPage] Refreshing trading data from API...");
           const data = await getAllTradingData(user_id);
           if (data) {
             // Use current symbol from refs
@@ -554,6 +553,8 @@ const TradingPage: React.FC = () => {
             const rawAccounts = Array.isArray(data.accounts) ? data.accounts : [];
             const rawPositions = Array.isArray(data.positions) ? data.positions : [];
             const rawOrders = Array.isArray(data.orders) ? data.orders : [];
+            
+            console.log(`[TradingPage] API refresh: ${rawAccounts.length} accounts, ${rawPositions.length} positions, ${rawOrders.length} orders`);
             
             // For positions: show ALL groups (only filter by symbol if set)
             let filteredPositions = rawPositions;
@@ -597,13 +598,22 @@ const TradingPage: React.FC = () => {
             setAccounts(allAccounts);
             setPositions(filteredPositions);
             setOrders(filteredOrders);
+            console.log(`[TradingPage] API refresh complete: ${allAccounts.length} accounts, ${filteredPositions.length} positions, ${filteredOrders.length} orders`);
           }
         } catch (error) {
           console.error("[TradingPage] Error refreshing trading data:", error);
         } finally {
           isRefreshingRef.current = false;
         }
-      }, 2000); // 2 second debounce
+      };
+
+      // If immediate (from WebSocket), execute right away
+      // Otherwise, debounce for 2 seconds (for manual refreshes)
+      if (immediate) {
+        executeRefresh();
+      } else {
+        refreshTimerRef.current = window.setTimeout(executeRefresh, 2000);
+      }
     };
 
     // Debounced PnL stream refresh
@@ -633,16 +643,23 @@ const TradingPage: React.FC = () => {
       const positionsArray = Array.isArray(allPositions) ? allPositions : [];
       console.log(`[TradingPage] WebSocket positions update: ${positionsArray.length} positions`);
       
-      // Only update if WebSocket has data OR if we've already received data from WebSocket before
-      // This prevents empty arrays from overwriting initial API data
-      if (positionsArray.length > 0) {
+      // Track if WebSocket has sent data
+      const hasData = positionsArray.length > 0;
+      if (hasData) {
         wsHasDataRef.current.positions = true;
       }
       
       // Only update state if WebSocket has sent data at least once
-      if (!wsHasDataRef.current.positions && positionsArray.length === 0) {
+      if (!wsHasDataRef.current.positions && !hasData) {
         console.log(`[TradingPage] Skipping WebSocket positions update - no data yet, keeping API data`);
         return;
+      }
+      
+      // If WebSocket has data, trigger API refresh and PnL SSE reconnect immediately
+      if (hasData && refreshDataRef.current) {
+        console.log(`[TradingPage] WebSocket positions update detected - triggering immediate API refresh and PnL SSE reconnect`);
+        refreshDataRef.current.refreshTradingData(true); // true = immediate
+        refreshDataRef.current.refreshPnLStream();
       }
       
       // Show ALL positions from ALL groups - no group filtering
@@ -666,27 +683,29 @@ const TradingPage: React.FC = () => {
 
       console.log(`[TradingPage] Positions (all groups): ${filtered.length}`);
       setPositions(filtered);
-
-      // Only refresh PnL stream when positions change (debounced)
-      // Don't refresh trading data from API - WebSocket data is sufficient
-      if (refreshDataRef.current) {
-        refreshDataRef.current.refreshPnLStream();
-      }
     });
 
     const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
       const ordersArray = Array.isArray(allOrders) ? allOrders : [];
       console.log(`[TradingPage] WebSocket orders update: ${ordersArray.length} orders`);
       
-      // Only update if WebSocket has data OR if we've already received data from WebSocket before
-      if (ordersArray.length > 0) {
+      // Track if WebSocket has sent data
+      const hasData = ordersArray.length > 0;
+      if (hasData) {
         wsHasDataRef.current.orders = true;
       }
       
       // Only update state if WebSocket has sent data at least once
-      if (!wsHasDataRef.current.orders && ordersArray.length === 0) {
+      if (!wsHasDataRef.current.orders && !hasData) {
         console.log(`[TradingPage] Skipping WebSocket orders update - no data yet, keeping API data`);
         return;
+      }
+      
+      // If WebSocket has data, trigger API refresh and PnL SSE reconnect immediately
+      if (hasData && refreshDataRef.current) {
+        console.log(`[TradingPage] WebSocket orders update detected - triggering immediate API refresh and PnL SSE reconnect`);
+        refreshDataRef.current.refreshTradingData(true); // true = immediate
+        refreshDataRef.current.refreshPnLStream();
       }
       
       const currentGroup = selectedGroupRef.current;
@@ -719,31 +738,35 @@ const TradingPage: React.FC = () => {
 
       console.log(`[TradingPage] Filtered orders: ${filtered.length}`);
       setOrders(filtered);
-
-      // Don't refresh from API - WebSocket data is sufficient for real-time updates
     });
 
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
       const accountsArray = Array.isArray(allAccounts) ? allAccounts : [];
       console.log(`[TradingPage] WebSocket accounts update: ${accountsArray.length} accounts`);
       
-      // Only update if WebSocket has data OR if we've already received data from WebSocket before
-      if (accountsArray.length > 0) {
+      // Track if WebSocket has sent data
+      const hasData = accountsArray.length > 0;
+      if (hasData) {
         wsHasDataRef.current.accounts = true;
       }
       
       // Only update state if WebSocket has sent data at least once
-      if (!wsHasDataRef.current.accounts && accountsArray.length === 0) {
+      if (!wsHasDataRef.current.accounts && !hasData) {
         console.log(`[TradingPage] Skipping WebSocket accounts update - no data yet, keeping API data`);
         return;
+      }
+      
+      // If WebSocket has data, trigger API refresh and PnL SSE reconnect immediately
+      if (hasData && refreshDataRef.current) {
+        console.log(`[TradingPage] WebSocket accounts update detected - triggering immediate API refresh and PnL SSE reconnect`);
+        refreshDataRef.current.refreshTradingData(true); // true = immediate
+        refreshDataRef.current.refreshPnLStream();
       }
       
       // Keep ALL accounts (needed for groupMonitorRows realized PnL calculation)
       // Filtering by group will be done in the accounts tab display
       console.log(`[TradingPage] Accounts (all groups): ${accountsArray.length}`);
       setAccounts(accountsArray);
-
-      // Don't refresh from API - WebSocket data is sufficient for real-time updates
     });
 
     return () => {
