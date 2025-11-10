@@ -307,7 +307,6 @@ def user_get_all_tokens_for_websocket(
     broker_accounts = (
         db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
     )
-    print(f"[Backend] Found {len(broker_accounts)} broker accounts for user {user_id}")
     tokens_list = []
     for broker in broker_accounts:
         # Check if any active sub-broker is demo to determine endpoint
@@ -336,14 +335,11 @@ def user_get_all_tokens_for_websocket(
                     # For now, use the refreshed tokens directly
                     access_token_to_use = new_tokens.access_token
                     md_access_token_to_use = new_tokens.md_access_token
-                    print(f"[Backend] Refreshed WebSocket token for broker {broker.id}")
                 else:
                     # Use existing token if refresh failed
                     access_token_to_use = broker.websocket_access_token
                     md_access_token_to_use = broker.websocket_md_access_token
-                    print(f"[Backend] Using existing WebSocket token for broker {broker.id} (refresh failed or not needed)")
-            except Exception as e:
-                print(f"[Backend] Error refreshing WebSocket token for broker {broker.id}: {e}")
+            except Exception:
                 # Fallback to existing token
                 access_token_to_use = broker.websocket_access_token
                 md_access_token_to_use = broker.websocket_md_access_token
@@ -356,13 +352,10 @@ def user_get_all_tokens_for_websocket(
                 if new_tokens:
                     access_token_to_use = new_tokens.access_token
                     md_access_token_to_use = new_tokens.md_access_token
-                    print(f"[Backend] Refreshed regular token for broker {broker.id}")
                 else:
                     access_token_to_use = broker.access_token
                     md_access_token_to_use = broker.md_access_token
-                    print(f"[Backend] Using existing regular token for broker {broker.id}")
-            except Exception as e:
-                print(f"[Backend] Error refreshing regular token for broker {broker.id}: {e}")
+            except Exception:
                 access_token_to_use = broker.access_token
                 md_access_token_to_use = broker.md_access_token
         
@@ -374,10 +367,6 @@ def user_get_all_tokens_for_websocket(
                 is_demo=is_demo
             )
             tokens_list.append(websocket_token)
-            print(f"[Backend] Added token for broker {broker.id} (is_demo: {is_demo})")
-        else:
-            print(f"[Backend] Skipping broker {broker.id} - no tokens available")
-    print(f"[Backend] Returning {len(tokens_list)} tokens for user {user_id}")
     return tokens_list
 
 def user_get_tokens_for_group(

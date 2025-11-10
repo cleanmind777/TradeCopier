@@ -32,12 +32,10 @@ async def databento_price_stream(request: Request, symbols: list[str]):
 
             # Format the record as JSON string or plain text
             data_str = record.asdict()  # Convert record object to dict
-            print(f"data: {data_str}\n\n")
             # You can improve formatting here (e.g., JSON serialize)
             yield f"data: {data_str}\n\n"
 
             # Yield control to event loop
             await asyncio.sleep(0)
-    except Exception as e:
-        # optionally log or handle errors
-        print(f"Error in stream: {e}")
+    except Exception:
+        pass

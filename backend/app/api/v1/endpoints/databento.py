@@ -115,8 +115,6 @@ async def stream_price_data(
         if not s_upper.endswith('.FUT'):
             requested_symbols_normalized.add(s_upper + '.FUT')
     
-    print(f"🔗 [Connection {connection_id}] Starting stream for symbols: {symbols}")
-    
     try:
         # Check if API key is available
         if not settings.DATABENTO_KEY:
@@ -128,25 +126,16 @@ async def stream_price_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
-        print(f"📊 [Connection {connection_id}] Dataset: {DATASET}")
-        print(f"📋 [Connection {connection_id}] Schema: {SCHEMA}")
-        print(f"🎯 [Connection {connection_id}] Symbols for this connection: {symbols}")
-        
         # Initialize DataBento Live client
         client = dbt.Live(key=settings.DATABENTO_KEY)
-        print(f"✅ [Connection {connection_id}] DataBento client initialized")
         
         # Subscribe to symbols with proper parameters
-        print(f"🔄 [Connection {connection_id}] Subscribing to symbols...")
         client.subscribe(
             dataset=DATASET,
             schema=SCHEMA,
             symbols=symbols,
             stype_in="raw_symbol"
         )
-        print(f"✅ [Connection {connection_id}] Successfully subscribed to symbols: {symbols}")
-
-        print(f"🔄 [Connection {connection_id}] Starting data stream...")
         
         # Send initial status message with connection ID
         status_data = {
@@ -156,7 +145,6 @@ async def stream_price_data(
             "connection_id": connection_id,
             "timestamp": datetime.now().isoformat()
         }
-        print(f"📤 [Connection {connection_id}] Sending status message: {status_data}")
         yield f"data: {json.dumps(status_data)}\n\n"
         
                 
@@ -164,7 +152,6 @@ async def stream_price_data(
             for record in client:
                 # Check if client disconnected - do this FIRST before processing any data
                 if await request.is_disconnected():
-                    print(f"❌ [Connection {connection_id}] Client disconnected, stopping stream for symbols: {symbols}")
                     # Try to close the DataBento client
                     try:
                         if hasattr(client, 'close'):
@@ -184,14 +171,12 @@ async def stream_price_data(
                         
                         if instrument_id is not None and symbol is not None:
                             symbol_mapping[instrument_id] = symbol
-                            print(f"🗺️ [Connection {connection_id}] Symbol mapping: {symbol} -> Instrument ID {instrument_id}")
                         
                         continue  # Skip symbol mapping messages for price display
                     
                     elif record_type in ["MBP1Msg", "MBPMsg", "TradeMsg"]:
                         # Double-check if client disconnected before processing
                         if await request.is_disconnected():
-                            print(f"❌ [Connection {connection_id}] Client disconnected during processing, stopping")
                             break
                         
                         # Handle actual price/trade data
@@ -216,7 +201,6 @@ async def stream_price_data(
                         ]
                         if not any(variant in requested_symbols_normalized for variant in symbol_variants):
                             # Skip data for symbols not requested in this connection
-                            print(f"⏭️ [Connection {connection_id}] Skipping data for {symbol} (not in requested symbols: {symbols})")
                             continue
                         
                         # Get timestamp - try record.hd.ts_event first, then record.ts_event
@@ -237,10 +221,6 @@ async def stream_price_data(
                         bid_size = None
                         ask_size = None
                         
-                        # Debug: Print record structure to understand levels format
-                        print(f"🔍 Record levels type: {type(record.levels) if hasattr(record, 'levels') else 'None'}")
-                        print(f"🔍 Record levels value: {record.levels if hasattr(record, 'levels') else 'None'}")
-                        
                         # Check if levels is a list or a single object
                         if hasattr(record, 'levels'):
                             levels_data = record.levels
@@ -255,34 +235,25 @@ async def stream_price_data(
                                 level = None
                                 
                             if level is not None:
-                                print(f"🔍 Level type: {type(level)}")
-                                print(f"🔍 Level attributes: {dir(level)}")
-                                
                                 # Extract prices from BidAskPair
                                 # Use 'pretty_bid_px' and 'pretty_ask_px' for human-readable float values
                                 # These are the correctly formatted prices, not the raw integer values
                                 if hasattr(level, 'pretty_bid_px'):
                                     bid_price = float(level.pretty_bid_px)
-                                    print(f"📊 Extracted bid_px (pretty): {bid_price}")
                                 elif hasattr(level, 'bid_px'):
                                     # Fallback to raw bid_px if pretty not available
                                     bid_price = float(level.bid_px)
-                                    print(f"📊 Extracted bid_px (raw): {bid_price}")
                                     
                                 if hasattr(level, 'pretty_ask_px'):
                                     ask_price = float(level.pretty_ask_px)
-                                    print(f"📊 Extracted ask_px (pretty): {ask_price}")
                                 elif hasattr(level, 'ask_px'):
                                     # Fallback to raw ask_px if pretty not available
                                     ask_price = float(level.ask_px)
-                                    print(f"📊 Extracted ask_px (raw): {ask_price}")
                                     
                                 if hasattr(level, 'bid_sz'):
                                     bid_size = int(level.bid_sz)
-                                    print(f"📊 Extracted bid_sz: {bid_size}")
                                 if hasattr(level, 'ask_sz'):
                                     ask_size = int(level.ask_sz)
-                                    print(f"📊 Extracted ask_sz: {ask_size}")
                         
                         data = {
                             "symbol": symbol,
@@ -298,12 +269,10 @@ async def stream_price_data(
                         }
 
                         # Always send data to frontend (even if price data is None)
-                        print(f"💰 [Connection {connection_id}] Sending {record_type} data: {data['symbol']} (ID: {data['instrument_id']}) - Bid: {data['bid_price']}, Ask: {data['ask_price']}")
                         yield f"data: {json.dumps(data)}\n\n"
                     
                     else:
                         # Handle other record types - send raw data
-                        print(f"ℹ️ Unhandled record type: {record_type}")
                         data = {
                             "raw_data": record.asdict() if hasattr(record, 'asdict') else str(record),
                             "record_type": record_type,
@@ -312,7 +281,6 @@ async def stream_price_data(
                         yield f"data: {json.dumps(data)}\n\n"
                         
                 except Exception as record_error:
-                    print(f"❌ Error processing record: {record_error}")
                     error_data = {
                         "error": f"Record processing error: {str(record_error)}",
                         "timestamp": datetime.now().isoformat()
@@ -320,7 +288,6 @@ async def stream_price_data(
                     yield f"data: {json.dumps(error_data)}\n\n"
                     
         except Exception as iteration_error:
-            print(f"❌ Error during iteration: {iteration_error}")
             error_data = {
                 "error": f"Iteration error: {str(iteration_error)}",
                 "timestamp": datetime.now().isoformat()
@@ -329,7 +296,6 @@ async def stream_price_data(
 
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ DataBento connection error: {error_msg}")
         
         # Provide specific guidance for authentication errors
         if "authentication failed" in error_msg.lower() or "cram" in error_msg.lower():
@@ -364,14 +330,13 @@ async def stream_price_data(
             
         yield f"data: {json.dumps(detailed_error)}\n\n"
     finally:
-        print(f"🧹 [Connection {connection_id}] DataBento connection cleanup completed")
         # Try to close the DataBento client if it exists
         try:
             if 'client' in locals() and client:
                 if hasattr(client, 'close'):
                     client.close()
-        except Exception as e:
-            print(f"⚠️ [Connection {connection_id}] Error closing DataBento client: {e}")
+        except Exception:
+            pass
 
 
 @router.post("/sse/current-price")
@@ -390,7 +355,6 @@ async def subscribe_symbols(request: Request, body: Symbols):
     symbols = body.symbols
     user_subscriptions[client_host] = symbols
     
-    print(f"📝 Client {client_host} subscribed to symbols: {symbols}")
     return {
         "message": "Subscribed successfully",
         "symbols": symbols,
@@ -470,7 +434,6 @@ async def test_databento_connection():
     try:
         # Test basic client initialization
         client = dbt.Live(key=settings.DATABENTO_KEY)
-        print(f"✅ Client created: {type(client)}")
         
         return {
             "status": "success",
@@ -568,9 +531,6 @@ async def stream_pnl_data(
             yield f"data: {json.dumps(error_data)}\n\n"
             return
         
-        print(f"📊 Positions found: {len(positions)}")
-        print(f"🎯 Symbols to track: {symbols}")
-        
         # Store position data for PnL calculation grouped by symbol
         # Some users may have multiple positions for the same symbol across accounts
         symbol_to_positions: dict[str, list[dict]] = {}
@@ -609,17 +569,14 @@ async def stream_pnl_data(
         
         # Initialize DataBento Live client
         client = dbt.Live(key=settings.DATABENTO_KEY)
-        print("✅ DataBento client initialized for PnL tracking")
         
         # Subscribe to symbols
-        print("🔄 Subscribing to symbols for PnL tracking...")
         client.subscribe(
             dataset=DATASET,
             schema=SCHEMA,
             symbols=symbols,
             stype_in="raw_symbol"
         )
-        print(f"✅ Successfully subscribed to symbols: {symbols}")
         
         # Send initial status message
         status_data = {
@@ -629,7 +586,6 @@ async def stream_pnl_data(
             "symbols": symbols,
             "timestamp": datetime.now().isoformat()
         }
-        print(f"📤 Sending status message: {status_data}")
         yield f"data: {json.dumps(status_data)}\n\n"
         
         try:
@@ -639,7 +595,6 @@ async def stream_pnl_data(
             for record in client:
                 # Check if client disconnected - do this FIRST before processing any data
                 if await request.is_disconnected():
-                    print(f"❌ [PnL Stream] Client disconnected for user {user_id}")
                     # Try to close the DataBento client
                     try:
                         if hasattr(client, 'close'):
@@ -747,19 +702,12 @@ async def stream_pnl_data(
                                 "positionKey": f"{symbol}:{position['accountId']}"
                             }
 
-                            print(
-                                f"💰 PnL for {symbol} (acct {position['accountId']}): "
-                                f"${unrealized_pnl:.2f} (Qty: {netPos}, Entry: ${netPrice}, Current: ${current_price}, "
-                                f"Multiplier: {valuePerPoint}, Price Diff: ${price_diff:.4f})"
-                            )
                             yield f"data: {json.dumps(pnl_data)}\n\n"
                 
                 except Exception as record_error:
-                    print(f"❌ Error processing record: {record_error}")
                     continue
                     
         except Exception as iteration_error:
-            print(f"❌ Error during iteration: {iteration_error}")
             error_data = {
                 "error": f"Iteration error: {str(iteration_error)}",
                 "timestamp": datetime.now().isoformat()
@@ -768,8 +716,6 @@ async def stream_pnl_data(
     
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ DataBento PnL tracking error: {error_msg}")
-        
         error_data = {
             "error": f"PnL tracking error: {error_msg}",
             "timestamp": datetime.now().isoformat()
@@ -777,14 +723,13 @@ async def stream_pnl_data(
         yield f"data: {json.dumps(error_data)}\n\n"
     
     finally:
-        print("🧹 DataBento PnL tracking cleanup completed")
         # Try to close the DataBento client if it exists
         try:
             if 'client' in locals() and client:
                 if hasattr(client, 'close'):
                     client.close()
-        except Exception as e:
-            print(f"⚠️ Error closing DataBento PnL client: {e}")
+        except Exception:
+            pass
 
 
 @router.get("/sse/pnl")
@@ -877,8 +822,7 @@ async def sse_pnl_stream(
                                         "tickSize": product_item.get("tickSize", 0.25),
                                         "symbol": contract_item.get("name", "")
                                     }
-                    except Exception as e:
-                        print(f"⚠️ Error fetching contract details for {contract_id}: {e}")
+                    except Exception:
                         # Use defaults
                         contract_details_cache[contract_id] = {
                             "valuePerPoint": 50,
@@ -887,8 +831,7 @@ async def sse_pnl_stream(
                         }
         
         symbols = list({p.get("symbol") for p in positions_dict if (p.get("netPos") or 0) != 0}) or []
-    except Exception as e:
-        print(f"⚠️ Error fetching positions for PnL stream: {e}")
+    except Exception:
         positions_dict = []
         symbols = []
     
