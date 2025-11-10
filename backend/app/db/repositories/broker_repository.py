@@ -304,6 +304,10 @@ def user_get_all_tokens_for_websocket(
     from app.db.repositories.broker_repository import user_refresh_websocket_token
     import asyncio
     
+    # IMPORTANT: Expire all cached objects to ensure we see newly added broker accounts
+    # This prevents the need to restart the backend after adding a new account
+    db.expire_all()
+    
     broker_accounts = (
         db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
     )
