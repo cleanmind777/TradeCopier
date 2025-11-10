@@ -309,15 +309,19 @@ def user_get_all_tokens_for_websocket(
     # in its transaction cache. By invalidating the connection, we force SQLAlchemy to
     # get a fresh connection from the pool, which will see the latest committed data.
     try:
+        # Rollback any pending transaction first
+        db.rollback()
         # Invalidate the current connection to force a fresh one
         db.connection().invalidate()
     except Exception:
-        # If invalidation fails, just continue - the query should still work
-        pass
+        # If invalidation fails, try to rollback and continue
+        try:
+            db.rollback()
+        except Exception:
+            pass
     
     # Ensure session is clean
     db.expire_all()
-    db.commit()  # Commit any pending operations to ensure clean state
     
     # Query for broker accounts - the connection invalidation above ensures we get fresh data
     broker_accounts = (
