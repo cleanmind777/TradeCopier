@@ -376,7 +376,7 @@ export class TradovateWSMultiClient {
     // This ensures UI gets initial data even if WebSocket hasn't received updates yet
     setTimeout(() => {
       this.aggregateAndNotify();
-    }, 1000); // Give WebSocket time to establish and receive initial sync data
+    }, 2000); // Give WebSocket time to establish and receive initial sync data
   }
 
   disconnectAll() {
@@ -395,10 +395,11 @@ export class TradovateWSMultiClient {
     if (this.updateTimer) {
       clearInterval(this.updateTimer);
     }
-    // Aggregate and notify listeners every 100ms
+    // Aggregate and notify listeners every 500ms to reduce overhead
+    // WebSocket updates are already real-time, so we don't need 100ms polling
     this.updateTimer = setInterval(() => {
       this.aggregateAndNotify();
-    }, 100);
+    }, 500);
   }
 
   private aggregateAndNotify() {

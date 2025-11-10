@@ -428,49 +428,79 @@ const TradingPage: React.FC = () => {
     symbolRef.current = symbol;
   }, [symbol]);
 
-  // Ref to store refresh functions so they can be called from WebSocket listeners
+  // Ref to store refresh functions and debounce timers
   const refreshDataRef = useRef<{
     refreshTradingData: () => Promise<void>;
     refreshPnLStream: () => void;
   } | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+  const pnlRefreshTimerRef = useRef<number | null>(null);
+  const isRefreshingRef = useRef<boolean>(false);
 
   // Subscribe once, filter using refs
   useEffect(() => {
     if (!user_id) return;
 
-    // Define refresh functions
+    // Define debounced refresh function - only refresh from API when necessary
+    // WebSocket updates should be sufficient for real-time data
     const refreshTradingData = async () => {
-      try {
-        const data = await getAllTradingData(user_id);
-        if (data) {
-          // Use current symbol and group from refs to ensure we filter correctly
-          const currentSymbol = symbolRef.current;
-          const currentGroup = selectedGroupRef.current;
-          const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
-            data.accounts || [],
-            data.positions || [],
-            data.orders || [],
-            currentSymbol || undefined,
-            currentGroup || undefined
-          );
-          setAccounts(filteredAccounts);
-          setPositions(filteredPositions);
-          setOrders(filteredOrders);
-        }
-      } catch (error) {
-        console.error("[TradingPage] Error refreshing trading data:", error);
+      // Prevent overlapping requests
+      if (isRefreshingRef.current) {
+        console.log("[TradingPage] Refresh already in progress, skipping");
+        return;
       }
+
+      // Clear any pending refresh
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+
+      // Debounce: only refresh after 2 seconds of no WebSocket updates
+      refreshTimerRef.current = window.setTimeout(async () => {
+        if (isRefreshingRef.current) return;
+        
+        isRefreshingRef.current = true;
+        try {
+          const data = await getAllTradingData(user_id);
+          if (data) {
+            // Use current symbol and group from refs to ensure we filter correctly
+            const currentSymbol = symbolRef.current;
+            const currentGroup = selectedGroupRef.current;
+            const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
+              data.accounts || [],
+              data.positions || [],
+              data.orders || [],
+              currentSymbol || undefined,
+              currentGroup || undefined
+            );
+            setAccounts(filteredAccounts);
+            setPositions(filteredPositions);
+            setOrders(filteredOrders);
+          }
+        } catch (error) {
+          console.error("[TradingPage] Error refreshing trading data:", error);
+        } finally {
+          isRefreshingRef.current = false;
+        }
+      }, 2000); // 2 second debounce
     };
 
+    // Debounced PnL stream refresh
     const refreshPnLStream = () => {
-      console.log("[TradingPage] Refreshing PnL SSE stream due to WebSocket event");
-      // Reconnect PnL stream to get updated positions
-      // Small delay to ensure positions are updated first
-      setTimeout(() => {
+      // Clear any pending refresh
+      if (pnlRefreshTimerRef.current) {
+        window.clearTimeout(pnlRefreshTimerRef.current);
+        pnlRefreshTimerRef.current = null;
+      }
+
+      // Debounce: only reconnect after 1 second of no updates
+      pnlRefreshTimerRef.current = window.setTimeout(() => {
+        console.log("[TradingPage] Refreshing PnL SSE stream due to WebSocket event");
         if (user_id) {
           connectToPnLStream();
         }
-      }, 500);
+      }, 1000); // 1 second debounce
     };
 
     // Store in ref for WebSocket listeners
@@ -513,9 +543,9 @@ const TradingPage: React.FC = () => {
       console.log(`[TradingPage] Filtered positions: ${filtered.length}`);
       setPositions(filtered);
 
-      // Refresh trading data and PnL stream when position updates are received
+      // Only refresh PnL stream when positions change (debounced)
+      // Don't refresh trading data from API - WebSocket data is sufficient
       if (refreshDataRef.current) {
-        refreshDataRef.current.refreshTradingData();
         refreshDataRef.current.refreshPnLStream();
       }
     });
@@ -554,10 +584,7 @@ const TradingPage: React.FC = () => {
       console.log(`[TradingPage] Filtered orders: ${filtered.length}`);
       setOrders(filtered);
 
-      // Refresh trading data when order updates are received
-      if (refreshDataRef.current) {
-        refreshDataRef.current.refreshTradingData();
-      }
+      // Don't refresh from API - WebSocket data is sufficient for real-time updates
     });
 
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
@@ -579,10 +606,7 @@ const TradingPage: React.FC = () => {
       console.log(`[TradingPage] Filtered accounts: ${filtered.length}`);
       setAccounts(filtered);
 
-      // Refresh trading data when account updates are received
-      if (refreshDataRef.current) {
-        refreshDataRef.current.refreshTradingData();
-      }
+      // Don't refresh from API - WebSocket data is sufficient for real-time updates
     });
 
     return () => {
@@ -590,6 +614,16 @@ const TradingPage: React.FC = () => {
       unsubOrders();
       unsubAccounts();
       refreshDataRef.current = null;
+      // Clear any pending timers
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      if (pnlRefreshTimerRef.current) {
+        window.clearTimeout(pnlRefreshTimerRef.current);
+        pnlRefreshTimerRef.current = null;
+      }
+      isRefreshingRef.current = false;
     };
     // Only subscribe once when user_id changes, filtering uses refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
