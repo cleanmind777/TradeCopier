@@ -515,8 +515,10 @@ const TradingPage: React.FC = () => {
 
     // Refresh function - executes immediately when called from WebSocket updates
     const refreshTradingData = async (immediate = false) => {
+      console.log(`[WS TRIGGER] refreshTradingData called, immediate=${immediate}, isRefreshing=${isRefreshingRef.current}`);
       // Prevent overlapping requests
       if (isRefreshingRef.current) {
+        console.log(`[WS TRIGGER] Refresh already in progress, skipping`);
         return;
       }
 
@@ -527,11 +529,17 @@ const TradingPage: React.FC = () => {
       }
 
       const executeRefresh = async () => {
-        if (isRefreshingRef.current) return;
+        console.log(`[WS TRIGGER] executeRefresh called, isRefreshing=${isRefreshingRef.current}`);
+        if (isRefreshingRef.current) {
+          console.log(`[WS TRIGGER] executeRefresh: already refreshing, returning`);
+          return;
+        }
         
         isRefreshingRef.current = true;
+        console.log(`[WS TRIGGER] executeRefresh: calling getAllTradingData`);
         try {
           const data = await getAllTradingData(user_id);
+          console.log(`[WS TRIGGER] executeRefresh: getAllTradingData returned, data=${data ? 'exists' : 'null'}`);
           if (data) {
             // Use current symbol from refs
             const currentSymbol = symbolRef.current;
@@ -630,13 +638,18 @@ const TradingPage: React.FC = () => {
       
       // Clear any pending refresh
       if (wsRefreshTimerRef.current) {
+        console.log(`[WS TRIGGER] Clearing previous timer`);
         window.clearTimeout(wsRefreshTimerRef.current);
         wsRefreshTimerRef.current = null;
       }
 
       // Debounce: wait 500ms after last WebSocket event, then send ONE API request
+      console.log(`[WS TRIGGER] Setting new timer (500ms)`);
       wsRefreshTimerRef.current = window.setTimeout(() => {
         console.log(`[WS TRIGGER] Timer fired - executing API refresh`);
+        
+        // Clear the timer ref since it's executing
+        wsRefreshTimerRef.current = null;
         
         // Use refreshDataRef from closure - it should be set by now
         const refreshFn = refreshDataRef.current;
