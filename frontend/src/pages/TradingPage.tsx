@@ -642,19 +642,33 @@ const TradingPage: React.FC = () => {
 
     // Single debounced function to handle all WebSocket events
     const handleWebSocketEvent = () => {
+      console.log(`[TradingPage] handleWebSocketEvent called - refreshDataRef exists: ${!!refreshDataRef.current}, isRefreshing: ${isRefreshingRef.current}`);
+      
       // Clear any pending refresh
       if (wsRefreshTimerRef.current) {
+        console.log(`[TradingPage] Clearing previous WebSocket refresh timer`);
         window.clearTimeout(wsRefreshTimerRef.current);
         wsRefreshTimerRef.current = null;
       }
 
       // Debounce: wait 500ms after last WebSocket event, then send ONE API request
+      console.log(`[TradingPage] Setting WebSocket refresh timer (500ms debounce)`);
       wsRefreshTimerRef.current = window.setTimeout(() => {
-        if (refreshDataRef.current && !isRefreshingRef.current) {
-          console.log(`[TradingPage] WebSocket event detected - triggering single API refresh and PnL SSE reconnect`);
-          refreshDataRef.current.refreshTradingData(true); // true = immediate
-          refreshDataRef.current.refreshPnLStream();
+        console.log(`[TradingPage] WebSocket debounce timer fired - refreshDataRef: ${!!refreshDataRef.current}, isRefreshing: ${isRefreshingRef.current}`);
+        
+        if (!refreshDataRef.current) {
+          console.warn(`[TradingPage] refreshDataRef.current is null, cannot refresh`);
+          return;
         }
+        
+        if (isRefreshingRef.current) {
+          console.log(`[TradingPage] Refresh already in progress, skipping WebSocket-triggered refresh`);
+          return;
+        }
+        
+        console.log(`[TradingPage] WebSocket event detected - triggering single API refresh and PnL SSE reconnect`);
+        refreshDataRef.current.refreshTradingData(true); // true = immediate
+        refreshDataRef.current.refreshPnLStream();
       }, 500); // 500ms debounce - all events within this window trigger only one refresh
     };
 
@@ -666,6 +680,7 @@ const TradingPage: React.FC = () => {
       wsHasDataRef.current.positions = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
+      console.log(`[TradingPage] Calling handleWebSocketEvent from positions listener`);
       handleWebSocketEvent();
       
       // DO NOT update state from WebSocket data - only use API data
@@ -679,6 +694,7 @@ const TradingPage: React.FC = () => {
       wsHasDataRef.current.orders = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
+      console.log(`[TradingPage] Calling handleWebSocketEvent from orders listener`);
       handleWebSocketEvent();
       
       // DO NOT update state from WebSocket data - only use API data
@@ -692,6 +708,7 @@ const TradingPage: React.FC = () => {
       wsHasDataRef.current.accounts = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
+      console.log(`[TradingPage] Calling handleWebSocketEvent from accounts listener`);
       handleWebSocketEvent();
       
       // DO NOT update state from WebSocket data - only use API data
