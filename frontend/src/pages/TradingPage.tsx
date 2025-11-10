@@ -390,18 +390,25 @@ const TradingPage: React.FC = () => {
     const load = async () => {
       if (!user_id) return;
       setIsPageLoading(true);
-      const data = await getAllTradingData(user_id);
-      if (data) {
-        const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
-          data.accounts || [],
-          data.positions || [],
-          data.orders || []
-        );
-        setAccounts(filteredAccounts);
-        setPositions(filteredPositions);
-        setOrders(filteredOrders);
+      try {
+        const data = await getAllTradingData(user_id);
+        if (data) {
+          console.log(`[TradingPage] Initial data load: ${data.accounts?.length || 0} accounts, ${data.positions?.length || 0} positions, ${data.orders?.length || 0} orders`);
+          const { filteredAccounts, filteredPositions, filteredOrders } = filterTradingData(
+            data.accounts || [],
+            data.positions || [],
+            data.orders || []
+          );
+          console.log(`[TradingPage] After filtering: ${filteredAccounts.length} accounts, ${filteredPositions.length} positions, ${filteredOrders.length} orders`);
+          setAccounts(filteredAccounts);
+          setPositions(filteredPositions);
+          setOrders(filteredOrders);
+        }
+      } catch (error) {
+        console.error("[TradingPage] Error loading initial trading data:", error);
+      } finally {
+        setIsPageLoading(false);
       }
-      setIsPageLoading(false);
     };
     load();
     // Reload when user_id or symbol changes
@@ -473,26 +480,18 @@ const TradingPage: React.FC = () => {
     };
 
     const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
-      // Handle empty arrays - set to empty and return early
-      if (!allPositions || allPositions.length === 0) {
-        setPositions([]);
-        // Still refresh PnL stream to clear stale data
-        if (refreshDataRef.current) {
-          refreshDataRef.current.refreshPnLStream();
-        }
-        return;
-      }
-
+      console.log(`[TradingPage] WebSocket positions update: ${allPositions?.length || 0} positions`);
+      
       const currentGroup = selectedGroupRef.current;
       const currentSymbol = symbolRef.current;
 
-      // Filter by selected group's account IDs
-      let filtered = allPositions;
+      // Filter by selected group's account IDs (only if group is selected)
+      let filtered = allPositions || [];
       if (currentGroup && currentGroup.sub_brokers.length > 0) {
         const groupAccountIds = new Set(
           currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
         );
-        filtered = allPositions.filter((p: any) => 
+        filtered = filtered.filter((p: any) => 
           groupAccountIds.has(p.accountId)
         );
       }
@@ -511,6 +510,7 @@ const TradingPage: React.FC = () => {
         });
       }
 
+      console.log(`[TradingPage] Filtered positions: ${filtered.length}`);
       setPositions(filtered);
 
       // Refresh trading data and PnL stream when position updates are received
@@ -521,22 +521,18 @@ const TradingPage: React.FC = () => {
     });
 
     const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
-      // Handle empty arrays - set to empty and return early
-      if (!allOrders || allOrders.length === 0) {
-        setOrders([]);
-        return;
-      }
-
+      console.log(`[TradingPage] WebSocket orders update: ${allOrders?.length || 0} orders`);
+      
       const currentGroup = selectedGroupRef.current;
       const currentSymbol = symbolRef.current;
 
-      // Filter by selected group's account IDs
-      let filtered = allOrders;
+      // Filter by selected group's account IDs (only if group is selected)
+      let filtered = allOrders || [];
       if (currentGroup && currentGroup.sub_brokers.length > 0) {
         const groupAccountIds = new Set(
           currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
         );
-        filtered = allOrders.filter((o: any) => 
+        filtered = filtered.filter((o: any) => 
           groupAccountIds.has(o.accountId)
         );
       }
@@ -555,6 +551,7 @@ const TradingPage: React.FC = () => {
         });
       }
 
+      console.log(`[TradingPage] Filtered orders: ${filtered.length}`);
       setOrders(filtered);
 
       // Refresh trading data when order updates are received
@@ -564,25 +561,22 @@ const TradingPage: React.FC = () => {
     });
 
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
-      // Handle empty arrays - set to empty and return early
-      if (!allAccounts || allAccounts.length === 0) {
-        setAccounts([]);
-        return;
-      }
-
+      console.log(`[TradingPage] WebSocket accounts update: ${allAccounts?.length || 0} accounts`);
+      
       const currentGroup = selectedGroupRef.current;
 
-      // Filter by selected group's account IDs
-      let filtered = allAccounts;
+      // Filter by selected group's account IDs (only if group is selected)
+      let filtered = allAccounts || [];
       if (currentGroup && currentGroup.sub_brokers.length > 0) {
         const groupAccountIds = new Set(
           currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
         );
-        filtered = allAccounts.filter((a: any) => 
+        filtered = filtered.filter((a: any) => 
           groupAccountIds.has(a.accountId)
         );
       }
 
+      console.log(`[TradingPage] Filtered accounts: ${filtered.length}`);
       setAccounts(filtered);
 
       // Refresh trading data when account updates are received

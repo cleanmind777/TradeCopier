@@ -192,6 +192,7 @@ class SingleWSConnection {
             return;
           }
           
+          // Handle props events (entity updates from user/syncrequest)
           if (item.e === "props" && item.d) {
             const entityType = item.d.entityType;
             const eventType = item.d.eventType;
@@ -206,6 +207,25 @@ class SingleWSConnection {
             } else if (entityType === "cashBalance" || entityType === "account") {
               this.handleAccountUpdate(entity, eventType, entityType);
             }
+          }
+          
+          // Handle initial sync data (might come as arrays)
+          if (item.d && Array.isArray(item.d)) {
+            item.d.forEach((entity: any) => {
+              if (entity && typeof entity === 'object') {
+                // Try to determine entity type from properties
+                if (entity.contractId !== undefined || entity.netPos !== undefined) {
+                  // This looks like a position
+                  this.handlePositionUpdate(entity, "Created");
+                } else if (entity.ordStatus !== undefined || entity.status !== undefined) {
+                  // This looks like an order
+                  this.handleOrderUpdate(entity, "Created");
+                } else if (entity.amount !== undefined || entity.accountId !== undefined) {
+                  // This looks like an account/cashBalance
+                  this.handleAccountUpdate(entity, "Created", "cashBalance");
+                }
+              }
+            });
           }
         });
       } catch (error) {
@@ -353,7 +373,10 @@ export class TradovateWSMultiClient {
     }
     
     // Immediately trigger aggregation to notify listeners with current state
-    this.aggregateAndNotify();
+    // This ensures UI gets initial data even if WebSocket hasn't received updates yet
+    setTimeout(() => {
+      this.aggregateAndNotify();
+    }, 1000); // Give WebSocket time to establish and receive initial sync data
   }
 
   disconnectAll() {
@@ -412,16 +435,34 @@ export class TradovateWSMultiClient {
 
   onPositions(listener: PositionListener) {
     this.positionListeners.add(listener);
+    // Immediately notify with current state
+    const allPositions: PositionUpdate[] = [];
+    for (const connection of this.connections.values()) {
+      allPositions.push(...connection.getPositions());
+    }
+    listener(allPositions);
     return () => this.positionListeners.delete(listener);
   }
 
   onOrders(listener: OrderListener) {
     this.orderListeners.add(listener);
+    // Immediately notify with current state
+    const allOrders: OrderUpdate[] = [];
+    for (const connection of this.connections.values()) {
+      allOrders.push(...connection.getOrders());
+    }
+    listener(allOrders);
     return () => this.orderListeners.delete(listener);
   }
 
   onAccounts(listener: AccountListener) {
     this.accountListeners.add(listener);
+    // Immediately notify with current state
+    const allAccounts: AccountUpdate[] = [];
+    for (const connection of this.connections.values()) {
+      allAccounts.push(...connection.getAccounts());
+    }
+    listener(allAccounts);
     return () => this.accountListeners.delete(listener);
   }
 }
