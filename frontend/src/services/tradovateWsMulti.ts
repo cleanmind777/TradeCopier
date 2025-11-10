@@ -188,9 +188,25 @@ class SingleWSConnection {
     if (!data || data.length === 0) return;
 
     const frameType = data[0];
+    
+    // Ignore heartbeat ("h") and empty array ("[]") messages - these are keepalive messages
+    if (frameType === "h") {
+      // Heartbeat - just respond, don't trigger updates
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send("[]");
+      }
+      return;
+    }
+    
     if (frameType === "a") {
       try {
         const items = JSON.parse(data.substring(1));
+        
+        // Filter out empty arrays - these are keepalive messages
+        if (!items || items.length === 0) {
+          return;
+        }
+        
         items.forEach((item: any) => {
           if (item.s !== undefined && item.i !== undefined) {
             if (item.s === 200 && item.i === 1) {
@@ -207,7 +223,7 @@ class SingleWSConnection {
             
             if (!entity) return;
             
-            // Trigger listeners immediately when we receive order/position/account updates
+            // Only trigger updates for relevant entity types
             if (entityType === "position") {
               console.log(`[TradovateWS-${this.brokerAccountId}] Position ${eventType} received`);
               this.handlePositionUpdate(entity, eventType);
@@ -234,6 +250,7 @@ class SingleWSConnection {
                 console.log(`[TradovateWS-${this.brokerAccountId}] onUpdateCallback is null!`);
               }
             }
+            // Ignore other entity types (userAchievement, command, commandReport, etc.)
           }
           
           // Handle initial sync data (might come as arrays)
@@ -257,10 +274,6 @@ class SingleWSConnection {
         });
       } catch (error) {
         console.error(`[TradovateWS-${this.brokerAccountId}] Error parsing message:`, error);
-      }
-    } else if (frameType === "h") {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send("[]");
       }
     }
   }
