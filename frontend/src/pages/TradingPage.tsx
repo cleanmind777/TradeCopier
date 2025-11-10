@@ -672,7 +672,9 @@ const TradingPage: React.FC = () => {
     
     // Store handler in ref so it's accessible from WebSocket listeners
     handleWebSocketEventRef.current = handleWebSocketEvent;
+    console.log(`[WS TRIGGER] Registered handleWebSocketEvent in ref`);
 
+    console.log(`[WS TRIGGER] Registering WebSocket listeners...`);
     const unsubPositions = tradovateWSMultiClient.onPositions((_allPositions) => {
       console.log(`[WS TRIGGER] Positions listener called with ${_allPositions?.length || 0} positions`);
       // Track that WebSocket has sent an event
@@ -689,6 +691,7 @@ const TradingPage: React.FC = () => {
       // DO NOT update state from WebSocket data - only use API data
     });
 
+    console.log(`[WS TRIGGER] Positions listener registered`);
     const unsubOrders = tradovateWSMultiClient.onOrders((_allOrders) => {
       console.log(`[WS TRIGGER] Orders listener called with ${_allOrders?.length || 0} orders`);
       // Track that WebSocket has sent an event
@@ -705,6 +708,7 @@ const TradingPage: React.FC = () => {
       // DO NOT update state from WebSocket data - only use API data
     });
 
+    console.log(`[WS TRIGGER] Orders listener registered`);
     const unsubAccounts = tradovateWSMultiClient.onAccounts((_allAccounts) => {
       console.log(`[WS TRIGGER] Accounts listener called with ${_allAccounts?.length || 0} accounts`);
       // Track that WebSocket has sent an event
@@ -720,6 +724,7 @@ const TradingPage: React.FC = () => {
       
       // DO NOT update state from WebSocket data - only use API data
     });
+    console.log(`[WS TRIGGER] Accounts listener registered`);
 
     return () => {
       unsubPositions();

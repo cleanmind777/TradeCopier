@@ -482,15 +482,36 @@ export class TradovateWSMultiClient {
     // This ensures UI updates when positions/orders/accounts are cleared
     if (this.positionListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.positionListeners.size} position listeners`);
-      this.positionListeners.forEach((cb) => cb(allPositions));
+      this.positionListeners.forEach((cb, index) => {
+        console.log(`[TradovateWSMulti] Calling position listener ${index}`);
+        try {
+          cb(allPositions);
+        } catch (error) {
+          console.log(`[TradovateWSMulti] Error in position listener ${index}:`, error);
+        }
+      });
     }
     if (this.orderListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.orderListeners.size} order listeners`);
-      this.orderListeners.forEach((cb) => cb(allOrders));
+      this.orderListeners.forEach((cb, index) => {
+        console.log(`[TradovateWSMulti] Calling order listener ${index}`);
+        try {
+          cb(allOrders);
+        } catch (error) {
+          console.log(`[TradovateWSMulti] Error in order listener ${index}:`, error);
+        }
+      });
     }
     if (this.accountListeners.size > 0) {
       console.log(`[TradovateWSMulti] Notifying ${this.accountListeners.size} account listeners`);
-      this.accountListeners.forEach((cb) => cb(allAccounts));
+      this.accountListeners.forEach((cb, index) => {
+        console.log(`[TradovateWSMulti] Calling account listener ${index}`);
+        try {
+          cb(allAccounts);
+        } catch (error) {
+          console.log(`[TradovateWSMulti] Error in account listener ${index}:`, error);
+        }
+      });
     }
   }
 
