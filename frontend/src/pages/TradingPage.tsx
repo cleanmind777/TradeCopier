@@ -632,11 +632,13 @@ const TradingPage: React.FC = () => {
       try {
         // Clear any pending refresh
         if (wsRefreshTimerRef.current) {
+          console.log(`[WS TRIGGER] Clearing previous timer (ID: ${wsRefreshTimerRef.current})`);
           window.clearTimeout(wsRefreshTimerRef.current);
           wsRefreshTimerRef.current = null;
         }
 
         // Debounce: wait 500ms after last WebSocket event, then send ONE API request
+        console.log(`[WS TRIGGER] Setting new timer (500ms delay)`);
         const timerId = window.setTimeout(() => {
           try {
             console.log(`[WS TRIGGER] ⚡ Timer fired - sending API requests`);
@@ -665,6 +667,7 @@ const TradingPage: React.FC = () => {
         }, 500); // 500ms debounce - all events within this window trigger only one refresh
         
         wsRefreshTimerRef.current = timerId;
+        console.log(`[WS TRIGGER] Timer set with ID: ${timerId}`);
       } catch (error) {
         console.log(`[WS TRIGGER] ❌ Error in handleWebSocketEvent:`, error);
       }
