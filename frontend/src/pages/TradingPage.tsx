@@ -641,132 +641,56 @@ const TradingPage: React.FC = () => {
 
     const unsubPositions = tradovateWSMultiClient.onPositions((allPositions) => {
       const positionsArray = Array.isArray(allPositions) ? allPositions : [];
-      console.log(`[TradingPage] WebSocket positions update: ${positionsArray.length} positions`);
+      console.log(`[TradingPage] WebSocket positions event received: ${positionsArray.length} positions`);
       
-      // Track if WebSocket has sent data
-      const hasData = positionsArray.length > 0;
-      if (hasData) {
-        wsHasDataRef.current.positions = true;
-      }
+      // Track that WebSocket has sent an event
+      wsHasDataRef.current.positions = true;
       
-      // Only update state if WebSocket has sent data at least once
-      if (!wsHasDataRef.current.positions && !hasData) {
-        console.log(`[TradingPage] Skipping WebSocket positions update - no data yet, keeping API data`);
-        return;
-      }
-      
-      // If WebSocket has data, trigger API refresh and PnL SSE reconnect immediately
-      if (hasData && refreshDataRef.current) {
-        console.log(`[TradingPage] WebSocket positions update detected - triggering immediate API refresh and PnL SSE reconnect`);
+      // Use WebSocket event ONLY as a trigger - don't use WebSocket data
+      // Trigger API refresh and PnL SSE reconnect immediately
+      if (refreshDataRef.current) {
+        console.log(`[TradingPage] WebSocket positions event detected - triggering immediate API refresh and PnL SSE reconnect`);
         refreshDataRef.current.refreshTradingData(true); // true = immediate
         refreshDataRef.current.refreshPnLStream();
       }
       
-      // Show ALL positions from ALL groups - no group filtering
-      // Only filter by symbol if symbol is set
-      const currentSymbol = symbolRef.current;
-      let filtered = positionsArray;
-
-      // Filter by selected symbol (if symbol is set) - use exact match or prefix match
-      if (currentSymbol && currentSymbol.trim()) {
-        const symbolUpper = currentSymbol.toUpperCase();
-        filtered = filtered.filter((p: any) => {
-          if (!p || !p.symbol) return false;
-          const pSymbol = p.symbol.toUpperCase();
-          // Exact match
-          if (pSymbol === symbolUpper) return true;
-          // Prefix match (e.g., "NQ" matches "NQZ5", "NQH6", etc.)
-          const symbolPrefix = symbolUpper.slice(0, 2);
-          return pSymbol.startsWith(symbolPrefix);
-        });
-      }
-
-      console.log(`[TradingPage] Positions (all groups): ${filtered.length}`);
-      setPositions(filtered);
+      // DO NOT update state from WebSocket data - only use API data
     });
 
     const unsubOrders = tradovateWSMultiClient.onOrders((allOrders) => {
       const ordersArray = Array.isArray(allOrders) ? allOrders : [];
-      console.log(`[TradingPage] WebSocket orders update: ${ordersArray.length} orders`);
+      console.log(`[TradingPage] WebSocket orders event received: ${ordersArray.length} orders`);
       
-      // Track if WebSocket has sent data
-      const hasData = ordersArray.length > 0;
-      if (hasData) {
-        wsHasDataRef.current.orders = true;
-      }
+      // Track that WebSocket has sent an event
+      wsHasDataRef.current.orders = true;
       
-      // Only update state if WebSocket has sent data at least once
-      if (!wsHasDataRef.current.orders && !hasData) {
-        console.log(`[TradingPage] Skipping WebSocket orders update - no data yet, keeping API data`);
-        return;
-      }
-      
-      // If WebSocket has data, trigger API refresh and PnL SSE reconnect immediately
-      if (hasData && refreshDataRef.current) {
-        console.log(`[TradingPage] WebSocket orders update detected - triggering immediate API refresh and PnL SSE reconnect`);
+      // Use WebSocket event ONLY as a trigger - don't use WebSocket data
+      // Trigger API refresh and PnL SSE reconnect immediately
+      if (refreshDataRef.current) {
+        console.log(`[TradingPage] WebSocket orders event detected - triggering immediate API refresh and PnL SSE reconnect`);
         refreshDataRef.current.refreshTradingData(true); // true = immediate
         refreshDataRef.current.refreshPnLStream();
       }
       
-      const currentGroup = selectedGroupRef.current;
-      const currentSymbol = symbolRef.current;
-
-      // Show ALL orders if no group selected, otherwise filter by group
-      let filtered = ordersArray;
-      if (currentGroup && currentGroup.sub_brokers.length > 0) {
-        const groupAccountIds = new Set(
-          currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
-        );
-        filtered = filtered.filter((o: any) => 
-          o && o.accountId && groupAccountIds.has(Number(o.accountId))
-        );
-      }
-
-      // Filter by selected symbol (if symbol is set) - use exact match or prefix match
-      if (currentSymbol && currentSymbol.trim()) {
-        const symbolUpper = currentSymbol.toUpperCase();
-        filtered = filtered.filter((o: any) => {
-          if (!o || !o.symbol) return false;
-          const oSymbol = o.symbol.toUpperCase();
-          // Exact match
-          if (oSymbol === symbolUpper) return true;
-          // Prefix match (e.g., "NQ" matches "NQZ5", "NQH6", etc.)
-          const symbolPrefix = symbolUpper.slice(0, 2);
-          return oSymbol.startsWith(symbolPrefix);
-        });
-      }
-
-      console.log(`[TradingPage] Filtered orders: ${filtered.length}`);
-      setOrders(filtered);
+      // DO NOT update state from WebSocket data - only use API data
     });
 
     const unsubAccounts = tradovateWSMultiClient.onAccounts((allAccounts) => {
       const accountsArray = Array.isArray(allAccounts) ? allAccounts : [];
-      console.log(`[TradingPage] WebSocket accounts update: ${accountsArray.length} accounts`);
+      console.log(`[TradingPage] WebSocket accounts event received: ${accountsArray.length} accounts`);
       
-      // Track if WebSocket has sent data
-      const hasData = accountsArray.length > 0;
-      if (hasData) {
-        wsHasDataRef.current.accounts = true;
-      }
+      // Track that WebSocket has sent an event
+      wsHasDataRef.current.accounts = true;
       
-      // Only update state if WebSocket has sent data at least once
-      if (!wsHasDataRef.current.accounts && !hasData) {
-        console.log(`[TradingPage] Skipping WebSocket accounts update - no data yet, keeping API data`);
-        return;
-      }
-      
-      // If WebSocket has data, trigger API refresh and PnL SSE reconnect immediately
-      if (hasData && refreshDataRef.current) {
-        console.log(`[TradingPage] WebSocket accounts update detected - triggering immediate API refresh and PnL SSE reconnect`);
+      // Use WebSocket event ONLY as a trigger - don't use WebSocket data
+      // Trigger API refresh and PnL SSE reconnect immediately
+      if (refreshDataRef.current) {
+        console.log(`[TradingPage] WebSocket accounts event detected - triggering immediate API refresh and PnL SSE reconnect`);
         refreshDataRef.current.refreshTradingData(true); // true = immediate
         refreshDataRef.current.refreshPnLStream();
       }
       
-      // Keep ALL accounts (needed for groupMonitorRows realized PnL calculation)
-      // Filtering by group will be done in the accounts tab display
-      console.log(`[TradingPage] Accounts (all groups): ${accountsArray.length}`);
-      setAccounts(accountsArray);
+      // DO NOT update state from WebSocket data - only use API data
     });
 
     return () => {
