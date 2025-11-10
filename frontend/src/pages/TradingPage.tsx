@@ -674,36 +674,48 @@ const TradingPage: React.FC = () => {
     handleWebSocketEventRef.current = handleWebSocketEvent;
 
     const unsubPositions = tradovateWSMultiClient.onPositions((_allPositions) => {
+      console.log(`[WS TRIGGER] Positions listener called with ${_allPositions?.length || 0} positions`);
       // Track that WebSocket has sent an event
       wsHasDataRef.current.positions = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
       if (handleWebSocketEventRef.current) {
+        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from positions listener`);
         handleWebSocketEventRef.current();
+      } else {
+        console.log(`[WS TRIGGER] ❌ handleWebSocketEventRef.current is null in positions listener!`);
       }
       
       // DO NOT update state from WebSocket data - only use API data
     });
 
     const unsubOrders = tradovateWSMultiClient.onOrders((_allOrders) => {
+      console.log(`[WS TRIGGER] Orders listener called with ${_allOrders?.length || 0} orders`);
       // Track that WebSocket has sent an event
       wsHasDataRef.current.orders = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
       if (handleWebSocketEventRef.current) {
+        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from orders listener`);
         handleWebSocketEventRef.current();
+      } else {
+        console.log(`[WS TRIGGER] ❌ handleWebSocketEventRef.current is null in orders listener!`);
       }
       
       // DO NOT update state from WebSocket data - only use API data
     });
 
     const unsubAccounts = tradovateWSMultiClient.onAccounts((_allAccounts) => {
+      console.log(`[WS TRIGGER] Accounts listener called with ${_allAccounts?.length || 0} accounts`);
       // Track that WebSocket has sent an event
       wsHasDataRef.current.accounts = true;
       
       // Trigger debounced refresh (will combine with other WebSocket events)
       if (handleWebSocketEventRef.current) {
+        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from accounts listener`);
         handleWebSocketEventRef.current();
+      } else {
+        console.log(`[WS TRIGGER] ❌ handleWebSocketEventRef.current is null in accounts listener!`);
       }
       
       // DO NOT update state from WebSocket data - only use API data
