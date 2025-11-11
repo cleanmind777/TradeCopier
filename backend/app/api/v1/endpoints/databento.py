@@ -637,6 +637,75 @@ async def stream_pnl_data(
         }
         yield f"data: {json.dumps(status_data)}\n\n"
         
+        # Send initial PnL using historical data to ensure frontend gets data immediately
+        try:
+            from datetime import datetime as dt, timezone, timedelta
+            hist_client = dbt.Historical(key=settings.DATABENTO_KEY)
+            end = dt.now(timezone.utc)
+            start = end - timedelta(minutes=5)
+            
+            all_variants = []
+            for sym in symbols:
+                all_variants.extend(_root_symbol_variants(sym))
+            all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+            
+            if all_variants:
+                result = hist_client.timeseries.get_range(
+                    dataset=DATASET,
+                    start=start.isoformat(),
+                    end=end.isoformat(),
+                    symbols=all_variants,
+                    schema="ohlcv-1m",
+                )
+                df = result.to_df()
+                
+                # Send initial PnL for all positions
+                for symbol_name, position_list in symbol_to_positions.items():
+                    current_price = None
+                    symbol_variants = _root_symbol_variants(symbol_name)
+                    for variant in symbol_variants:
+                        symbol_data = df[df.index.get_level_values('symbol') == variant]
+                        if not symbol_data.empty:
+                            latest = symbol_data.iloc[-1]
+                            current_price = float(latest['close'])
+                            break
+                    
+                    if current_price is None:
+                        continue
+                    
+                    for position in position_list:
+                        netPos = position["netPos"]
+                        netPrice = position["netPrice"]
+                        contractDetails = position["contractDetails"]
+                        valuePerPoint = contractDetails["valuePerPoint"]
+                        
+                        if netPos > 0:
+                            price_diff = current_price - netPrice
+                            unrealized_pnl = price_diff * netPos * valuePerPoint
+                        else:
+                            price_diff = netPrice - current_price
+                            unrealized_pnl = price_diff * abs(netPos) * valuePerPoint
+                        
+                        pnl_data = {
+                            "symbol": symbol_name,
+                            "accountId": position["accountId"],
+                            "accountNickname": position["accountNickname"],
+                            "accountDisplayName": position["accountDisplayName"],
+                            "netPos": netPos,
+                            "entryPrice": netPrice,
+                            "currentPrice": current_price,
+                            "unrealizedPnL": round(unrealized_pnl, 2),
+                            "bidPrice": current_price,
+                            "askPrice": current_price,
+                            "timestamp": datetime.now().isoformat(),
+                            "positionKey": f"{symbol_name}:{position['accountId']}",
+                            "source": "initial_historical"
+                        }
+                        yield f"data: {json.dumps(pnl_data)}\n\n"
+        except Exception as init_error:
+            # If initial historical fails, continue with live API
+            pass
+        
         try:
             # Track latest prices for each symbol
             latest_prices = {}
@@ -757,19 +826,166 @@ async def stream_pnl_data(
                     continue
                     
         except Exception as iteration_error:
-            error_data = {
-                "error": f"Iteration error: {str(iteration_error)}",
-                "timestamp": datetime.now().isoformat()
-            }
-            yield f"data: {json.dumps(error_data)}\n\n"
+            # Live API failed - fallback to historical data
+            error_msg = str(iteration_error)
+            yield f"data: {json.dumps({'status': 'live_api_failed', 'error': error_msg, 'falling_back': 'historical'})}\n\n"
+            
+            # Fallback to historical data
+            try:
+                from datetime import datetime as dt, timezone, timedelta
+                hist_client = dbt.Historical(key=settings.DATABENTO_KEY)
+                end = dt.now(timezone.utc)
+                start = end - timedelta(minutes=5)
+                
+                # Build symbol variants
+                all_variants = []
+                for sym in symbols:
+                    all_variants.extend(_root_symbol_variants(sym))
+                all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+                
+                if all_variants:
+                    result = hist_client.timeseries.get_range(
+                        dataset=DATASET,
+                        start=start.isoformat(),
+                        end=end.isoformat(),
+                        symbols=all_variants,
+                        schema="ohlcv-1m",
+                    )
+                    df = result.to_df()
+                    
+                    # Calculate PnL using historical data
+                    for symbol_name, position_list in symbol_to_positions.items():
+                        # Find latest price for this symbol
+                        current_price = None
+                        symbol_variants = _root_symbol_variants(symbol_name)
+                        for variant in symbol_variants:
+                            symbol_data = df[df.index.get_level_values('symbol') == variant]
+                            if not symbol_data.empty:
+                                latest = symbol_data.iloc[-1]
+                                current_price = float(latest['close'])
+                                break
+                        
+                        if current_price is None:
+                            continue
+                        
+                        # Calculate PnL for all positions of this symbol
+                        for position in position_list:
+                            netPos = position["netPos"]
+                            netPrice = position["netPrice"]
+                            contractDetails = position["contractDetails"]
+                            valuePerPoint = contractDetails["valuePerPoint"]
+                            
+                            # Calculate PnL
+                            if netPos > 0:
+                                price_diff = current_price - netPrice
+                                unrealized_pnl = price_diff * netPos * valuePerPoint
+                            else:
+                                price_diff = netPrice - current_price
+                                unrealized_pnl = price_diff * abs(netPos) * valuePerPoint
+                            
+                            pnl_data = {
+                                "symbol": symbol_name,
+                                "accountId": position["accountId"],
+                                "accountNickname": position["accountNickname"],
+                                "accountDisplayName": position["accountDisplayName"],
+                                "netPos": netPos,
+                                "entryPrice": netPrice,
+                                "currentPrice": current_price,
+                                "unrealizedPnL": round(unrealized_pnl, 2),
+                                "bidPrice": current_price,
+                                "askPrice": current_price,
+                                "timestamp": datetime.now().isoformat(),
+                                "positionKey": f"{symbol_name}:{position['accountId']}",
+                                "source": "historical_fallback"
+                            }
+                            yield f"data: {json.dumps(pnl_data)}\n\n"
+            except Exception as hist_error:
+                error_data = {
+                    "error": f"Historical fallback also failed: {str(hist_error)}",
+                    "timestamp": datetime.now().isoformat()
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
     
     except Exception as e:
         error_msg = str(e)
-        error_data = {
-            "error": f"PnL tracking error: {error_msg}",
-            "timestamp": datetime.now().isoformat()
-        }
-        yield f"data: {json.dumps(error_data)}\n\n"
+        # Try historical fallback even on initial connection error
+        try:
+            # Extract symbols from positions if not already defined
+            if 'symbols' not in locals() or not symbols:
+                symbols = list({(pos.get('symbol')) for pos in positions if (pos.get('netPos') or 0) != 0})
+            
+            if not symbols or not positions:
+                error_data = {
+                    "error": f"PnL tracking error: {error_msg}",
+                    "timestamp": datetime.now().isoformat()
+                }
+                yield f"data: {json.dumps(error_data)}\n\n"
+                return
+            
+            from datetime import datetime as dt, timezone, timedelta
+            hist_client = dbt.Historical(key=settings.DATABENTO_KEY)
+            end = dt.now(timezone.utc)
+            start = end - timedelta(minutes=5)
+            
+            all_variants = []
+            for sym in symbols:
+                all_variants.extend(_root_symbol_variants(sym))
+            all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+            
+            if all_variants and positions:
+                result = hist_client.timeseries.get_range(
+                    dataset=DATASET,
+                    start=start.isoformat(),
+                    end=end.isoformat(),
+                    symbols=all_variants,
+                    schema="ohlcv-1m",
+                )
+                df = result.to_df()
+                
+                # Calculate PnL using historical data
+                for pos in positions:
+                    net_pos = pos.get("netPos") or 0
+                    if net_pos != 0:
+                        symbol_name = pos.get("symbol")
+                        account_id = pos.get("accountId")
+                        net_price = pos.get("netPrice") or 0
+                        contract_id = pos.get("contractId")
+                        contract_details = contract_details_cache.get(contract_id, {"valuePerPoint": 50, "tickSize": 0.25})
+                        
+                        current_price = net_price
+                        symbol_variants = _root_symbol_variants(symbol_name)
+                        for variant in symbol_variants:
+                            symbol_data = df[df.index.get_level_values('symbol') == variant]
+                            if not symbol_data.empty:
+                                latest = symbol_data.iloc[-1]
+                                current_price = float(latest['close'])
+                                break
+                        
+                        price_diff = current_price - net_price
+                        unrealized_pnl = price_diff * net_pos * contract_details.get("valuePerPoint", 50)
+                        
+                        pnl_data = {
+                            "symbol": symbol_name,
+                            "accountId": account_id,
+                            "accountNickname": pos.get("accountNickname", ""),
+                            "accountDisplayName": pos.get("accountDisplayName", ""),
+                            "netPos": net_pos,
+                            "entryPrice": net_price,
+                            "currentPrice": current_price,
+                            "unrealizedPnL": round(unrealized_pnl, 2),
+                            "bidPrice": current_price,
+                            "askPrice": current_price,
+                            "timestamp": datetime.now().isoformat(),
+                            "positionKey": f"{symbol_name}:{account_id}",
+                            "source": "historical_fallback"
+                        }
+                        yield f"data: {json.dumps(pnl_data)}\n\n"
+        except:
+            error_data = {
+                "error": f"PnL tracking error: {error_msg}",
+                "timestamp": datetime.now().isoformat()
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
     
     finally:
         # Try to close the DataBento client if it exists
