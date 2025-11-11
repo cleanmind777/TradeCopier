@@ -436,10 +436,10 @@ async def sse_price_stream(request: Request, symbols: str = None):
                                     }
                                     yield f"data: {json.dumps(price_data)}\n\n"
                                     break
-                
-                # Send market closed status
-                payload = {"status": "market_closed", "reason": reason, "source": "historical"}
-                yield f"data: {json.dumps(payload)}\n\n"
+                    
+                    # Send market closed status
+                    payload = {"status": "market_closed", "reason": reason, "source": "historical"}
+                    yield f"data: {json.dumps(payload)}\n\n"
             except Exception as e:
                 error_data = {"status": "market_closed", "reason": f"historical_fallback_error: {str(e)}"}
                 yield f"data: {json.dumps(error_data)}\n\n"
@@ -617,15 +617,19 @@ async def stream_pnl_data(
                 })
         
         # Initialize DataBento Live client
+        print(f"[PnL SSE] Initializing Live client for symbols: {symbols}")
         client = dbt.Live(key=settings.DATABENTO_KEY)
+        print(f"[PnL SSE] Live client created successfully")
         
         # Subscribe to symbols
+        print(f"[PnL SSE] Subscribing to symbols: {symbols}, dataset: {DATASET}, schema: {SCHEMA}")
         client.subscribe(
             dataset=DATASET,
             schema=SCHEMA,
             symbols=symbols,
             stype_in="raw_symbol"
         )
+        print(f"[PnL SSE] Subscription completed")
         
         # Send initial status message
         status_data = {
@@ -635,10 +639,12 @@ async def stream_pnl_data(
             "symbols": symbols,
             "timestamp": datetime.now().isoformat()
         }
+        print(f"[PnL SSE] Sending initial status: {status_data}")
         yield f"data: {json.dumps(status_data)}\n\n"
         
         # Send initial PnL using historical data to ensure frontend gets data immediately
         try:
+            print(f"[PnL SSE] Fetching initial historical data for symbols: {symbols}")
             from datetime import datetime as dt, timezone, timedelta
             hist_client = dbt.Historical(key=settings.DATABENTO_KEY)
             end = dt.now(timezone.utc)
@@ -648,6 +654,7 @@ async def stream_pnl_data(
             for sym in symbols:
                 all_variants.extend(_root_symbol_variants(sym))
             all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+            print(f"[PnL SSE] Historical query variants: {all_variants}, start: {start.isoformat()}, end: {end.isoformat()}")
             
             if all_variants:
                 result = hist_client.timeseries.get_range(
@@ -658,8 +665,10 @@ async def stream_pnl_data(
                     schema="ohlcv-1m",
                 )
                 df = result.to_df()
+                print(f"[PnL SSE] Historical data received: {len(df)} rows")
                 
                 # Send initial PnL for all positions
+                initial_pnl_count = 0
                 for symbol_name, position_list in symbol_to_positions.items():
                     current_price = None
                     symbol_variants = _root_symbol_variants(symbol_name)
@@ -668,9 +677,11 @@ async def stream_pnl_data(
                         if not symbol_data.empty:
                             latest = symbol_data.iloc[-1]
                             current_price = float(latest['close'])
+                            print(f"[PnL SSE] Found price for {symbol_name} (variant {variant}): {current_price}")
                             break
                     
                     if current_price is None:
+                        print(f"[PnL SSE] WARNING: No price found for symbol {symbol_name}")
                         continue
                     
                     for position in position_list:
@@ -701,18 +712,30 @@ async def stream_pnl_data(
                             "positionKey": f"{symbol_name}:{position['accountId']}",
                             "source": "initial_historical"
                         }
+                        print(f"[PnL SSE] Sending initial PnL: {pnl_data['symbol']}, account: {pnl_data['accountId']}, PnL: {pnl_data['unrealizedPnL']}")
                         yield f"data: {json.dumps(pnl_data)}\n\n"
+                        initial_pnl_count += 1
+                print(f"[PnL SSE] Sent {initial_pnl_count} initial PnL updates")
         except Exception as init_error:
             # If initial historical fails, continue with live API
-            pass
+            print(f"[PnL SSE] ERROR in initial historical fetch: {str(init_error)}")
+            import traceback
+            print(f"[PnL SSE] Traceback: {traceback.format_exc()}")
         
         try:
             # Track latest prices for each symbol
             latest_prices = {}
+            record_count = 0
             
+            print(f"[PnL SSE] Starting to iterate over Live client records...")
             for record in client:
+                record_count += 1
+                if record_count % 100 == 0:
+                    print(f"[PnL SSE] Processed {record_count} records from Live API")
+                
                 # Check if client disconnected - do this FIRST before processing any data
                 if await request.is_disconnected():
+                    print(f"[PnL SSE] Client disconnected, closing connection")
                     # Try to close the DataBento client
                     try:
                         if hasattr(client, 'close'):
@@ -732,19 +755,26 @@ async def stream_pnl_data(
                         
                         if instrument_id is not None and symbol is not None:
                             symbol_mapping[instrument_id] = symbol
+                            print(f"[PnL SSE] Symbol mapping: instrument_id={instrument_id} -> symbol={symbol}")
                         
                         continue
                     
                     elif record_type in ["MBP1Msg", "MBPMsg", "TradeMsg"]:
+                        if record_count <= 10 or record_count % 50 == 0:
+                            print(f"[PnL SSE] Received {record_type} record #{record_count}")
                         # Extract price data robustly
                         instrument_id = getattr(record, 'instrument_id', None)
                         symbol = symbol_mapping.get(instrument_id, None) or getattr(record, 'stype_in_symbol', None)
                         if not symbol or symbol not in symbol_to_positions:
+                            if record_count <= 10:
+                                print(f"[PnL SSE] Skipping record: symbol={symbol}, instrument_id={instrument_id}, symbol in positions: {symbol in symbol_to_positions if symbol else False}")
                             continue
 
                         bid_price = None
                         ask_price = None
                         last_price = None
+                        if record_count <= 10:
+                            print(f"[PnL SSE] Processing price data for symbol: {symbol}, instrument_id: {instrument_id}")
 
                         if hasattr(record, 'levels'):
                             levels_data = record.levels
@@ -771,11 +801,17 @@ async def stream_pnl_data(
                                 last_price = float(record.px)
 
                         if bid_price is None and ask_price is None and last_price is None:
+                            if record_count <= 10:
+                                print(f"[PnL SSE] No price data extracted for symbol {symbol}")
                             continue
+                        
+                        if record_count <= 10 or record_count % 50 == 0:
+                            print(f"[PnL SSE] Price data for {symbol}: bid={bid_price}, ask={ask_price}, last={last_price}")
                         
                         latest_prices[symbol] = {"bid": bid_price, "ask": ask_price, "last": last_price}
 
                         # Calculate and emit PnL for all positions under this symbol
+                        pnl_updates_sent = 0
                         for position in symbol_to_positions[symbol]:
                             netPos = position["netPos"]
                             netPrice = position["netPrice"]
@@ -820,14 +856,25 @@ async def stream_pnl_data(
                                 "positionKey": f"{symbol}:{position['accountId']}"
                             }
 
+                            if record_count <= 10 or pnl_updates_sent == 0:
+                                print(f"[PnL SSE] Sending PnL update: {symbol}, account: {position['accountId']}, PnL: {pnl_data['unrealizedPnL']}")
                             yield f"data: {json.dumps(pnl_data)}\n\n"
+                            pnl_updates_sent += 1
                 
                 except Exception as record_error:
+                    if record_count <= 10:
+                        print(f"[PnL SSE] ERROR processing record #{record_count}: {str(record_error)}")
+                        import traceback
+                        print(f"[PnL SSE] Traceback: {traceback.format_exc()}")
                     continue
                     
         except Exception as iteration_error:
             # Live API failed - fallback to historical data
             error_msg = str(iteration_error)
+            print(f"[PnL SSE] ERROR in Live API iteration: {error_msg}")
+            import traceback
+            print(f"[PnL SSE] Traceback: {traceback.format_exc()}")
+            print(f"[PnL SSE] Total records processed before error: {record_count}")
             yield f"data: {json.dumps({'status': 'live_api_failed', 'error': error_msg, 'falling_back': 'historical'})}\n\n"
             
             # Fallback to historical data
@@ -1178,9 +1225,9 @@ async def sse_pnl_stream(
                                 }
                                 yield f"data: {json.dumps(pnl_data)}\n\n"
                     
-                    # Send market closed status
-                    payload = {"status": "market_closed", "reason": reason, "source": "historical"}
-                    yield f"data: {json.dumps(payload)}\n\n"
+                        # Send market closed status
+                        payload = {"status": "market_closed", "reason": reason, "source": "historical"}
+                        yield f"data: {json.dumps(payload)}\n\n"
                 except Exception as e:
                     error_data = {"status": "market_closed", "reason": f"historical_fallback_error: {str(e)}"}
                     yield f"data: {json.dumps(error_data)}\n\n"
