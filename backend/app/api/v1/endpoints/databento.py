@@ -871,7 +871,7 @@ async def sse_pnl_stream(
                                         "tickSize": product_item.get("tickSize", 0.25),
                                         "symbol": contract_item.get("name", "")
                                     }
-    except Exception:
+                    except Exception:
                         # Use defaults
                         contract_details_cache[contract_id] = {
                             "valuePerPoint": 50,
