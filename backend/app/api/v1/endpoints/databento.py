@@ -41,20 +41,29 @@ def _root_symbol_variants(symbol: str) -> list[str]:
 async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
     """Check market status using recent historical data. Returns False if market is closed."""
     try:
+        print(f"[Market Status] Checking market status for symbols: {symbols}")
         if not settings.DATABENTO_KEY:
+            print(f"[Market Status] ERROR: DATABENTO_KEY not set")
             return (False, "missing_api_key")
         from datetime import datetime as dt, timezone, timedelta
         client = dbt.Historical(key=settings.DATABENTO_KEY)
         end = dt.now(timezone.utc)
         start = end - timedelta(minutes=15)  # Check last 15 minutes for recent data
+        print(f"[Market Status] Querying Databento Historical API: start={start.isoformat()}, end={end.isoformat()}")
+        
         # Build variant list per symbol
         all_variants: list[str] = []
         for sym in symbols:
             all_variants.extend(_root_symbol_variants(sym))
         all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+        print(f"[Market Status] Symbol variants: {all_variants}")
+        
         if not all_variants:
+            print(f"[Market Status] ERROR: No symbol variants found")
             return (False, "no_symbols")
+        
         # Query minimal range; if data within 15 minutes, market is open
+        print(f"[Market Status] Calling Databento timeseries.get_range...")
         result = client.timeseries.get_range(
             dataset=DATASET,
             start=start.isoformat(),
@@ -62,21 +71,48 @@ async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
             symbols=all_variants,
             schema="ohlcv-1m",
         )
+        print(f"[Market Status] Databento API response received: type={type(result)}")
         df = result.to_df()
+        print(f"[Market Status] DataFrame shape: {df.shape}, empty: {df.empty}")
+        
         if df.empty:
+            print(f"[Market Status] WARNING: DataFrame is empty - no recent data")
             return (False, "no_recent_data")
+        
+        # Log sample data
+        if len(df) > 0:
+            print(f"[Market Status] DataFrame columns: {df.columns.tolist()}")
+            print(f"[Market Status] DataFrame index levels: {df.index.names if hasattr(df.index, 'names') else 'No index names'}")
+            print(f"[Market Status] First few rows:\n{df.head()}")
+        
         try:
             max_ts = df.index.get_level_values("ts_event").max()
-        except Exception:
+            print(f"[Market Status] Max timestamp from data: {max_ts}")
+        except Exception as ts_error:
+            print(f"[Market Status] ERROR extracting timestamp: {str(ts_error)}")
             max_ts = None
+        
         if not max_ts:
+            print(f"[Market Status] WARNING: No timestamp found in data")
             return (False, "no_timestamp")
+        
+        # Calculate time difference
+        time_diff = end - max_ts
+        time_diff_minutes = time_diff.total_seconds() / 60
+        print(f"[Market Status] Time difference: {time_diff_minutes:.2f} minutes (threshold: 15 minutes)")
+        
         # If latest data is more than 15 minutes old, market is likely closed
         if (end - max_ts) > timedelta(minutes=15):
+            print(f"[Market Status] Market detected as CLOSED (data is {time_diff_minutes:.2f} minutes old)")
             return (False, "market_closed")
+        
+        print(f"[Market Status] Market detected as OPEN (data is {time_diff_minutes:.2f} minutes old)")
         return (True, "market_open")
     except Exception as e:
         # On error, assume closed to be safe
+        print(f"[Market Status] EXCEPTION in is_market_open: {str(e)}")
+        import traceback
+        print(f"[Market Status] Traceback: {traceback.format_exc()}")
         return (False, f"error_checking: {str(e)}")
 
 
@@ -391,8 +427,11 @@ async def sse_price_stream(request: Request, symbols: str = None):
         )
 
     # Check market status quickly to avoid slow connects when closed
+    print(f"[Price SSE] Checking market status for symbols: {symbol_list}")
     open_flag, reason = await is_market_open(symbol_list)
+    print(f"[Price SSE] Market status result: open={open_flag}, reason={reason}")
     if not open_flag:
+        print(f"[Price SSE] Market is closed (reason: {reason}), using historical fallback")
         # Market is closed or API key missing - use historical data fallback
         async def historical_price_fallback():
             from datetime import datetime as dt, timezone, timedelta
@@ -1150,8 +1189,11 @@ async def sse_pnl_stream(
     # Database session will be automatically closed when the dependency exits
     
     if symbols:
+        print(f"[PnL SSE] Checking market status for symbols: {symbols}")
         open_flag, reason = await is_market_open(symbols)
+        print(f"[PnL SSE] Market status result: open={open_flag}, reason={reason}")
         if not open_flag:
+            print(f"[PnL SSE] Market is closed (reason: {reason}), using historical fallback")
             # Market is closed - use historical data fallback for PnL
             async def historical_pnl_fallback():
                 from datetime import datetime as dt, timezone, timedelta
