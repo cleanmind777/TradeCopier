@@ -964,7 +964,7 @@ async def sse_pnl_stream(
                     
                     # Send market closed status
                     payload = {"status": "market_closed", "reason": reason, "source": "historical"}
-                yield f"data: {json.dumps(payload)}\n\n"
+                    yield f"data: {json.dumps(payload)}\n\n"
                 except Exception as e:
                     error_data = {"status": "market_closed", "reason": f"historical_fallback_error: {str(e)}"}
                     yield f"data: {json.dumps(error_data)}\n\n"
