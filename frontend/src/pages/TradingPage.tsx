@@ -56,6 +56,7 @@ const TradingPage: React.FC = () => {
   const [groupBalance, setGroupBalance] = useState<number>(0); // kept for future toolbar summaries
   const [groupSymbolNet, setGroupSymbolNet] = useState<{ netPos: number; avgNetPrice: number; }>({ netPos: 0, avgNetPrice: 0 });
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
+  const [isMarketClosed, setIsMarketClosed] = useState<boolean>(false);
 
   // Real-time price data (bid, ask, last, sizes)
   const [currentPrice, setCurrentPrice] = useState<{
@@ -807,6 +808,12 @@ const TradingPage: React.FC = () => {
   }, [positions]);
 
   const handleFlattenAll = async () => {
+    // Check if market is closed
+    if (isMarketClosed) {
+      alert("Current Market Close");
+      return;
+    }
+
     try {
       setIsOrdering(true);
       const exitList = positions
@@ -920,6 +927,7 @@ const TradingPage: React.FC = () => {
         // Check for market closed status
         if (data.status === "market_closed") {
           setIsConnectedToPnL(false);
+          setIsMarketClosed(true);
           return;
         }
 
@@ -989,12 +997,18 @@ const TradingPage: React.FC = () => {
         const statusJson = await statusRes.json();
         if (!statusJson.open) {
           setIsPriceIdle(true);
+          setIsMarketClosed(true);
           // Still attempt SSE unless API key is missing
           if (statusJson.reason === 'missing_api_key') {
             return;
           }
+        } else {
+          setIsMarketClosed(false);
         }
-      } catch {}
+      } catch {
+        // On error, assume market is closed to be safe
+        setIsMarketClosed(true);
+      }
       
       // Create EventSource with current symbol
       const currentSymbol = currentSymbolRef.current;
@@ -1010,6 +1024,14 @@ const TradingPage: React.FC = () => {
           // Handle connection status message
           if (data.status === "connected") {
             sseConnectionIdRef.current = data.connection_id || null;
+            setIsMarketClosed(false);
+            return;
+          }
+          
+          // Check for market closed status
+          if (data.status === "market_closed") {
+            setIsMarketClosed(true);
+            setIsPriceIdle(true);
             return;
           }
           
@@ -1214,6 +1236,12 @@ const TradingPage: React.FC = () => {
 
   // Execute buy/sell order directly via WebSocket
   const executeOrder = async (action: "Buy" | "Sell") => {
+    // Check if market is closed
+    if (isMarketClosed) {
+      alert("Current Market Close");
+      return;
+    }
+
     if (
       !selectedGroup
     ) {

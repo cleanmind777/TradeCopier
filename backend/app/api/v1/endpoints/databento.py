@@ -39,22 +39,22 @@ def _root_symbol_variants(symbol: str) -> list[str]:
 
 
 async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
-    """Heuristic market status using recent historical data presence; permissive to avoid false negatives."""
+    """Check market status using recent historical data. Returns False if market is closed."""
     try:
         if not settings.DATABENTO_KEY:
             return (False, "missing_api_key")
         from datetime import datetime as dt, timezone, timedelta
         client = dbt.Historical(key=settings.DATABENTO_KEY)
         end = dt.now(timezone.utc)
-        start = end - timedelta(minutes=90)
+        start = end - timedelta(minutes=15)  # Check last 15 minutes for recent data
         # Build variant list per symbol
         all_variants: list[str] = []
         for sym in symbols:
             all_variants.extend(_root_symbol_variants(sym))
         all_variants = list(dict.fromkeys([v for v in all_variants if v]))
         if not all_variants:
-            return (True, "no_symbols")
-        # Query minimal range; if any data within 60 minutes, treat open
+            return (False, "no_symbols")
+        # Query minimal range; if data within 15 minutes, market is open
         result = client.timeseries.get_range(
             dataset=DATASET,
             start=start.isoformat(),
@@ -64,19 +64,20 @@ async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
         )
         df = result.to_df()
         if df.empty:
-            return (True, "permissive_no_data")
+            return (False, "no_recent_data")
         try:
             max_ts = df.index.get_level_values("ts_event").max()
         except Exception:
             max_ts = None
         if not max_ts:
-            return (True, "permissive_no_ts")
-        if (end - max_ts) <= timedelta(minutes=60):
-            return (True, "recent_data")
-        return (True, "permissive_stale")
-    except Exception:
-        # Be permissive to avoid blocking live
-        return (True, "error_checking_permissive")
+            return (False, "no_timestamp")
+        # If latest data is more than 15 minutes old, market is likely closed
+        if (end - max_ts) > timedelta(minutes=15):
+            return (False, "market_closed")
+        return (True, "market_open")
+    except Exception as e:
+        # On error, assume closed to be safe
+        return (False, f"error_checking: {str(e)}")
 
 
 @router.get("/market-status")
@@ -391,12 +392,60 @@ async def sse_price_stream(request: Request, symbols: str = None):
 
     # Check market status quickly to avoid slow connects when closed
     open_flag, reason = await is_market_open(symbol_list)
-    if not open_flag and reason == "missing_api_key":
-        async def closed_stream():
-            payload = {"status": "market_closed", "reason": reason}
+    if not open_flag:
+        # Market is closed or API key missing - use historical data fallback
+        async def historical_price_fallback():
+            from datetime import datetime as dt, timezone, timedelta
+            try:
+                client = dbt.Historical(key=settings.DATABENTO_KEY)
+                end = dt.now(timezone.utc)
+                start = end - timedelta(minutes=5)  # Get last 5 minutes of data
+                
+                # Build symbol variants
+                all_variants = []
+                for sym in symbol_list:
+                    all_variants.extend(_root_symbol_variants(sym))
+                all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+                
+                if all_variants:
+                    result = client.timeseries.get_range(
+                        dataset=DATASET,
+                        start=start.isoformat(),
+                        end=end.isoformat(),
+                        symbols=all_variants,
+                        schema="ohlcv-1m",
+                    )
+                    df = result.to_df()
+                    if not df.empty:
+                        # Get latest price for each symbol
+                        for symbol in symbol_list:
+                            symbol_variants = _root_symbol_variants(symbol)
+                            for variant in symbol_variants:
+                                symbol_data = df[df.index.get_level_values('symbol') == variant]
+                                if not symbol_data.empty:
+                                    latest = symbol_data.iloc[-1]
+                                    price_data = {
+                                        "symbol": symbol,
+                                        "bid_price": float(latest['close']),
+                                        "ask_price": float(latest['close']),
+                                        "timestamp": str(latest.name[0]) if hasattr(latest.name, '__getitem__') else datetime.now().isoformat(),
+                                        "received_at": datetime.now().isoformat(),
+                                        "source": "historical",
+                                        "status": "market_closed",
+                                        "reason": reason
+                                    }
+                                    yield f"data: {json.dumps(price_data)}\n\n"
+                                    break
+                
+                # Send market closed status
+                payload = {"status": "market_closed", "reason": reason, "source": "historical"}
             yield f"data: {json.dumps(payload)}\n\n"
+            except Exception as e:
+                error_data = {"status": "market_closed", "reason": f"historical_fallback_error: {str(e)}"}
+                yield f"data: {json.dumps(error_data)}\n\n"
+        
         return StreamingResponse(
-            closed_stream(),
+            historical_price_fallback(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -517,7 +566,7 @@ async def stream_pnl_data(
         
         # Helpers to read attrs from dict (positions are already converted to dicts)
         def _get(p, key):
-            return p.get(key)
+                return p.get(key)
 
         # Extract unique symbols from positions
         symbols = list({(_get(pos, 'symbol')) for pos in positions if (_get(pos, 'netPos') or 0) != 0})
@@ -547,9 +596,9 @@ async def stream_pnl_data(
                 
                 # Get contract details from cache (already fetched before stream started)
                 contract_details = contract_details_cache.get(contract_id, {
-                    "valuePerPoint": 50,  # Default ES multiplier
-                    "tickSize": 0.25,  # Default ES tick size
-                    "symbol": symbol_name
+                            "valuePerPoint": 50,  # Default ES multiplier
+                            "tickSize": 0.25,  # Default ES tick size
+                            "symbol": symbol_name
                 })
                 
                 symbol_to_positions.setdefault(symbol_name, []).append({
@@ -822,7 +871,7 @@ async def sse_pnl_stream(
                                         "tickSize": product_item.get("tickSize", 0.25),
                                         "symbol": contract_item.get("name", "")
                                     }
-                    except Exception:
+    except Exception:
                         # Use defaults
                         contract_details_cache[contract_id] = {
                             "valuePerPoint": 50,
@@ -839,12 +888,89 @@ async def sse_pnl_stream(
     
     if symbols:
         open_flag, reason = await is_market_open(symbols)
-        if not open_flag and reason == "missing_api_key":
-            async def closed_stream():
-                payload = {"status": "market_closed", "reason": reason}
+        if not open_flag:
+            # Market is closed - use historical data fallback for PnL
+            async def historical_pnl_fallback():
+                from datetime import datetime as dt, timezone, timedelta
+                try:
+                    client = dbt.Historical(key=settings.DATABENTO_KEY)
+                    end = dt.now(timezone.utc)
+                    start = end - timedelta(minutes=5)  # Get last 5 minutes of data
+                    
+                    # Build symbol variants
+                    all_variants = []
+                    for sym in symbols:
+                        all_variants.extend(_root_symbol_variants(sym))
+                    all_variants = list(dict.fromkeys([v for v in all_variants if v]))
+                    
+                    if all_variants:
+                        result = client.timeseries.get_range(
+                            dataset=DATASET,
+                            start=start.isoformat(),
+                            end=end.isoformat(),
+                            symbols=all_variants,
+                            schema="ohlcv-1m",
+                        )
+                        df = result.to_df()
+                        
+                        # Calculate PnL for each position using historical closing price
+                        for pos in positions_dict:
+                            net_pos = pos.get("netPos") or 0
+                            if net_pos != 0:
+                                symbol_name = pos.get("symbol")
+                                account_id = pos.get("accountId")
+                                net_price = pos.get("netPrice") or 0
+                                contract_id = pos.get("contractId")
+                                
+                                # Get contract details
+                                contract_details = contract_details_cache.get(contract_id, {
+                                    "valuePerPoint": 50,
+                                    "tickSize": 0.25,
+                                    "symbol": symbol_name
+                                })
+                                
+                                # Find latest price for this symbol
+                                current_price = net_price  # Default to entry price
+                                symbol_variants = _root_symbol_variants(symbol_name)
+                                for variant in symbol_variants:
+                                    symbol_data = df[df.index.get_level_values('symbol') == variant]
+                                    if not symbol_data.empty:
+                                        latest = symbol_data.iloc[-1]
+                                        current_price = float(latest['close'])
+                                        break
+                                
+                                # Calculate unrealized PnL
+                                price_diff = current_price - net_price
+                                unrealized_pnl = price_diff * net_pos * contract_details.get("valuePerPoint", 50)
+                                
+                                pnl_data = {
+                                    "symbol": symbol_name,
+                                    "accountId": account_id,
+                                    "accountNickname": pos.get("accountNickname", ""),
+                                    "accountDisplayName": pos.get("accountDisplayName", ""),
+                                    "netPos": net_pos,
+                                    "entryPrice": net_price,
+                                    "currentPrice": current_price,
+                                    "unrealizedPnL": unrealized_pnl,
+                                    "bidPrice": current_price,
+                                    "askPrice": current_price,
+                                    "timestamp": datetime.now().isoformat(),
+                                    "positionKey": f"{symbol_name}:{account_id}",
+                                    "source": "historical",
+                                    "status": "market_closed",
+                                    "reason": reason
+                                }
+                                yield f"data: {json.dumps(pnl_data)}\n\n"
+                    
+                    # Send market closed status
+                    payload = {"status": "market_closed", "reason": reason, "source": "historical"}
                 yield f"data: {json.dumps(payload)}\n\n"
+                except Exception as e:
+                    error_data = {"status": "market_closed", "reason": f"historical_fallback_error: {str(e)}"}
+                    yield f"data: {json.dumps(error_data)}\n\n"
+            
             return StreamingResponse(
-                closed_stream(),
+                historical_pnl_fallback(),
                 media_type="text/event-stream",
                 headers={
                     "Cache-Control": "no-cache",
