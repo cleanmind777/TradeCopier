@@ -46,8 +46,10 @@ async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
             print(f"[Market Status] ERROR: DATABENTO_KEY not set")
             return (False, "missing_api_key")
         from datetime import datetime as dt, timezone, timedelta
+        import re
         client = dbt.Historical(key=settings.DATABENTO_KEY)
-        end = dt.now(timezone.utc)
+        # Historical data has a delay - use 5 minutes ago as end time to ensure data is available
+        end = dt.now(timezone.utc) - timedelta(minutes=5)
         start = end - timedelta(minutes=15)  # Check last 15 minutes for recent data
         print(f"[Market Status] Querying Databento Historical API: start={start.isoformat()}, end={end.isoformat()}")
         
@@ -64,13 +66,65 @@ async def is_market_open(symbols: list[str]) -> tuple[bool, str]:
         
         # Query minimal range; if data within 15 minutes, market is open
         print(f"[Market Status] Calling Databento timeseries.get_range...")
-        result = client.timeseries.get_range(
-            dataset=DATASET,
-            start=start.isoformat(),
-            end=end.isoformat(),
-            symbols=all_variants,
-            schema="ohlcv-1m",
-        )
+        try:
+            result = client.timeseries.get_range(
+                dataset=DATASET,
+                start=start.isoformat(),
+                end=end.isoformat(),
+                symbols=all_variants,
+                schema="ohlcv-1m",
+            )
+        except Exception as api_error:
+            error_msg = str(api_error)
+            # Handle the case where end time is after available data
+            if "data_end_after_available_end" in error_msg:
+                print(f"[Market Status] End time is after available data, trying to extract available end time...")
+                # Try to extract the available end time from error message
+                match = re.search(r"data available up to '([^']+)'", error_msg)
+                if match:
+                    try:
+                        available_end_str = match.group(1)
+                        available_end = dt.fromisoformat(available_end_str.replace(' ', 'T'))
+                        # Use 1 minute before available end to be safe
+                        end = available_end - timedelta(minutes=1)
+                        start = end - timedelta(minutes=15)
+                        print(f"[Market Status] Adjusted query times: start={start.isoformat()}, end={end.isoformat()}")
+                        # Retry with adjusted times
+                        result = client.timeseries.get_range(
+                            dataset=DATASET,
+                            start=start.isoformat(),
+                            end=end.isoformat(),
+                            symbols=all_variants,
+                            schema="ohlcv-1m",
+                        )
+                    except Exception as parse_error:
+                        print(f"[Market Status] Failed to parse available end time: {parse_error}")
+                        # Fallback: use 10 minutes ago
+                        end = dt.now(timezone.utc) - timedelta(minutes=10)
+                        start = end - timedelta(minutes=15)
+                        print(f"[Market Status] Using fallback times: start={start.isoformat()}, end={end.isoformat()}")
+                        result = client.timeseries.get_range(
+                            dataset=DATASET,
+                            start=start.isoformat(),
+                            end=end.isoformat(),
+                            symbols=all_variants,
+                            schema="ohlcv-1m",
+                        )
+                else:
+                    # If we can't parse, use 10 minutes ago as fallback
+                    end = dt.now(timezone.utc) - timedelta(minutes=10)
+                    start = end - timedelta(minutes=15)
+                    print(f"[Market Status] Using fallback times (couldn't parse error): start={start.isoformat()}, end={end.isoformat()}")
+                    result = client.timeseries.get_range(
+                        dataset=DATASET,
+                        start=start.isoformat(),
+                        end=end.isoformat(),
+                        symbols=all_variants,
+                        schema="ohlcv-1m",
+                    )
+            else:
+                # Re-raise if it's a different error
+                raise
         print(f"[Market Status] Databento API response received: type={type(result)}")
         df = result.to_df()
         print(f"[Market Status] DataFrame shape: {df.shape}, empty: {df.empty}")
