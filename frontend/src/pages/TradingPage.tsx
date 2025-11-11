@@ -1361,11 +1361,9 @@ const TradingPage: React.FC = () => {
       setLimitPrice("");
       setOrderType("market");
 
-      alert(
-        `Order submitted for ${action} ${orderQuantity} contracts across ${selectedGroup.sub_brokers.length} sub-brokers`
-      );
+      // Success notification removed per user request
     } catch (error) {
-      // Silent error handling
+      // Error alert kept for user feedback
       alert("Error executing order. Please try again.");
     } finally {
       setIsOrdering(false);
