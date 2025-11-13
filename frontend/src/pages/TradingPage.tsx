@@ -21,8 +21,11 @@ import {
   TradovatePositionListResponse,
 } from "../types/broker";
 import LoadingModal from "../components/ui/LoadingModal";
+import Modal from "../components/ui/Modal";
 import { tradovateWSMultiClient } from "../services/tradovateWsMulti";
 import { getAllWebSocketTokens } from "../api/brokerApi";
+import { addUserContract, getUserContracts, deleteUserContract } from "../api/userContractApi";
+import { UserContractInfo } from "../types/userContract";
 
 const TradingPage: React.FC = () => {
   // Trading state
@@ -93,6 +96,11 @@ const TradingPage: React.FC = () => {
 
   // Monitor tabs
   const [activeTab, setActiveTab] = useState<"positions" | "orders" | "accounts">("positions");
+
+  // User contracts (preferred symbols)
+  const [userContracts, setUserContracts] = useState<UserContractInfo[]>([]);
+  const [isContractModalOpen, setIsContractModalOpen] = useState<boolean>(false);
+  const [newContractSymbol, setNewContractSymbol] = useState<string>("");
 
   // Check if selected group has positions to flatten
   const hasGroupPositions = useMemo(() => {
@@ -1315,12 +1323,51 @@ const TradingPage: React.FC = () => {
     if (!user_id) return;
     try {
       const userGroups = await getGroup(user_id);
+      // Load user contracts (preferred symbols)
+      try {
+        const contracts = await getUserContracts(user_id);
+        setUserContracts(contracts);
+      } catch (error) {
+        console.error("Error loading user contracts:", error);
+      }
       setGroups(userGroups);
       if (userGroups.length > 0) {
         setSelectedGroup(userGroups[0]);
       }
     } catch (error) {
       // Silent error handling
+    }
+  };
+
+  // Handle adding a new contract
+  const handleAddContract = async () => {
+    if (!user_id || !newContractSymbol.trim()) {
+      alert("Please enter a symbol");
+      return;
+    }
+
+    try {
+      const contract = await addUserContract({
+        user_id,
+        symbol: newContractSymbol.trim().toUpperCase(),
+      });
+      setUserContracts((prev) => [contract, ...prev]);
+      setNewContractSymbol("");
+      setIsContractModalOpen(false);
+    } catch (error) {
+      console.error("Error adding contract:", error);
+      alert("Failed to add contract. It may already exist.");
+    }
+  };
+
+  // Handle deleting a contract
+  const handleDeleteContract = async (contractId: string) => {
+    if (!user_id) return;
+    try {
+      await deleteUserContract(contractId, user_id);
+      setUserContracts((prev) => prev.filter((c) => c.id !== contractId));
+    } catch (error) {
+      console.error("Error deleting contract:", error);
     }
   };
 
@@ -1925,19 +1972,36 @@ const TradingPage: React.FC = () => {
                 {/* Symbol select */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">Symbol</span>
-                  <input
-                    value={pendingSymbol}
-                    onChange={(e) => setPendingSymbol(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol); }}
-                    placeholder="NQZ5"
-                    className="h-8 w-28 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+                  <div className="relative">
+                    <input
+                      value={pendingSymbol}
+                      onChange={(e) => setPendingSymbol(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol); }}
+                      placeholder="NQZ5"
+                      list="user-contracts-list"
+                      className="h-8 w-28 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {userContracts.length > 0 && (
+                      <datalist id="user-contracts-list">
+                        {userContracts.map((contract) => (
+                          <option key={contract.id} value={contract.symbol} />
+                        ))}
+                      </datalist>
+                    )}
+                  </div>
                   <button
                     onClick={() => setSymbol(pendingSymbol)}
                     disabled={!pendingSymbol}
                     className={`h-8 px-3 rounded text-sm font-medium ${pendingSymbol ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-700 cursor-not-allowed'} text-white`}
                   >
                     Select
+                  </button>
+                  <button
+                    onClick={() => setIsContractModalOpen(true)}
+                    className="h-8 px-3 rounded bg-green-600 hover:bg-green-700 text-white text-sm font-medium"
+                    title="Add preferred symbol"
+                  >
+                    + Contract
                   </button>
                 </div>
                 <div className="w-px h-6 bg-slate-700" />
@@ -2351,6 +2415,60 @@ const TradingPage: React.FC = () => {
         </main>
         <Footer />
       </div>
+
+      {/* Add Contract Modal */}
+      <Modal
+        isOpen={isContractModalOpen}
+        onClose={() => {
+          setIsContractModalOpen(false);
+          setNewContractSymbol("");
+        }}
+        title="Add Preferred Symbol"
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Symbol
+            </label>
+            <input
+              type="text"
+              value={newContractSymbol}
+              onChange={(e) => setNewContractSymbol(e.target.value.toUpperCase())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleAddContract();
+                }
+              }}
+              placeholder="e.g., NQZ5"
+              className="w-full h-10 rounded border border-slate-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setIsContractModalOpen(false);
+                setNewContractSymbol("");
+              }}
+              className="px-4 py-2 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddContract}
+              disabled={!newContractSymbol.trim()}
+              className={`px-4 py-2 rounded text-sm font-medium ${
+                newContractSymbol.trim()
+                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                  : "bg-slate-300 text-slate-500 cursor-not-allowed"
+              }`}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
