@@ -4,7 +4,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from app.core.config import settings
-from app.models import base  # Your declarative base with models
+# Import Base from session (same one used by all models)
+from app.db.session import Base
+# Import all models to ensure they're registered with SQLAlchemy
+from app.models import (
+    User,
+    BrokerAccount,
+    SubBrokerAccount,
+    Group,
+    GroupBroker,
+    UserContract,
+)
 from app.services.broker_service import (
     refresh_new_token,
 )  # Your async token refresh logic
@@ -57,8 +67,13 @@ app.include_router(api_router, prefix="/api/v1")
 
 # Async database schema initialization
 async def init_db():
+    # Create tables on async engine
     async with engine.begin() as conn:
-        await conn.run_sync(base.Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all)
+    
+    # Also create tables on sync engine (used by repositories)
+    from app.db.session import engine as sync_engine
+    Base.metadata.create_all(bind=sync_engine)
 
 
 # Periodic background task to refresh tokens

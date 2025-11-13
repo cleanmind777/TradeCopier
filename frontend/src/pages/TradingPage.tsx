@@ -1327,6 +1327,11 @@ const TradingPage: React.FC = () => {
       try {
         const contracts = await getUserContracts(user_id);
         setUserContracts(contracts);
+        // Set symbol to first contract if contracts exist, otherwise keep default
+        if (contracts.length > 0 && !contracts.some(c => c.symbol === symbol)) {
+          setSymbol(contracts[0].symbol);
+          setPendingSymbol(contracts[0].symbol);
+        }
       } catch (error) {
         console.error("Error loading user contracts:", error);
       }
@@ -1352,6 +1357,9 @@ const TradingPage: React.FC = () => {
         symbol: newContractSymbol.trim().toUpperCase(),
       });
       setUserContracts((prev) => [contract, ...prev]);
+      // Automatically set the symbol to the newly added contract
+      setSymbol(contract.symbol);
+      setPendingSymbol(contract.symbol);
       setNewContractSymbol("");
       setIsContractModalOpen(false);
     } catch (error) {
@@ -1972,30 +1980,24 @@ const TradingPage: React.FC = () => {
                 {/* Symbol select */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">Symbol</span>
-                  <div className="relative">
-                    <input
-                      value={pendingSymbol}
-                      onChange={(e) => setPendingSymbol(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol); }}
-                      placeholder="NQZ5"
-                      list="user-contracts-list"
-                      className="h-8 w-28 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    {userContracts.length > 0 && (
-                      <datalist id="user-contracts-list">
-                        {userContracts.map((contract) => (
-                          <option key={contract.id} value={contract.symbol} />
-                        ))}
-                      </datalist>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setSymbol(pendingSymbol)}
-                    disabled={!pendingSymbol}
-                    className={`h-8 px-3 rounded text-sm font-medium ${pendingSymbol ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-700 cursor-not-allowed'} text-white`}
+                  <select
+                    value={symbol}
+                    onChange={(e) => {
+                      setSymbol(e.target.value);
+                      setPendingSymbol(e.target.value);
+                    }}
+                    className="h-8 w-32 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    Select
-                  </button>
+                    {userContracts.length > 0 ? (
+                      userContracts.map((contract) => (
+                        <option key={contract.id} value={contract.symbol}>
+                          {contract.symbol}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="NQZ5">NQZ5</option>
+                    )}
+                  </select>
                   <button
                     onClick={() => setIsContractModalOpen(true)}
                     className="h-8 px-3 rounded bg-green-600 hover:bg-green-700 text-white text-sm font-medium"
