@@ -94,6 +94,19 @@ const TradingPage: React.FC = () => {
   // Monitor tabs
   const [activeTab, setActiveTab] = useState<"positions" | "orders" | "accounts">("positions");
 
+  // Check if selected group has positions to flatten
+  const hasGroupPositions = useMemo(() => {
+    if (!selectedGroup || positions.length === 0) return false;
+    const groupAccountIds = new Set(
+      selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+    );
+    return positions.some(p => {
+      const hasPosition = (Number(p.netPos) || 0) !== 0;
+      const belongsToGroup = groupAccountIds.has(Number(p.accountId));
+      return hasPosition && belongsToGroup;
+    });
+  }, [selectedGroup, positions]);
+
   // Aggregated group-position monitoring rows by symbol for ALL groups and ALL symbols
   // Shows positions from all groups, or "All" if no groups are loaded
   const groupMonitorRows = useMemo(() => {
@@ -879,6 +892,83 @@ const TradingPage: React.FC = () => {
       } catch {}
     } catch (e) {
       // Silent error handling
+    } finally {
+      setIsOrdering(false);
+    }
+  };
+
+  const handleFlattenGroup = async () => {
+    // Check if market is closed
+    if (isMarketClosed) {
+      alert("Current Market Close");
+      return;
+    }
+
+    // Check if a group is selected
+    if (!selectedGroup) {
+      alert("Please select a group first");
+      return;
+    }
+
+    try {
+      setIsOrdering(true);
+      
+      // Get account IDs from the selected group's sub_brokers
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+
+      // Filter positions to only those belonging to the selected group
+      const groupPositions = positions.filter((p) => {
+        const hasPosition = (Number(p.netPos) || 0) !== 0;
+        const belongsToGroup = groupAccountIds.has(Number(p.accountId));
+        return hasPosition && belongsToGroup;
+      });
+
+      if (groupPositions.length === 0) {
+        alert("No positions to flatten in the selected group");
+        setIsOrdering(false);
+        return;
+      }
+
+      // Create exit orders for group positions
+      const exitList = groupPositions.map((position) => {
+        const action = position.netPos > 0 ? "Sell" : "Buy";
+        return {
+          accountId: position.accountId,
+          action,
+          symbol: position.symbol,
+          orderQty: Math.abs(position.netPos),
+          orderType: "Market",
+          isAutomated: true,
+        };
+      });
+
+      if (exitList.length > 0) {
+        await exitAllPostions(exitList as any);
+      }
+
+      // Wait briefly for provider to reflect flatten
+      // WebSocket will update positions automatically
+      await new Promise((r) => setTimeout(r, 1000));
+      
+      // Clear stale PnL data for group accounts - WebSocket will update positions automatically
+      setPnlData((prev) => {
+        const next = { ...prev } as Record<string, any>;
+        Object.entries(prev).forEach(([key, value]: [string, any]) => {
+          if (value && groupAccountIds.has(Number(value.accountId))) {
+            // Zero out PnL for group accounts
+            next[key] = { ...value, unrealizedPnL: 0 };
+          }
+        });
+        return next;
+      });
+
+      // Update group PnL to zero since all positions are flattened
+      setGroupPnL({ totalPnL: 0, symbolPnL: 0, lastUpdate: new Date().toLocaleTimeString() });
+    } catch (e) {
+      // Silent error handling
+      console.error("Error flattening group:", e);
     } finally {
       setIsOrdering(false);
     }
@@ -1982,6 +2072,15 @@ const TradingPage: React.FC = () => {
                 </div>
                 {/* push following controls to the far right */}
                 <div className="flex-1" />
+                <button
+                  onClick={handleFlattenGroup}
+                  disabled={isOrdering || !selectedGroup || !hasGroupPositions}
+                  className="h-8 px-3 rounded bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold disabled:opacity-50"
+                  aria-label="Flatten Group / Exit All & Cancel for Selected Group"
+                  title={selectedGroup ? `Flatten positions for ${selectedGroup.name}` : "Select a group first"}
+                >
+                  Group Flatten
+                </button>
                 <button
                   onClick={handleFlattenAll}
                   disabled={isOrdering || positions.every(p => (Number(p.netPos) || 0) === 0)}

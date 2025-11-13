@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 from sqlalchemy.future import select
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
+from app.models.group_broker import GroupBroker
 from app.schemas.broker import (
     BrokerAdd,
     BrokerInfo,
@@ -144,11 +145,28 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
         db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
     )
     user_id = db_broker_account.user_id
+    
+    # Get all sub-broker account IDs that will be deleted
+    sub_broker_accounts = db.query(SubBrokerAccount).filter(
+        SubBrokerAccount.broker_account_id == broker_id
+    ).all()
+    sub_broker_ids = [sub_broker.id for sub_broker in sub_broker_accounts]
+    
+    # Remove sub-broker accounts from all groups before deleting them
+    if sub_broker_ids:
+        db.query(GroupBroker).filter(
+            GroupBroker.sub_broker_id.in_(sub_broker_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
+    
+    # Delete sub-broker accounts
     query = db.query(SubBrokerAccount).filter(
         SubBrokerAccount.broker_account_id == broker_id
     )
     query.delete(synchronize_session=False)
     db.commit()
+    
+    # Delete broker account
     query = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id)
     query.delete(synchronize_session=False)
     db.commit()
