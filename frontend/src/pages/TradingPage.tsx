@@ -36,8 +36,8 @@ const TradingPage: React.FC = () => {
   const [limitPrice, setLimitPrice] = useState<string>("");
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
-  const [symbol, setSymbol] = useState<string>("NQZ5");
-  const [pendingSymbol, setPendingSymbol] = useState<string>("NQZ5");
+  const [symbol, setSymbol] = useState<string>("MNQZ5");
+  const [pendingSymbol, setPendingSymbol] = useState<string>("MNQZ5");
   
   // PnL tracking state
   const [pnlData, setPnlData] = useState<Record<string, any>>({});
@@ -280,46 +280,8 @@ const TradingPage: React.FC = () => {
     let filteredPositions = positions || [];
     let filteredOrders = orders || [];
 
-    // Filter by selected group's account IDs
-    if (groupToUse && groupToUse.sub_brokers.length > 0) {
-      const groupAccountIds = new Set(
-        groupToUse.sub_brokers.map(s => parseInt(s.sub_account_id))
-      );
-      
-      filteredAccounts = filteredAccounts.filter((a: any) => 
-        groupAccountIds.has(a.accountId)
-      );
-      filteredPositions = filteredPositions.filter((p: any) => 
-        groupAccountIds.has(p.accountId)
-      );
-      filteredOrders = filteredOrders.filter((o: any) => 
-        groupAccountIds.has(o.accountId)
-      );
-    }
-
-    // Filter positions and orders by selected symbol (exact match or prefix match)
-    if (symbolToUse && symbolToUse.trim()) {
-      const symbolUpper = symbolToUse.toUpperCase();
-      // Try exact match first, then fall back to prefix match for futures contracts
-      filteredPositions = filteredPositions.filter((p: any) => {
-        if (!p.symbol) return false;
-        const pSymbol = p.symbol.toUpperCase();
-        // Exact match
-        if (pSymbol === symbolUpper) return true;
-        // Prefix match (e.g., "NQ" matches "NQZ5", "NQH6", etc.)
-        const symbolPrefix = symbolUpper.slice(0, 2);
-        return pSymbol.startsWith(symbolPrefix);
-      });
-      filteredOrders = filteredOrders.filter((o: any) => {
-        if (!o.symbol) return false;
-        const oSymbol = o.symbol.toUpperCase();
-        // Exact match
-        if (oSymbol === symbolUpper) return true;
-        // Prefix match
-        const symbolPrefix = symbolUpper.slice(0, 2);
-        return oSymbol.startsWith(symbolPrefix);
-      });
-    }
+    // Show ALL accounts, positions, and orders (no filtering by group or symbol)
+    // This helper function is kept for compatibility but no longer filters data
 
     return { filteredAccounts, filteredPositions, filteredOrders };
   };
@@ -424,10 +386,9 @@ const TradingPage: React.FC = () => {
     setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
   }, [selectedGroup?.id, symbol, positions]);
 
-  // Fetch accounts, positions, and orders on mount and when symbol changes
-  // Reload all data when symbol changes (like first loading)
-  // Positions: Show ALL groups (only filter by symbol if set)
-  // Accounts/Orders: Filter by selected group (for toolbar display)
+  // Fetch accounts, positions, and orders on mount only
+  // Show ALL positions, orders, and accounts (no filtering)
+  // No need to reload when symbol changes since we don't filter by symbol
   useEffect(() => {
     const load = async () => {
       if (!user_id) return;
@@ -441,49 +402,18 @@ const TradingPage: React.FC = () => {
           const rawPositions = Array.isArray(data.positions) ? data.positions : [];
           const rawOrders = Array.isArray(data.orders) ? data.orders : [];
           
-          // For positions: show ALL groups (only filter by symbol if set)
+          // For positions: show ALL positions (no symbol filtering)
           let filteredPositions = rawPositions;
-          if (symbol && symbol.trim()) {
-            const symbolUpper = symbol.toUpperCase();
-            filteredPositions = filteredPositions.filter((p: any) => {
-              if (!p || !p.symbol) return false;
-              const pSymbol = p.symbol.toUpperCase();
-              if (pSymbol === symbolUpper) return true;
-              const symbolPrefix = symbolUpper.slice(0, 2);
-              return pSymbol.startsWith(symbolPrefix);
-            });
-          }
           
-          // For accounts: keep ALL accounts (needed for groupMonitorRows realized PnL calculation)
-          // Filtering by group will be done in the accounts tab display
+          // For accounts: show ALL accounts (no filtering)
           const allAccounts = rawAccounts;
           
-          // For orders: show ALL orders if no group selected, otherwise filter by group
-          let filteredOrders = rawOrders;
-          if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
-            const groupAccountIds = new Set(
-              selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
-            );
-            filteredOrders = filteredOrders.filter((o: any) => 
-              o && o.accountId && groupAccountIds.has(Number(o.accountId))
-            );
-          }
-          
-          // Filter orders by symbol if set
-          if (symbol && symbol.trim()) {
-            const symbolUpper = symbol.toUpperCase();
-            filteredOrders = filteredOrders.filter((o: any) => {
-              if (!o || !o.symbol) return false;
-              const oSymbol = o.symbol.toUpperCase();
-              if (oSymbol === symbolUpper) return true;
-              const symbolPrefix = symbolUpper.slice(0, 2);
-              return oSymbol.startsWith(symbolPrefix);
-            });
-          }
+          // For orders: show ALL orders (no filtering)
+          const allOrders = rawOrders;
           
           setAccounts(allAccounts);
           setPositions(filteredPositions);
-          setOrders(filteredOrders);
+          setOrders(allOrders);
         } else {
           // Set empty arrays to ensure UI shows "no data" message
           setAccounts([]);
@@ -497,9 +427,9 @@ const TradingPage: React.FC = () => {
       }
     };
     load();
-    // Reload when user_id or symbol changes
+    // Only reload when user_id changes (on mount or user switch)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user_id, symbol]);
+  }, [user_id]);
 
   // Subscribe to WebSocket updates for positions, orders, and accounts
   // Use refs to access current selectedGroup and symbol without re-subscribing
@@ -567,48 +497,18 @@ const TradingPage: React.FC = () => {
             const rawPositions = Array.isArray(data.positions) ? data.positions : [];
             const rawOrders = Array.isArray(data.orders) ? data.orders : [];
             
-            // For positions: show ALL groups (only filter by symbol if set)
+            // For positions: show ALL positions (no symbol filtering)
             let filteredPositions = rawPositions;
-            if (currentSymbol && currentSymbol.trim()) {
-              const symbolUpper = currentSymbol.toUpperCase();
-              filteredPositions = filteredPositions.filter((p: any) => {
-                if (!p || !p.symbol) return false;
-                const pSymbol = p.symbol.toUpperCase();
-                if (pSymbol === symbolUpper) return true;
-                const symbolPrefix = symbolUpper.slice(0, 2);
-                return pSymbol.startsWith(symbolPrefix);
-              });
-            }
             
-            // For accounts: keep ALL accounts (needed for groupMonitorRows)
+            // For accounts: show ALL accounts (no filtering)
             const allAccounts = rawAccounts;
             
-            // For orders: show ALL orders if no group selected, otherwise filter by group
-            let filteredOrders = rawOrders;
-            if (currentGroup && currentGroup.sub_brokers.length > 0) {
-              const groupAccountIds = new Set(
-                currentGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
-              );
-              filteredOrders = filteredOrders.filter((o: any) => 
-                o && o.accountId && groupAccountIds.has(Number(o.accountId))
-              );
-            }
-            
-            // Filter orders by symbol if set
-            if (currentSymbol && currentSymbol.trim()) {
-              const symbolUpper = currentSymbol.toUpperCase();
-              filteredOrders = filteredOrders.filter((o: any) => {
-                if (!o || !o.symbol) return false;
-                const oSymbol = o.symbol.toUpperCase();
-                if (oSymbol === symbolUpper) return true;
-                const symbolPrefix = symbolUpper.slice(0, 2);
-                return oSymbol.startsWith(symbolPrefix);
-              });
-            }
+            // For orders: show ALL orders (no filtering)
+            const allOrders = rawOrders;
             
             setAccounts(allAccounts);
             setPositions(filteredPositions);
-            setOrders(filteredOrders);
+            setOrders(allOrders);
           }
         } catch (error) {
           // Silent error handling
@@ -1995,7 +1895,7 @@ const TradingPage: React.FC = () => {
                         </option>
                       ))
                     ) : (
-                      <option value="NQZ5">NQZ5</option>
+                      <option value="MNQZ5">MNQZ5</option>
                     )}
                   </select>
                   <button
@@ -2367,16 +2267,8 @@ const TradingPage: React.FC = () => {
                   </table>
                 )}
                 {activeTab === 'accounts' && (() => {
-                  // Filter accounts by selected group for display (if group is selected)
-                  let displayAccounts = accounts;
-                  if (selectedGroup && selectedGroup.sub_brokers.length > 0) {
-                    const groupAccountIds = new Set(
-                      selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
-                    );
-                    displayAccounts = accounts.filter((a: any) => 
-                      groupAccountIds.has(a.accountId)
-                    );
-                  }
+                  // Show ALL accounts (no filtering)
+                  const displayAccounts = accounts;
                   
                   return (
                     <table className="w-full text-sm">
