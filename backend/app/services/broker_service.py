@@ -277,7 +277,7 @@ async def get_positions(db: Session, user_id: UUID):
                 continue
         for position in positions_status:
             sba = sub_map.get(str(position["accountId"]))
-            if not sba or not sba.is_active or position.get("netPos", 0) == 0:
+            if not sba or not sba.is_active:
                 continue
             name = contract_name_map.get((sba.is_demo, position["contractId"]))
             p = TradovatePositionListForFrontend(

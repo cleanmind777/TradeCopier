@@ -36,7 +36,7 @@ const TradingPage: React.FC = () => {
   const [limitPrice, setLimitPrice] = useState<string>("");
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
-  const [symbol, setSymbol] = useState<string>("MNQZ5");
+  const [symbol, setSymbol] = useState<string>("All");
   const [pendingSymbol, setPendingSymbol] = useState<string>("MNQZ5");
   
   // PnL tracking state
@@ -52,10 +52,77 @@ const TradingPage: React.FC = () => {
     lastUpdate: ""
   });
 
-  // Accounts and positions for aggregates/balance
+  // Accounts and positions for aggregates/balance (raw data from API)
   const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
   const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  
+  // Filtered data based on selected group and symbol (frontend filtering)
+  const filteredPositions = useMemo(() => {
+    let filtered = positions;
+    
+    // Filter by group if not "All"
+    if (selectedGroup && selectedGroup.id !== "All") {
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+      filtered = filtered.filter(p => groupAccountIds.has(Number(p.accountId)));
+    }
+    
+    // Filter by symbol if not "All"
+    if (symbol && symbol !== "All") {
+      const symbolUpper = symbol.toUpperCase();
+      filtered = filtered.filter(p => {
+        if (!p.symbol) return false;
+        const pSymbol = p.symbol.toUpperCase();
+        if (pSymbol === symbolUpper) return true;
+        const symbolPrefix = symbolUpper.slice(0, 2);
+        return pSymbol.startsWith(symbolPrefix);
+      });
+    }
+    
+    return filtered;
+  }, [positions, selectedGroup, symbol]);
+  
+  const filteredOrders = useMemo(() => {
+    let filtered = orders;
+    
+    // Filter by group if not "All"
+    if (selectedGroup && selectedGroup.id !== "All") {
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+      filtered = filtered.filter(o => groupAccountIds.has(Number(o.accountId)));
+    }
+    
+    // Filter by symbol if not "All"
+    if (symbol && symbol !== "All") {
+      const symbolUpper = symbol.toUpperCase();
+      filtered = filtered.filter(o => {
+        if (!o.symbol) return false;
+        const oSymbol = o.symbol.toUpperCase();
+        if (oSymbol === symbolUpper) return true;
+        const symbolPrefix = symbolUpper.slice(0, 2);
+        return oSymbol.startsWith(symbolPrefix);
+      });
+    }
+    
+    return filtered;
+  }, [orders, selectedGroup, symbol]);
+  
+  const filteredAccounts = useMemo(() => {
+    let filtered = accounts;
+    
+    // Filter by group if not "All"
+    if (selectedGroup && selectedGroup.id !== "All") {
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+      filtered = filtered.filter(a => groupAccountIds.has(Number(a.accountId)));
+    }
+    
+    return filtered;
+  }, [accounts, selectedGroup]);
   const [groupBalance, setGroupBalance] = useState<number>(0); // kept for future toolbar summaries
   const [groupSymbolNet, setGroupSymbolNet] = useState<{ netPos: number; avgNetPrice: number; }>({ netPos: 0, avgNetPrice: 0 });
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
@@ -104,21 +171,24 @@ const TradingPage: React.FC = () => {
 
   // Check if selected group has positions to flatten
   const hasGroupPositions = useMemo(() => {
-    if (!selectedGroup || positions.length === 0) return false;
+    if (!selectedGroup || filteredPositions.length === 0) return false;
+    if (selectedGroup.id === "All") {
+      return filteredPositions.some(p => (Number(p.netPos) || 0) !== 0);
+    }
     const groupAccountIds = new Set(
       selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
     );
-    return positions.some(p => {
+    return filteredPositions.some(p => {
       const hasPosition = (Number(p.netPos) || 0) !== 0;
       const belongsToGroup = groupAccountIds.has(Number(p.accountId));
       return hasPosition && belongsToGroup;
     });
-  }, [selectedGroup, positions]);
+  }, [selectedGroup, filteredPositions]);
 
   // Aggregated group-position monitoring rows by symbol for ALL groups and ALL symbols
   // Shows positions from all groups, or "All" if no groups are loaded
   const groupMonitorRows = useMemo(() => {
-    if (positions.length === 0) return [] as Array<{
+    if (filteredPositions.length === 0) return [] as Array<{
       groupName: string;
       symbol: string;
       openPositions: number;
@@ -139,13 +209,13 @@ const TradingPage: React.FC = () => {
     // If no groups loaded, show all positions under "All" group
     if (groups.length === 0) {
       const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
-      positions.forEach((p) => {
+      filteredPositions.forEach((p) => {
         const sym = (p.symbol || "").toUpperCase();
         if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
         symbolToPositions.get(sym)!.push(p);
       });
 
-      // Get all accounts for realized PnL calculation
+      // Get all accounts for realized PnL calculation (use all accounts, not filtered)
       const allAccountsMap = new Map<number, TradovateAccountsResponse>();
       accounts.forEach((a) => {
         allAccountsMap.set(a.accountId, a);
@@ -190,7 +260,7 @@ const TradingPage: React.FC = () => {
 
       // Group positions by (groupName, symbol) - show ALL positions
       const groupSymbolToPositions = new Map<string, TradovatePositionListResponse[]>();
-      positions.forEach((p) => {
+      filteredPositions.forEach((p) => {
         const accountId = Number(p.accountId);
         const groupName = accountToGroupMap.get(accountId) || "All"; // Use "All" for accounts not in any group
         const sym = (p.symbol || "").toUpperCase();
@@ -217,7 +287,7 @@ const TradingPage: React.FC = () => {
           );
         }
 
-        // Sum realized PnL across accounts in group
+        // Sum realized PnL across accounts in group (use all accounts for calculation)
         const realizedPnLTotal = accounts
           .filter((a) => groupAccountIds.has(Number(a.accountId)))
           .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
@@ -260,7 +330,7 @@ const TradingPage: React.FC = () => {
       return a.symbol.localeCompare(b.symbol);
     });
     return rows;
-  }, [groups, positions, pnlData, accounts]);
+  }, [groups, filteredPositions, pnlData, accounts]);
 
   // Typing-only symbol entry (no dropdown)
 
@@ -374,17 +444,16 @@ const TradingPage: React.FC = () => {
 
   // Derive group symbol aggregates (net position and avg net price)
   useEffect(() => {
-    if (!selectedGroup || !symbol || positions.length === 0) {
+    if (!selectedGroup || !symbol || symbol === "All" || filteredPositions.length === 0) {
       setGroupSymbolNet({ netPos: 0, avgNetPrice: 0 });
       return;
     }
-    const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
-    const filtered = positions.filter(p => ids.has(p.accountId) && p.symbol?.toUpperCase().startsWith(symbol.toUpperCase().slice(0, 2)));
-    const totalQty = filtered.reduce((sum, p) => sum + (p.netPos || 0), 0);
-    const weightedPriceNumer = filtered.reduce((sum, p) => sum + (p.netPos || 0) * (p.netPrice || 0), 0);
+    // Use filtered positions which already account for group and symbol selection
+    const totalQty = filteredPositions.reduce((sum, p) => sum + (p.netPos || 0), 0);
+    const weightedPriceNumer = filteredPositions.reduce((sum, p) => sum + (p.netPos || 0) * (p.netPrice || 0), 0);
     const avgPrice = totalQty !== 0 ? weightedPriceNumer / totalQty : 0;
     setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
-  }, [selectedGroup?.id, symbol, positions]);
+  }, [selectedGroup?.id, symbol, filteredPositions]);
 
   // Fetch accounts, positions, and orders on mount only
   // Show ALL positions, orders, and accounts (no filtering)
@@ -737,7 +806,8 @@ const TradingPage: React.FC = () => {
 
     try {
       setIsOrdering(true);
-      const exitList = positions
+      // Use filtered positions based on selected group and symbol
+      const exitList = filteredPositions
         .filter((p) => (Number(p.netPos) || 0) !== 0)
         .map((position) => {
         const action = position.netPos > 0 ? "Sell" : "Buy";
@@ -813,24 +883,18 @@ const TradingPage: React.FC = () => {
     }
 
     // Check if a group is selected
-    if (!selectedGroup) {
-      alert("Please select a group first");
+    if (!selectedGroup || selectedGroup.id === "All") {
+      alert("Please select a specific group (not 'All')");
       return;
     }
 
     try {
       setIsOrdering(true);
       
-      // Get account IDs from the selected group's sub_brokers
-      const groupAccountIds = new Set(
-        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
-      );
-
-      // Filter positions to only those belonging to the selected group
-      const groupPositions = positions.filter((p) => {
+      // Use filtered positions which already account for group selection
+      const groupPositions = filteredPositions.filter((p) => {
         const hasPosition = (Number(p.netPos) || 0) !== 0;
-        const belongsToGroup = groupAccountIds.has(Number(p.accountId));
-        return hasPosition && belongsToGroup;
+        return hasPosition;
       });
 
       if (groupPositions.length === 0) {
@@ -861,6 +925,9 @@ const TradingPage: React.FC = () => {
       await new Promise((r) => setTimeout(r, 1000));
       
       // Clear stale PnL data for group accounts - WebSocket will update positions automatically
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
       setPnlData((prev) => {
         const next = { ...prev } as Record<string, any>;
         Object.entries(prev).forEach(([key, value]: [string, any]) => {
@@ -1227,18 +1294,13 @@ const TradingPage: React.FC = () => {
       try {
         const contracts = await getUserContracts(user_id);
         setUserContracts(contracts);
-        // Set symbol to first contract if contracts exist, otherwise keep default
-        if (contracts.length > 0 && !contracts.some(c => c.symbol === symbol)) {
-          setSymbol(contracts[0].symbol);
-          setPendingSymbol(contracts[0].symbol);
-        }
+        // Keep "All" as default, don't auto-select first contract
       } catch (error) {
         console.error("Error loading user contracts:", error);
       }
       setGroups(userGroups);
-      if (userGroups.length > 0) {
-        setSelectedGroup(userGroups[0]);
-      }
+      // Default to "All" group
+      setSelectedGroup({ id: "All", name: "All", sub_brokers: [] } as GroupInfo);
     } catch (error) {
       // Silent error handling
     }
@@ -1288,9 +1350,14 @@ const TradingPage: React.FC = () => {
     }
 
     if (
-      !selectedGroup
+      !selectedGroup || selectedGroup.id === "All"
     ) {
-      alert("Please select a group");
+      alert("Please select a specific group (not 'All')");
+      return;
+    }
+    
+    if (symbol === "All") {
+      alert("Please select a specific symbol (not 'All')");
       return;
     }
 
@@ -1884,10 +1951,13 @@ const TradingPage: React.FC = () => {
                     value={symbol}
                     onChange={(e) => {
                       setSymbol(e.target.value);
-                      setPendingSymbol(e.target.value);
+                      if (e.target.value !== "All") {
+                        setPendingSymbol(e.target.value);
+                      }
                     }}
                     className="h-8 w-32 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
+                    <option value="All">All</option>
                     {userContracts.length > 0 ? (
                       userContracts.map((contract) => (
                         <option key={contract.id} value={contract.symbol}>
@@ -1923,14 +1993,18 @@ const TradingPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">Group</span>
                   <select
-                    value={selectedGroup?.id || ""}
+                    value={selectedGroup?.id || "All"}
                     onChange={(e) => {
-                      const group = groups.find((g) => g.id === e.target.value);
-                      setSelectedGroup(group || null);
+                      if (e.target.value === "All") {
+                        setSelectedGroup({ id: "All", name: "All", sub_brokers: [] } as GroupInfo);
+                      } else {
+                        const group = groups.find((g) => g.id === e.target.value);
+                        setSelectedGroup(group || null);
+                      }
                     }}
                     className="h-8 min-w-[160px] rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="">Select group</option>
+                    <option value="All">All</option>
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>{g.name}</option>
                     ))}
@@ -2004,7 +2078,7 @@ const TradingPage: React.FC = () => {
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-slate-400">PnL</span>
                   <span className={`${groupPnL.totalPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>${groupPnL.totalPnL.toFixed(0)}</span>
-                  {symbol && (
+                  {symbol && symbol !== "All" && (
                     <span className={`${groupPnL.symbolPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>{symbol}: ${groupPnL.symbolPnL.toFixed(0)}</span>
                   )}
                 </div>
@@ -2012,7 +2086,7 @@ const TradingPage: React.FC = () => {
                 {/* Group balance and symbol net */}
                 <div className="flex items-center gap-3 text-xs text-slate-300">
                   <span>Bal ${groupBalance.toFixed(0)}</span>
-                  {symbol && (
+                  {symbol && symbol !== "All" && (
                     <span>Net {groupSymbolNet.netPos} @ {groupSymbolNet.avgNetPrice ? groupSymbolNet.avgNetPrice.toFixed(2) : 0}</span>
                   )}
                 </div>
@@ -2021,17 +2095,17 @@ const TradingPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => executeOrder("Buy")}
-                    disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
+                    disabled={isOrdering || !selectedGroup || selectedGroup.id === "All" || symbol === "All" || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
                     className="h-8 px-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold"
-                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
+                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : (!selectedGroup || selectedGroup.id === "All" || symbol === "All" ? 'Select a specific group and symbol' : '')}
                   >
                     {orderType === 'limit' ? 'Buy Limit' : 'Buy Mkt'}
                   </button>
                   <button
                     onClick={() => executeOrder("Sell")}
-                    disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
+                    disabled={isOrdering || !selectedGroup || selectedGroup.id === "All" || symbol === "All" || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
                     className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold"
-                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
+                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : (!selectedGroup || selectedGroup.id === "All" || symbol === "All" ? 'Select a specific group and symbol' : '')}
                   >
                     {orderType === 'limit' ? 'Sell Limit' : 'Sell Mkt'}
                   </button>
@@ -2040,16 +2114,16 @@ const TradingPage: React.FC = () => {
                 <div className="flex-1" />
                 <button
                   onClick={handleFlattenGroup}
-                  disabled={isOrdering || !selectedGroup || !hasGroupPositions}
+                  disabled={isOrdering || !selectedGroup || selectedGroup.id === "All" || !hasGroupPositions}
                   className="h-8 px-3 rounded bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold disabled:opacity-50"
                   aria-label="Flatten Group / Exit All & Cancel for Selected Group"
-                  title={selectedGroup ? `Flatten positions for ${selectedGroup.name}` : "Select a group first"}
+                  title={selectedGroup && selectedGroup.id !== "All" ? `Flatten positions for ${selectedGroup.name}` : "Select a specific group (not 'All')"}
                 >
                   Group Flatten
                 </button>
                 <button
                   onClick={handleFlattenAll}
-                  disabled={isOrdering || positions.every(p => (Number(p.netPos) || 0) === 0)}
+                  disabled={isOrdering || filteredPositions.every(p => (Number(p.netPos) || 0) === 0)}
                   className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold disabled:opacity-50"
                   aria-label="Flatten All / Exit All & Cancel All"
                 >
@@ -2059,7 +2133,7 @@ const TradingPage: React.FC = () => {
             </div>
 
             {/* Real-time Price Display */}
-            {symbol && (
+            {symbol && symbol !== "All" && (
               <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
                 <div className="flex items-center gap-3 md:gap-6 text-xs flex-wrap">
                   <div className="flex items-center gap-2">
@@ -2197,7 +2271,7 @@ const TradingPage: React.FC = () => {
               {/* Debug info - remove in production */}
               {process.env.NODE_ENV === 'development' && (
                 <div className="mb-2 text-xs text-gray-500">
-                  Debug: positions={positions.length}, orders={orders.length}, accounts={accounts.length}, groupMonitorRows={groupMonitorRows.length}
+                  Debug: positions={filteredPositions.length}, orders={filteredOrders.length}, accounts={filteredAccounts.length}, groupMonitorRows={groupMonitorRows.length}
                 </div>
               )}
               {activeTab === 'positions' && (
@@ -2228,7 +2302,7 @@ const TradingPage: React.FC = () => {
                   </table>
                 ) : (
                   <div className="text-center py-4 text-slate-500">
-                    {groups.length === 0 ? "Loading groups..." : positions.length === 0 ? "No open positions found" : "No positions match the selected criteria"}
+                    {groups.length === 0 ? "Loading groups..." : filteredPositions.length === 0 ? "No positions found" : "No positions match the selected criteria"}
                       </div>
                 )
               )}
@@ -2246,8 +2320,8 @@ const TradingPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {orders.length > 0 ? (
-                        orders.map((order) => (
+                      {filteredOrders.length > 0 ? (
+                        filteredOrders.map((order) => (
                           <tr key={order.id} className="border-b last:border-0">
                             <td className="px-3 py-2">{order.accountNickname}</td>
                             <td className="px-3 py-2">{order.accountDisplayName}</td>
@@ -2267,8 +2341,8 @@ const TradingPage: React.FC = () => {
                   </table>
                 )}
                 {activeTab === 'accounts' && (() => {
-                  // Show ALL accounts (no filtering)
-                  const displayAccounts = accounts;
+                  // Use filtered accounts
+                  const displayAccounts = filteredAccounts;
                   
                   return (
                     <table className="w-full text-sm">
