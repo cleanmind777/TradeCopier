@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 from sqlalchemy.future import select
 from app.models.broker_account import BrokerAccount, SubBrokerAccount
+from app.models.group_broker import GroupBroker
 from app.schemas.broker import (
     BrokerAdd,
     BrokerInfo,
@@ -44,6 +45,7 @@ async def user_add_broker(db: Session, broker_add: BrokerAdd) -> BrokerInfo:
     db.add(db_broker)
     db.commit()
     db.refresh(db_broker)
+    print(f"[Add Broker] Committed broker account {db_broker.id} for user {broker_add.user_id}")
     return db_broker
 
 
@@ -143,11 +145,28 @@ def user_del_broker(db: Session, broker_id: UUID) -> list[BrokerInfo]:
         db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
     )
     user_id = db_broker_account.user_id
+    
+    # Get all sub-broker account IDs that will be deleted
+    sub_broker_accounts = db.query(SubBrokerAccount).filter(
+        SubBrokerAccount.broker_account_id == broker_id
+    ).all()
+    sub_broker_ids = [sub_broker.id for sub_broker in sub_broker_accounts]
+    
+    # Remove sub-broker accounts from all groups before deleting them
+    if sub_broker_ids:
+        db.query(GroupBroker).filter(
+            GroupBroker.sub_broker_id.in_(sub_broker_ids)
+        ).delete(synchronize_session=False)
+        db.commit()
+    
+    # Delete sub-broker accounts
     query = db.query(SubBrokerAccount).filter(
         SubBrokerAccount.broker_account_id == broker_id
     )
     query.delete(synchronize_session=False)
     db.commit()
+    
+    # Delete broker account
     query = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id)
     query.delete(synchronize_session=False)
     db.commit()
@@ -264,11 +283,289 @@ def user_get_tokens_for_websocket(
         db.query(BrokerAccount).filter(BrokerAccount.user_id == user_id).all()
     )
     for broker in broker_accounts:
+        # Check if any active sub-broker is demo to determine endpoint
+        is_demo = False
+        sub_brokers = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.broker_account_id == broker.id)
+            .filter(SubBrokerAccount.is_active == True)
+            .all()
+        )
+        if sub_brokers:
+            # If any active sub-broker is demo, use demo endpoint
+            is_demo = any(sub.is_demo for sub in sub_brokers)
+        
+        # Prefer websocket tokens if available
         if broker.websocket_access_token:
             websocket_token = WebSocketTokens(
                 id=broker.id,
                 access_token=broker.websocket_access_token,
-                md_access_token=broker.websocket_md_access_token
+                md_access_token=broker.websocket_md_access_token,
+                is_demo=is_demo
             )
             return websocket_token
+        # Fallback to regular access tokens if websocket tokens don't exist
+        elif broker.access_token and broker.md_access_token:
+            websocket_token = WebSocketTokens(
+                id=broker.id,
+                access_token=broker.access_token,
+                md_access_token=broker.md_access_token,
+                is_demo=is_demo
+            )
+            return websocket_token
+    return None
+
+def user_get_all_tokens_for_websocket(
+    db: Session, user_id: UUID
+) -> list[WebSocketTokens]:
+    """Get WebSocket tokens for all broker accounts for a user"""
+    from app.utils.tradovate import get_renew_token
+    from app.db.repositories.broker_repository import user_refresh_websocket_token
+    from sqlalchemy import text
+    import asyncio
+    
+    # CRITICAL FIX: Use raw SQL to bypass ALL ORM caching and connection state issues
+    # This ensures we ALWAYS query the database directly and see committed data
+    # Even if the ORM session has cached data or connection pooling issues
+    
+    try:
+        # Use raw SQL query - this bypasses all ORM caching and queries the database directly
+        # This is the ONLY reliable way to see newly committed data from other sessions
+        raw_result = db.execute(
+            text("""
+                SELECT id, user_id, username, password, nickname, type, last_sync, status, 
+                       user_broker_id, access_token, md_access_token, 
+                       websocket_access_token, websocket_md_access_token, expire_in
+                FROM broker_accounts 
+                WHERE user_id = :user_id
+            """),
+            {"user_id": str(user_id)}
+        )
+        
+        # Convert raw results to BrokerAccount objects manually
+        broker_accounts = []
+        for row in raw_result:
+            row_dict = dict(row._mapping)
+            # Debug: print what we got from the database
+            print(f"[WebSocket Tokens] Raw row data: id={row_dict.get('id')}, access_token present={bool(row_dict.get('access_token'))}, md_access_token present={bool(row_dict.get('md_access_token'))}, websocket_access_token present={bool(row_dict.get('websocket_access_token'))}")
+            
+            # Create BrokerAccount instance - we need to handle UUID conversion
+            from uuid import UUID as UUIDType
+            try:
+                if isinstance(row_dict.get('id'), str):
+                    row_dict['id'] = UUIDType(row_dict['id'])
+                if isinstance(row_dict.get('user_id'), str):
+                    row_dict['user_id'] = UUIDType(row_dict['user_id'])
+            except Exception as e:
+                print(f"[WebSocket Tokens] UUID conversion error: {e}")
+            
+            # Create BrokerAccount object - we'll use the ORM model but populate it manually
+            # This creates a detached instance (not in session) which is fine for read-only access
+            broker = BrokerAccount()
+            for key, value in row_dict.items():
+                if hasattr(broker, key):
+                    try:
+                        # Set the attribute - set even if None to preserve database state
+                        setattr(broker, key, value)
+                        # Debug: verify the attribute was set for token fields
+                        if key in ['access_token', 'md_access_token', 'websocket_access_token', 'websocket_md_access_token']:
+                            actual_value = getattr(broker, key, None)
+                            print(f"[WebSocket Tokens] Set {key} = {bool(actual_value)} (value: {str(actual_value)[:50] if actual_value else 'None'}...)")
+                    except Exception as e:
+                        print(f"[WebSocket Tokens] Warning: Could not set {key} on BrokerAccount: {e}, value type: {type(value)}, value: {str(value)[:50] if value else 'None'}")
+            broker_accounts.append(broker)
+            
+            # Final verification - check what we actually have
+            print(f"[WebSocket Tokens] Broker {broker.id} final state:")
+            print(f"  - access_token: {bool(broker.access_token)} ({len(broker.access_token) if broker.access_token else 0} chars)")
+            print(f"  - md_access_token: {bool(broker.md_access_token)} ({len(broker.md_access_token) if broker.md_access_token else 0} chars)")
+            print(f"  - websocket_access_token: {bool(broker.websocket_access_token)} ({len(broker.websocket_access_token) if broker.websocket_access_token else 0} chars)")
+            print(f"  - websocket_md_access_token: {bool(broker.websocket_md_access_token)} ({len(broker.websocket_md_access_token) if broker.websocket_md_access_token else 0} chars)")
+        
+        print(f"[WebSocket Tokens] Raw SQL query returned {len(broker_accounts)} broker accounts for user {user_id}")
+        if len(broker_accounts) > 0:
+            print(f"[WebSocket Tokens] Broker account IDs: {[str(b.id) for b in broker_accounts]}")
+    except Exception as e:
+        print(f"[WebSocket Tokens] ERROR: Raw SQL query failed: {e}")
+        print(f"[WebSocket Tokens] Falling back to ORM query")
+        # Fallback to ORM query if raw SQL fails
+        broker_accounts = (
+            db.query(BrokerAccount)
+            .filter(BrokerAccount.user_id == user_id)
+            .all()
+        )
+        print(f"[WebSocket Tokens] ORM query returned {len(broker_accounts)} broker accounts")
+    tokens_list = []
+    for broker in broker_accounts:
+        # Check if any active sub-broker is demo to determine endpoint
+        is_demo = False
+        sub_brokers = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.broker_account_id == broker.id)
+            .filter(SubBrokerAccount.is_active == True)
+            .all()
+        )
+        if sub_brokers:
+            # If any active sub-broker is demo, use demo endpoint
+            is_demo = any(sub.is_demo for sub in sub_brokers)
+        
+        # Try to refresh tokens before using them
+        access_token_to_use = None
+        md_access_token_to_use = None
+        
+        # Prefer websocket tokens if available, but refresh them first
+        if broker.websocket_access_token:
+            try:
+                # Try to refresh the token with retry
+                new_tokens = None
+                for attempt in range(2):  # Try twice
+                    try:
+                        new_tokens = get_renew_token(broker.websocket_access_token)
+                        if new_tokens:
+                            break
+                    except Exception as e:
+                        if attempt == 0:
+                            print(f"[WebSocket Tokens] Token refresh attempt {attempt + 1} failed for broker {broker.id}: {e}")
+                        else:
+                            print(f"[WebSocket Tokens] Token refresh failed for broker {broker.id} after 2 attempts: {e}")
+                
+                if new_tokens:
+                    # Update in database (async function needs to be called properly)
+                    # For now, use the refreshed tokens directly
+                    access_token_to_use = new_tokens.access_token
+                    md_access_token_to_use = new_tokens.md_access_token
+                    print(f"[WebSocket Tokens] Successfully refreshed websocket token for broker {broker.id}")
+                else:
+                    # Use existing token if refresh failed
+                    access_token_to_use = broker.websocket_access_token
+                    md_access_token_to_use = broker.websocket_md_access_token
+                    print(f"[WebSocket Tokens] Using existing websocket token for broker {broker.id} (refresh returned None)")
+            except Exception as e:
+                # Fallback to existing token
+                access_token_to_use = broker.websocket_access_token
+                md_access_token_to_use = broker.websocket_md_access_token
+                print(f"[WebSocket Tokens] Exception refreshing websocket token for broker {broker.id}: {e}, using existing token")
+        
+        # Fallback to regular access tokens if websocket tokens don't exist
+        # Use access_token even if md_access_token is NULL - we can refresh to get both
+        elif broker.access_token:
+            try:
+                # Try to refresh the token with retry
+                new_tokens = None
+                for attempt in range(2):  # Try twice
+                    try:
+                        new_tokens = get_renew_token(broker.access_token)
+                        if new_tokens:
+                            break
+                    except Exception as e:
+                        if attempt == 0:
+                            print(f"[WebSocket Tokens] Token refresh attempt {attempt + 1} failed for broker {broker.id}: {e}")
+                        else:
+                            print(f"[WebSocket Tokens] Token refresh failed for broker {broker.id} after 2 attempts: {e}")
+                
+                if new_tokens:
+                    access_token_to_use = new_tokens.access_token
+                    md_access_token_to_use = new_tokens.md_access_token
+                    print(f"[WebSocket Tokens] Successfully refreshed regular token for broker {broker.id}")
+                else:
+                    # If refresh fails, use existing tokens (even if md_access_token is None)
+                    # The frontend might be able to work with just access_token
+                    access_token_to_use = broker.access_token
+                    md_access_token_to_use = broker.md_access_token if broker.md_access_token else None
+                    print(f"[WebSocket Tokens] Using existing regular token for broker {broker.id} (refresh returned None, md_token: {bool(md_access_token_to_use)})")
+            except Exception as e:
+                access_token_to_use = broker.access_token
+                md_access_token_to_use = broker.md_access_token if broker.md_access_token else None
+                print(f"[WebSocket Tokens] Exception refreshing regular token for broker {broker.id}: {e}, using existing token (md_token: {bool(md_access_token_to_use)})")
+        
+        # Require access_token, but md_access_token can be None (we'll try to refresh it)
+        if access_token_to_use:
+            # If md_access_token is missing, try to get it from the refreshed token
+            # If refresh already happened above, md_access_token_to_use should be set
+            # If not, we'll use None and let the frontend handle it
+            websocket_token = WebSocketTokens(
+                id=broker.id,
+                access_token=access_token_to_use,
+                md_access_token=md_access_token_to_use if md_access_token_to_use else access_token_to_use,  # Fallback to access_token if md_token is None
+                is_demo=is_demo
+            )
+            tokens_list.append(websocket_token)
+            print(f"[WebSocket Tokens] Added token for broker {broker.id} (is_demo: {is_demo}, md_token: {bool(md_access_token_to_use)})")
+        else:
+            print(f"[WebSocket Tokens] Skipping broker {broker.id} - missing access_token (access_token: {bool(access_token_to_use)}, md_access_token: {bool(md_access_token_to_use)})")
+    print(f"[WebSocket Tokens] Returning {len(tokens_list)} tokens for user {user_id}")
+    return tokens_list
+
+def user_get_tokens_for_group(
+    db: Session, group_id: UUID
+) -> WebSocketTokens | None:
+    """Get WebSocket token for the broker account associated with a group's sub-brokers"""
+    from app.models.group_broker import GroupBroker
+    from app.models.broker_account import SubBrokerAccount
+    
+    # Get all sub-brokers in this group
+    group_brokers = (
+        db.query(GroupBroker).filter(GroupBroker.group_id == group_id).all()
+    )
+    
+    if not group_brokers:
+        return None
+    
+    # Get the broker_account_id from the first sub-broker
+    # (assuming all sub-brokers in a group belong to the same broker account)
+    first_sub_broker_id = group_brokers[0].sub_broker_id
+    sub_broker = (
+        db.query(SubBrokerAccount)
+        .filter(SubBrokerAccount.id == first_sub_broker_id)
+        .first()
+    )
+    
+    if not sub_broker or not sub_broker.broker_account_id:
+        return None
+    
+    # Get the broker account and its WebSocket token
+    broker_account = (
+        db.query(BrokerAccount)
+        .filter(BrokerAccount.id == sub_broker.broker_account_id)
+        .first()
+    )
+    
+    if not broker_account:
+        return None
+    
+    # Check if any sub-broker in the group is demo to determine endpoint
+    is_demo = False
+    if sub_broker:
+        is_demo = sub_broker.is_demo
+    else:
+        # Fallback: check all sub-brokers in the group
+        sub_broker_ids = [gb.sub_broker_id for gb in group_brokers]
+        sub_brokers_in_group = (
+            db.query(SubBrokerAccount)
+            .filter(SubBrokerAccount.id.in_(sub_broker_ids))
+            .all()
+        )
+        if sub_brokers_in_group:
+            # If any sub-broker in group is demo, use demo endpoint
+            is_demo = any(sub.is_demo for sub in sub_brokers_in_group)
+    
+    # Prefer websocket tokens if available
+    if broker_account.websocket_access_token:
+        websocket_token = WebSocketTokens(
+            id=broker_account.id,
+            access_token=broker_account.websocket_access_token,
+            md_access_token=broker_account.websocket_md_access_token,
+            is_demo=is_demo
+        )
+        return websocket_token
+    # Fallback to regular access tokens if websocket tokens don't exist
+    elif broker_account.access_token and broker_account.md_access_token:
+        websocket_token = WebSocketTokens(
+            id=broker_account.id,
+            access_token=broker_account.access_token,
+            md_access_token=broker_account.md_access_token,
+            is_demo=is_demo
+        )
+        return websocket_token
+    
     return None

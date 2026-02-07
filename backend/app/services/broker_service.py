@@ -67,8 +67,6 @@ from app.utils.tradovate import (
     tradovate_execute_market_order
 )
 import asyncio
-from app.utils.cache import cache_get_json, cache_set_json
-from app.core.config import settings
 from app.db.repositories.broker_repository import (
     user_add_broker,
     user_get_brokers,
@@ -227,10 +225,6 @@ def change_sub_brokers(db: Session, sub_broker_change: SubBrokerChange):
 
 
 async def get_positions(db: Session, user_id: UUID):
-    cache_key = f"user:{user_id}:positions"
-    cached = await cache_get_json(cache_key)
-    if cached is not None:
-        return cached
     positions_status: list[TradovatePositionListResponse] = []
     positions_for_frontend: list[TradovatePositionListForFrontend] = []
     db_broker_accounts = (
@@ -283,7 +277,7 @@ async def get_positions(db: Session, user_id: UUID):
                 continue
         for position in positions_status:
             sba = sub_map.get(str(position["accountId"]))
-            if not sba or not sba.is_active or position.get("netPos", 0) == 0:
+            if not sba or not sba.is_active:
                 continue
             name = contract_name_map.get((sba.is_demo, position["contractId"]))
             p = TradovatePositionListForFrontend(
@@ -301,15 +295,10 @@ async def get_positions(db: Session, user_id: UUID):
                 accountDisplayName=sba.sub_account_name,
             )
             positions_for_frontend.append(p)
-    await cache_set_json(cache_key, [p.model_dump() for p in positions_for_frontend], settings.CACHE_TTL_SECONDS)
     return positions_for_frontend
 
 
 async def get_orders(db: Session, user_id: UUID):
-    cache_key = f"user:{user_id}:orders"
-    cached = await cache_get_json(cache_key)
-    if cached is not None:
-        return cached
     order_status: list[TradovateOrderListResponse] = []
     order_for_frontend = []
     db_broker_accounts = (
@@ -379,15 +368,10 @@ async def get_orders(db: Session, user_id: UUID):
                 accountDisplayName=sba.sub_account_name,
             )
             order_for_frontend.append(o)
-    await cache_set_json(cache_key, [o.model_dump() for o in order_for_frontend], settings.CACHE_TTL_SECONDS)
     return order_for_frontend
 
 
 async def get_accounts(db: Session, user_id: UUID):
-    cache_key = f"user:{user_id}:accounts"
-    cached = await cache_get_json(cache_key)
-    if cached is not None:
-        return cached
     accounts_status: list[TradovateCashBalanceResponse] = []
     accounts_for_dashboard = []
     db_broker_accounts = (
@@ -431,7 +415,6 @@ async def get_accounts(db: Session, user_id: UUID):
                 accountDisplayName=sba.sub_account_name,
             )
             accounts_for_dashboard.append(a)
-    await cache_set_json(cache_key, [a.model_dump() for a in accounts_for_dashboard], settings.CACHE_TTL_SECONDS)
     return accounts_for_dashboard
 
 
@@ -445,21 +428,104 @@ async def get_sub_brokers_for_group(
 
 
 def exit_position(db: Session, exit_position_data: ExitPosition):
-    db_sub_broker = (
+    # Use the same string conversion as in exit_Position
+    # IMPORTANT: Filter by is_active=True to match exit_Position query
+    account_id_str = str(exit_position_data.accountId)
+    
+    # Get all active SubBrokerAccount records for this accountId
+    # If there are duplicates, prefer the one with a refreshable token
+    sub_brokers = (
         db.query(SubBrokerAccount)
-        .filter(SubBrokerAccount.sub_account_id == str(exit_position_data.accountId))
-        .first()
+        .filter(SubBrokerAccount.sub_account_id == account_id_str)
+        .filter(SubBrokerAccount.is_active == True)  # Only use active accounts
+        .all()
     )
-    if db_sub_broker is None:
+    
+    if not sub_brokers:
+        print(f"[FLATTEN DEBUG] Sub broker account not found for accountId {account_id_str} (is_active=True)")
         return {"error": "Sub broker account not found", "accountId": exit_position_data.accountId}
+    
+    # If there are multiple records, prefer the one with a refreshable token
+    db_sub_broker = None
+    if len(sub_brokers) == 1:
+        db_sub_broker = sub_brokers[0]
+    else:
+        print(f"[FLATTEN DEBUG] Found {len(sub_brokers)} active SubBrokerAccount records for accountId {account_id_str}, selecting best one")
+        # Find the SubBrokerAccount with a refreshable token
+        best_sub_broker = None
+        best_broker = None
+        best_token_valid = False
+        
+        for sb in sub_brokers:
+            broker = db.query(BrokerAccount).filter(BrokerAccount.id == sb.broker_account_id).first()
+            if broker and broker.access_token:
+                try:
+                    from app.utils.tradovate import get_renew_token
+                    test_refresh = get_renew_token(broker.access_token)
+                    if test_refresh is not None:
+                        # This broker has a refreshable token
+                        if not best_token_valid:
+                            best_sub_broker = sb
+                            best_broker = broker
+                            best_token_valid = True
+                            print(f"[FLATTEN DEBUG]   Selected broker {sb.broker_account_id} (has refreshable token)")
+                except:
+                    pass
+        
+        # If we found one with a valid token, use it; otherwise use the first one
+        if best_sub_broker:
+            db_sub_broker = best_sub_broker
+        else:
+            db_sub_broker = sub_brokers[0]
+            print(f"[FLATTEN DEBUG]   No broker with refreshable token found, using first one (broker {db_sub_broker.broker_account_id})")
+    
+    if db_sub_broker is None:
+        print(f"[FLATTEN DEBUG] Could not determine SubBrokerAccount for accountId {account_id_str}")
+        return {"error": "Sub broker account not found", "accountId": exit_position_data.accountId}
+    
+    # Get the broker account for this sub-broker account
+    # IMPORTANT: Always query fresh from database to ensure we get the latest token
+    # This is critical when multiple positions share the same broker account
+    broker_id = db_sub_broker.broker_account_id
+    
+    print(f"[FLATTEN DEBUG] accountId={account_id_str}, found broker_id={broker_id} from SubBrokerAccount")
+    
+    # Expire any cached broker account object to force fresh query
+    # This ensures we get the token that was just refreshed in exitall endpoint
+    db.expire_all()
+    
+    # Query fresh from database
     db_broker = (
         db.query(BrokerAccount)
-        .filter(BrokerAccount.id == db_sub_broker.broker_account_id)
+        .filter(BrokerAccount.id == broker_id)
         .first()
     )
     if db_broker is None:
-        return {"error": "Broker account not found", "broker_account_id": db_sub_broker.broker_account_id}
+        print(f"[FLATTEN DEBUG] Broker account {broker_id} not found in database")
+        return {"error": "Broker account not found", "broker_account_id": broker_id}
+    
+    print(f"[FLATTEN DEBUG] accountId={account_id_str}, broker_id={db_broker.id}, symbol={exit_position_data.symbol}, token_preview={db_broker.access_token[:20] if db_broker.access_token else 'None'}...")
+    
+    # Get access token from the fresh query
     access_token = db_broker.access_token
+    if not access_token:
+        return {"error": "No access token available", "accountId": exit_position_data.accountId}
+    
+    # Try to refresh token before using it (in case pre-refresh didn't work or token expired)
+    try:
+        new_tokens = get_renew_token(access_token)
+        if new_tokens:
+            access_token = new_tokens.access_token
+            # Update token in database for future use
+            db_broker.access_token = new_tokens.access_token
+            db_broker.md_access_token = new_tokens.md_access_token
+            db.commit()
+            # Expire again to ensure next position gets fresh token if same broker
+            db.expire(db_broker)
+            print(f"[FLATTEN DEBUG] Refreshed token for broker {db_broker.id}, accountId {exit_position_data.accountId}")
+    except Exception as e:
+        print(f"[FLATTEN DEBUG] Token refresh failed for broker {db_broker.id}: {e}, using existing token")
+    
     # Build full payload including accountSpec as required by provider
     order_payload = {
         "accountId": int(db_sub_broker.sub_account_id),
@@ -471,18 +537,29 @@ def exit_position(db: Session, exit_position_data: ExitPosition):
         "isAutomated": bool(exit_position_data.isAutomated),
     }
     response = place_order(access_token, db_sub_broker.is_demo, order_payload)
+    
+    # If we still get a 401 error after refresh, try one more time with a fresh refresh
     if isinstance(response, dict) and response.get("status") == 401:
-        # Try to renew token and retry once
-        new_tokens = get_renew_token(access_token)
-        if new_tokens:
-            try:
-                db_broker.access_token = new_tokens.access_token
-                db_broker.md_access_token = new_tokens.md_access_token
-                db.commit()
-                db.refresh(db_broker)
-            except Exception:
-                db.rollback()
-            return place_order(db_broker.access_token, db_sub_broker.is_demo, order_payload)
+        print(f"[FLATTEN DEBUG] Got 401 for accountId {exit_position_data.accountId}, broker {db_broker.id}, retrying with fresh token")
+        try:
+            # Expire and re-query to get absolutely fresh token
+            db.expire_all()
+            db_broker_fresh = db.query(BrokerAccount).filter(BrokerAccount.id == broker_id).first()
+            if db_broker_fresh and db_broker_fresh.access_token:
+                new_tokens = get_renew_token(db_broker_fresh.access_token)
+                if new_tokens:
+                    try:
+                        db_broker_fresh.access_token = new_tokens.access_token
+                        db_broker_fresh.md_access_token = new_tokens.md_access_token
+                        db.commit()
+                        response = place_order(db_broker_fresh.access_token, db_sub_broker.is_demo, order_payload)
+                        print(f"[FLATTEN DEBUG] Retry successful for accountId {exit_position_data.accountId}")
+                    except Exception as e:
+                        db.rollback()
+                        print(f"[FLATTEN DEBUG] Error updating token in database: {e}")
+        except Exception as e:
+            print(f"[FLATTEN DEBUG] Error refreshing token on retry: {e}")
+    
     return response
 
 
@@ -490,6 +567,18 @@ def get_token_for_websocket(
     db: Session, user_id: UUID
 ) -> WebSocketTokens | None:
     return user_get_tokens_for_websocket(db, user_id)
+
+def get_all_tokens_for_websocket(
+    db: Session, user_id: UUID
+) -> list[WebSocketTokens]:
+    from app.db.repositories.broker_repository import user_get_all_tokens_for_websocket
+    return user_get_all_tokens_for_websocket(db, user_id)
+
+def get_token_for_group_websocket(
+    db: Session, group_id: UUID
+) -> WebSocketTokens | None:
+    from app.db.repositories.broker_repository import user_get_tokens_for_group
+    return user_get_tokens_for_group(db, group_id)
 
 async def execute_market_order(db: Session, order: MarketOrder):
     db_subroker_accounts = (
@@ -522,7 +611,24 @@ async def execute_market_order(db: Session, order: MarketOrder):
         except Exception as e:
             errors.append({"error": f"Invalid order payload: {e}", "sub_broker_id": str(subbroker.sub_broker_id)})
             continue
+        # Get access token and refresh if needed
         access_token = db_broker_account.access_token
+        if not access_token:
+            errors.append({"error": "No access token available", "sub_broker_id": str(subbroker.sub_broker_id)})
+            continue
+        
+        # Try to refresh token before using it
+        try:
+            new_tokens = get_renew_token(access_token)
+            if new_tokens:
+                access_token = new_tokens.access_token
+                # Update token in database for future use
+                db_broker_account.access_token = new_tokens.access_token
+                db_broker_account.md_access_token = new_tokens.md_access_token
+                db.commit()
+        except Exception as e:
+            pass  # Using existing token
+        
         is_demo = db_subbroker_account.is_demo
         response = await tradovate_execute_market_order(tradovate_order, access_token, is_demo)
         if response is None or (isinstance(response, dict) and response.get("error")):
@@ -552,7 +658,25 @@ async def execute_limit_order(db: Session, order: LimitOrder):
         db_broker_account = (
             db.query(BrokerAccount).filter(BrokerAccount.id == db_subroker_account.broker_account_id).first()
         )
+        if not db_broker_account:
+            continue
+        # Get access token and refresh if needed
         access_token = db_broker_account.access_token
+        if not access_token:
+            continue
+        
+        # Try to refresh token before using it
+        try:
+            new_tokens = get_renew_token(access_token)
+            if new_tokens:
+                access_token = new_tokens.access_token
+                # Update token in database for future use
+                db_broker_account.access_token = new_tokens.access_token
+                db_broker_account.md_access_token = new_tokens.md_access_token
+                db.commit()
+        except Exception as e:
+            pass  # Using existing token
+        
         is_demo = db_subroker_account.is_demo
         response = await tradovate_execute_limit_order(tradovate_order, access_token, is_demo)
     
@@ -592,7 +716,25 @@ async def execute_limit_order_with_sltp(db: Session, order: LimitOrderWithSLTP):
         db_broker_account = (
             db.query(BrokerAccount).filter(BrokerAccount.id == db_subroker_account.broker_account_id).first()
         )
+        if not db_broker_account:
+            continue
+        # Get access token and refresh if needed
         access_token = db_broker_account.access_token
+        if not access_token:
+            continue
+        
+        # Try to refresh token before using it
+        try:
+            new_tokens = get_renew_token(access_token)
+            if new_tokens:
+                access_token = new_tokens.access_token
+                # Update token in database for future use
+                db_broker_account.access_token = new_tokens.access_token
+                db_broker_account.md_access_token = new_tokens.md_access_token
+                db.commit()
+        except Exception as e:
+            pass  # Using existing token
+        
         is_demo = db_subroker_account.is_demo
         response = await tradovate_execute_limit_order_with_sltp(tradovate_order, access_token, is_demo)
     

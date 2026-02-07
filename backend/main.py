@@ -4,14 +4,33 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from app.core.config import settings
-from app.models import base  # Your declarative base with models
+# Import Base from session (same one used by all models)
+from app.db.session import Base
+# Import all models to ensure they're registered with SQLAlchemy
+from app.models import (
+    User,
+    BrokerAccount,
+    SubBrokerAccount,
+    Group,
+    GroupBroker,
+    UserContract,
+)
 from app.services.broker_service import (
     refresh_new_token,
 )  # Your async token refresh logic
 from app.api.v1.routers import api_router  # Your routers
 
 # Async SQLAlchemy engine and session maker
-engine = create_async_engine(settings.ASYNC_DATABASE_URL, echo=True)
+# Configure connection pool to handle connection errors and stale connections
+engine = create_async_engine(
+    settings.ASYNC_DATABASE_URL,
+    echo=True,
+    pool_pre_ping=True,  # Verify connections before using them
+    pool_size=10,  # Number of connections to maintain
+    max_overflow=20,  # Maximum number of connections beyond pool_size
+    pool_recycle=1800,  # Recycle connections after 30 minutes (1800 seconds)
+    pool_reset_on_return='commit',  # Reset connections on return
+)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 
@@ -48,8 +67,13 @@ app.include_router(api_router, prefix="/api/v1")
 
 # Async database schema initialization
 async def init_db():
+    # Create tables on async engine
     async with engine.begin() as conn:
-        await conn.run_sync(base.Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all)
+    
+    # Also create tables on sync engine (used by repositories)
+    from app.db.session import engine as sync_engine
+    Base.metadata.create_all(bind=sync_engine)
 
 
 # Periodic background task to refresh tokens
@@ -58,7 +82,7 @@ async def regenerate_access_token_periodically():
         async with async_session() as db:
             print("Regenerating access token...")
             await refresh_new_token(db)
-        await asyncio.sleep(1800)  # Sleep 30 minutes
+        await asyncio.sleep(1200)  # Sleep 20 minutes
 
 
 # FastAPI startup event to initialize DB and start background task

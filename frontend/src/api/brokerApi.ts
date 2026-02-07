@@ -191,6 +191,37 @@ export const getAccounts = async (
   }
 };
 
+// Combined function to get all trading data in one request
+export const getAllTradingData = async (
+  user_id: string
+): Promise<{
+  accounts: TradovateAccountsResponse[] | null;
+  positions: TradovatePositionListResponse[] | null;
+  orders: TradovateOrderListResponse[] | null;
+} | null> => {
+  try {
+    const params = { user_id };
+    const [accountsRes, positionsRes, ordersRes] = await Promise.all([
+      axios.get(`${API_BASE}/broker/accounts`, { params }),
+      axios.get(`${API_BASE}/broker/positions`, { params }),
+      axios.get(`${API_BASE}/broker/orders`, { params }),
+    ]);
+    return {
+      accounts: accountsRes.data,
+      positions: positionsRes.data,
+      orders: ordersRes.data,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get All Trading Data:", error.response?.data);
+      // Don't alert for combined call to avoid spam
+    } else {
+      console.error("Unexpected Get All Trading Data error:", error);
+    }
+    return null;
+  }
+};
+
 export const getSubBrokersForGroup = async (
   user_id: string
 ): Promise<SubBrokerSummaryForGet[] | null> => {
@@ -263,6 +294,51 @@ export const getWebSocketToken = async (
       alert(error.response?.data?.detail ?? "Unknown error");
     } else {
       console.error("Unexpected Get Tokens error:", error);
+    }
+    return null;
+  }
+};
+
+export const getWebSocketTokenForGroup = async (
+  group_id: string
+): Promise<Tokens | null> => {
+  try {
+    const response = await axios.get(`${API_BASE}/broker/websockettoken/group/${group_id}`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("Get Group Tokens:", error.response?.data);
+      // Don't alert for group token errors to avoid spam
+    } else {
+      console.error("Unexpected Get Group Tokens error:", error);
+    }
+    return null;
+  }
+};
+
+export const getAllWebSocketTokens = async (
+  user_id: string
+): Promise<Tokens[] | null> => {
+  try {
+    const params = { user_id };
+    console.log(`[brokerApi] Fetching WebSocket tokens from ${API_BASE}/broker/websockettoken/all for user: ${user_id}`);
+    const response = await axios.get(`${API_BASE}/broker/websockettoken/all`, {
+      params,
+    });
+    console.log(`[brokerApi] Received response:`, response.data);
+    console.log(`[brokerApi] Response type:`, typeof response.data, Array.isArray(response.data));
+    if (response.data) {
+      console.log(`[brokerApi] Response length:`, Array.isArray(response.data) ? response.data.length : 'not an array');
+    }
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error("[brokerApi] Get All Tokens Error:", error.response?.data);
+      console.error("[brokerApi] Error Status:", error.response?.status);
+      console.error("[brokerApi] Error Headers:", error.response?.headers);
+      // Don't alert to avoid spam
+    } else {
+      console.error("[brokerApi] Unexpected Get All Tokens error:", error);
     }
     return null;
   }

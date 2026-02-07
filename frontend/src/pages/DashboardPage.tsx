@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
@@ -124,14 +124,59 @@ const DashboardPage: React.FC = () => {
     loadData();
   }, [user_id]);
 
-  // Connect to real-time PnL SSE stream AFTER initial data has rendered
+  // Poll positions, orders, and accounts every 3 seconds to sync with Tradovate
   useEffect(() => {
-    if (!user_id || positions.length === 0 || isInitialLoad) {
+    if (!user_id || isInitialLoad) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        await Promise.all([fetchPositions(), fetchOrders(), fetchAccounts()]);
+      } catch (error) {
+        console.error("Error polling positions/orders/accounts:", error);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [user_id, isInitialLoad]);
+
+  // Connect to real-time PnL SSE stream and reconnect when positions change
+  const prevPositionKeysRef = useRef<string>("");
+  useEffect(() => {
+    if (!user_id || isInitialLoad) {
+      return;
+    }
+
+    // Create a hash of position keys (symbol:accountId) to detect changes
+    const currentPositionKeys = positions
+      .filter((p: any) => (p.netPos || 0) !== 0)
+      .map((p: any) => `${p.symbol}:${p.accountId}`)
+      .sort()
+      .join(",");
+    
+    // If position keys changed, reconnect stream
+    const positionsChanged = currentPositionKeys !== prevPositionKeysRef.current;
+    prevPositionKeysRef.current = currentPositionKeys;
+
+    // If no positions, disconnect and clear PnL data
+    if (positions.length === 0 || currentPositionKeys === "") {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
+      setPnlData({});
       return;
     }
 
     const start = () => {
       const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+      
+      // Close existing connection if positions changed
+      if (positionsChanged && eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+
       const symbols = Array.from(new Set(positions.map(p => p.symbol))).join(",");
       fetch(`${API_BASE}/databento/market-status?symbols=${encodeURIComponent(symbols)}`)
         .then(r => r.json())
@@ -161,7 +206,12 @@ const DashboardPage: React.FC = () => {
           }
           const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
           eventSourceRef.current = eventSource;
-          eventSource.onopen = () => setIsConnectedToPnL(true);
+          eventSource.onopen = () => {
+            setIsConnectedToPnL(true);
+            if (positionsChanged) {
+              console.log("🔄 PnL stream reconnected after positions changed");
+            }
+          };
           eventSource.onmessage = (e) => {
             try {
               const data = JSON.parse(e.data);
@@ -185,32 +235,41 @@ const DashboardPage: React.FC = () => {
         });
     };
 
-    const idleCb = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: any) => number);
+    // If positions changed, reconnect immediately, otherwise use deferred start
+    let idleInterval: number | undefined;
     let timeoutId: number | undefined;
-    if (typeof idleCb === "function") {
-      idleCb(start, { timeout: 1000 });
+
+    if (positionsChanged) {
+      start();
     } else {
-      timeoutId = window.setTimeout(start, 250);
-    }
-
-    // Idle detector
-    const idleInterval = window.setInterval(() => {
-      const since = Date.now() - (lastPnlTsRef.current || 0);
-      if (since > 20000) {
-        setIsPnlIdle(true);
+      const idleCb = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: any) => number);
+      if (typeof idleCb === "function") {
+        idleCb(start, { timeout: 1000 });
+      } else {
+        timeoutId = window.setTimeout(start, 250);
       }
-    }, 5000);
 
+      // Idle detector
+      idleInterval = window.setInterval(() => {
+        const since = Date.now() - (lastPnlTsRef.current || 0);
+        if (since > 20000) {
+          setIsPnlIdle(true);
+        }
+      }, 5000);
+    }
+    
+    // Return cleanup for when component unmounts or positions change
     return () => {
-      window.clearInterval(idleInterval);
+      if (idleInterval) window.clearInterval(idleInterval);
       if (timeoutId) window.clearTimeout(timeoutId);
+      // Close EventSource when component unmounts (user leaves DashboardPage)
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
       }
-      setIsConnectedToPnL(false);
     };
-  }, [user_id, positions.length, isInitialLoad]);
+  }, [user_id, positions, isInitialLoad]);
 
   // General sorting utility for array of objects
   const sortData = <T,>(

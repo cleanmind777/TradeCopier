@@ -28,6 +28,18 @@ export const getHistoricalChart = async (
   schema: string = "ohlcv-1m"
 ): Promise<HistoricalChartResponse | null> => {
   try {
+    // Validate time range: ensure start is before end
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    
+    if (startDate >= endDate) {
+      console.error(`Invalid time range: start (${start}) must be before end (${end})`);
+      // Auto-fix: adjust end to be at least 1 minute after start
+      const correctedEnd = new Date(startDate.getTime() + 60 * 1000).toISOString();
+      console.warn(`Auto-corrected end time to: ${correctedEnd}`);
+      return getHistoricalChart(symbol, start, correctedEnd, schema);
+    }
+    
     const response = await axios.get(`${API_BASE}/databento/historical`, {
       params: { symbol, start, end, schema },
     });

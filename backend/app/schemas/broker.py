@@ -138,6 +138,7 @@ class Tokens(BaseModel):
 
 class WebSocketTokens(Tokens):
     id: UUID
+    is_demo: bool = False  # Whether this is a demo account (determines WebSocket endpoint)
 
 class Symbols(BaseModel):
     symbols: list[str]

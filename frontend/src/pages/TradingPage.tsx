@@ -3,15 +3,12 @@ import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
 import { Card, CardContent, CardHeader } from "../components/ui/Card";
-import SymbolsMonitor from "../components/trading/SymbolMonitor";
 // import TradingViewWidget from "../components/trading/TradingViewWidget";
 import {
   executeLimitOrder,
   executeLimitOrderWithSLTP,
   executeMarketOrder,
-  getAccounts,
-  getPositions,
-  getOrders,
+  getAllTradingData,
   exitAllPostions,
 } from "../api/brokerApi";
 import { getGroup } from "../api/groupApi";
@@ -23,8 +20,12 @@ import {
   TradovateAccountsResponse,
   TradovatePositionListResponse,
 } from "../types/broker";
-import { getHistoricalChart } from "../api/databentoApi";
 import LoadingModal from "../components/ui/LoadingModal";
+import Modal from "../components/ui/Modal";
+import { tradovateWSMultiClient } from "../services/tradovateWsMulti";
+import { getAllWebSocketTokens } from "../api/brokerApi";
+import { addUserContract, getUserContracts, deleteUserContract } from "../api/userContractApi";
+import { UserContractInfo } from "../types/userContract";
 
 const TradingPage: React.FC = () => {
   // Trading state
@@ -35,8 +36,8 @@ const TradingPage: React.FC = () => {
   const [limitPrice, setLimitPrice] = useState<string>("");
   const [isOrdering, setIsOrdering] = useState<boolean>(false);
   const [orderHistory, setOrderHistory] = useState<any[]>([]);
-  const [symbol, setSymbol] = useState<string>("NQZ5");
-  const [pendingSymbol, setPendingSymbol] = useState<string>("NQZ5");
+  const [symbol, setSymbol] = useState<string>("All");
+  const [pendingSymbol, setPendingSymbol] = useState<string>("MNQZ5");
   
   // PnL tracking state
   const [pnlData, setPnlData] = useState<Record<string, any>>({});
@@ -51,13 +52,81 @@ const TradingPage: React.FC = () => {
     lastUpdate: ""
   });
 
-  // Accounts and positions for aggregates/balance
+  // Accounts and positions for aggregates/balance (raw data from API)
   const [accounts, setAccounts] = useState<TradovateAccountsResponse[]>([]);
   const [positions, setPositions] = useState<TradovatePositionListResponse[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  
+  // Filtered data based on selected group and symbol (frontend filtering)
+  const filteredPositions = useMemo(() => {
+    let filtered = positions;
+    
+    // Filter by group if not "All"
+    if (selectedGroup && selectedGroup.id !== "All") {
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+      filtered = filtered.filter(p => groupAccountIds.has(Number(p.accountId)));
+    }
+    
+    // Filter by symbol if not "All"
+    if (symbol && symbol !== "All") {
+      const symbolUpper = symbol.toUpperCase();
+      filtered = filtered.filter(p => {
+        if (!p.symbol) return false;
+        const pSymbol = p.symbol.toUpperCase();
+        if (pSymbol === symbolUpper) return true;
+        const symbolPrefix = symbolUpper.slice(0, 2);
+        return pSymbol.startsWith(symbolPrefix);
+      });
+    }
+    
+    return filtered;
+  }, [positions, selectedGroup, symbol]);
+  
+  const filteredOrders = useMemo(() => {
+    let filtered = orders;
+    
+    // Filter by group if not "All"
+    if (selectedGroup && selectedGroup.id !== "All") {
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+      filtered = filtered.filter(o => groupAccountIds.has(Number(o.accountId)));
+    }
+    
+    // Filter by symbol if not "All"
+    if (symbol && symbol !== "All") {
+      const symbolUpper = symbol.toUpperCase();
+      filtered = filtered.filter(o => {
+        if (!o.symbol) return false;
+        const oSymbol = o.symbol.toUpperCase();
+        if (oSymbol === symbolUpper) return true;
+        const symbolPrefix = symbolUpper.slice(0, 2);
+        return oSymbol.startsWith(symbolPrefix);
+      });
+    }
+    
+    return filtered;
+  }, [orders, selectedGroup, symbol]);
+  
+  const filteredAccounts = useMemo(() => {
+    let filtered = accounts;
+    
+    // Filter by group if not "All"
+    if (selectedGroup && selectedGroup.id !== "All") {
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+      filtered = filtered.filter(a => groupAccountIds.has(Number(a.accountId)));
+    }
+    
+    return filtered;
+  }, [accounts, selectedGroup]);
   const [groupBalance, setGroupBalance] = useState<number>(0); // kept for future toolbar summaries
   const [groupSymbolNet, setGroupSymbolNet] = useState<{ netPos: number; avgNetPrice: number; }>({ netPos: 0, avgNetPrice: 0 });
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
+  const [isMarketClosed, setIsMarketClosed] = useState<boolean>(false);
 
   // Real-time price data (bid, ask, last, sizes)
   const [currentPrice, setCurrentPrice] = useState<{
@@ -80,8 +149,6 @@ const TradingPage: React.FC = () => {
     equity: number;
   }>>({});
 
-  // Offline PnL fallback
-  const offlinePnlIntervalRef = useRef<number | null>(null);
 
   // SL/TP state
   const [slTpOption, setSlTpOption] = useState<
@@ -97,9 +164,31 @@ const TradingPage: React.FC = () => {
   // Monitor tabs
   const [activeTab, setActiveTab] = useState<"positions" | "orders" | "accounts">("positions");
 
+  // User contracts (preferred symbols)
+  const [userContracts, setUserContracts] = useState<UserContractInfo[]>([]);
+  const [isContractModalOpen, setIsContractModalOpen] = useState<boolean>(false);
+  const [newContractSymbol, setNewContractSymbol] = useState<string>("");
+
+  // Check if selected group has positions to flatten
+  const hasGroupPositions = useMemo(() => {
+    if (!selectedGroup || filteredPositions.length === 0) return false;
+    if (selectedGroup.id === "All") {
+      return filteredPositions.some(p => (Number(p.netPos) || 0) !== 0);
+    }
+    const groupAccountIds = new Set(
+      selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+    );
+    return filteredPositions.some(p => {
+      const hasPosition = (Number(p.netPos) || 0) !== 0;
+      const belongsToGroup = groupAccountIds.has(Number(p.accountId));
+      return hasPosition && belongsToGroup;
+    });
+  }, [selectedGroup, filteredPositions]);
+
   // Aggregated group-position monitoring rows by symbol for ALL groups and ALL symbols
+  // Shows positions from all groups, or "All" if no groups are loaded
   const groupMonitorRows = useMemo(() => {
-    if (positions.length === 0) return [] as Array<{
+    if (filteredPositions.length === 0) return [] as Array<{
       groupName: string;
       symbol: string;
       openPositions: number;
@@ -117,16 +206,21 @@ const TradingPage: React.FC = () => {
       totalAccounts: number;
     }> = [];
 
+    // If no groups loaded, show all positions under "All" group
     if (groups.length === 0) {
-      // Fallback: no groups loaded; aggregate ALL positions by symbol under a single "All" group
       const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
-      positions.forEach((p) => {
+      filteredPositions.forEach((p) => {
         const sym = (p.symbol || "").toUpperCase();
         if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
         symbolToPositions.get(sym)!.push(p);
       });
 
-      const realizedPnLTotal = accounts.reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
+      // Get all accounts for realized PnL calculation (use all accounts, not filtered)
+      const allAccountsMap = new Map<number, TradovateAccountsResponse>();
+      accounts.forEach((a) => {
+        allAccountsMap.set(a.accountId, a);
+      });
+      const realizedPnLTotal = Array.from(allAccountsMap.values()).reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
 
       for (const [sym, list] of symbolToPositions.entries()) {
         const totalNetPos = list.reduce((sum, p) => sum + (p.netPos || 0), 0);
@@ -155,57 +249,76 @@ const TradingPage: React.FC = () => {
         });
       }
     } else {
-      // Loop through ALL groups
+      // Create a map of accountId -> group name for quick lookup
+      const accountToGroupMap = new Map<number, string>();
       for (const group of groups) {
-        const accountIdSet = new Set(
-          group.sub_brokers.map((s) => parseInt(s.sub_account_id))
-        );
+        group.sub_brokers.forEach((s) => {
+          const accountId = parseInt(s.sub_account_id);
+          accountToGroupMap.set(accountId, group.name);
+        });
+      }
 
-        // Group positions by symbol for accounts in this group
-        const symbolToPositions = new Map<string, TradovatePositionListResponse[]>();
-        positions
-          .filter((p) => accountIdSet.has(Number(p.accountId)))
-          .forEach((p) => {
-            const sym = (p.symbol || "").toUpperCase();
-            if (!symbolToPositions.has(sym)) symbolToPositions.set(sym, []);
-            symbolToPositions.get(sym)!.push(p);
-          });
+      // Group positions by (groupName, symbol) - show ALL positions
+      const groupSymbolToPositions = new Map<string, TradovatePositionListResponse[]>();
+      filteredPositions.forEach((p) => {
+        const accountId = Number(p.accountId);
+        const groupName = accountToGroupMap.get(accountId) || "All"; // Use "All" for accounts not in any group
+        const sym = (p.symbol || "").toUpperCase();
+        const key = `${groupName}:${sym}`;
+        if (!groupSymbolToPositions.has(key)) {
+          groupSymbolToPositions.set(key, []);
+        }
+        groupSymbolToPositions.get(key)!.push(p);
+      });
 
-        // Sum realized PnL across accounts in group
+      // Process each (group, symbol) combination
+      for (const [key, list] of groupSymbolToPositions.entries()) {
+        const [groupName, sym] = key.split(":");
+        
+        // Get account IDs for this group (or all accounts if "All")
+        let groupAccountIds: Set<number>;
+        if (groupName === "All") {
+          // For "All" group, use all account IDs from positions in this list
+          groupAccountIds = new Set(list.map(p => Number(p.accountId)));
+        } else {
+          const group = groups.find(g => g.name === groupName);
+          groupAccountIds = new Set(
+            group?.sub_brokers.map((s) => parseInt(s.sub_account_id)) || []
+          );
+        }
+
+        // Sum realized PnL across accounts in group (use all accounts for calculation)
         const realizedPnLTotal = accounts
-          .filter((a) => accountIdSet.has(Number(a.accountId)))
+          .filter((a) => groupAccountIds.has(Number(a.accountId)))
           .reduce((sum, a) => sum + (a.realizedPnL || 0), 0);
 
-        // For each symbol in this group
-        for (const [sym, list] of symbolToPositions.entries()) {
-          // Open Position: total net position (sum of netPos values)
-          const totalNetPos = list.reduce((sum, p) => sum + (Number(p.netPos) || 0), 0);
+        // Open Position: total net position (sum of netPos values)
+        const totalNetPos = list.reduce((sum, p) => sum + (Number(p.netPos) || 0), 0);
 
-          // Open PnL: sum from live pnlData if available
-          let openPnLSum = 0;
-          list.forEach((p) => {
-            const key1 = `${p.symbol}:${p.accountId}`;
-            const live = pnlData[key1];
-            if (live && typeof live.unrealizedPnL === "number") {
-              openPnLSum += live.unrealizedPnL;
-            }
-          });
+        // Open PnL: sum from live pnlData if available
+        let openPnLSum = 0;
+        list.forEach((p) => {
+          const key1 = `${p.symbol}:${p.accountId}`;
+          const live = pnlData[key1];
+          if (live && typeof live.unrealizedPnL === "number") {
+            openPnLSum += live.unrealizedPnL;
+          }
+        });
 
-          // Count unique accounts in this group that have a non-zero position for this symbol
-          const accountsWithPositions = new Set<number>();
-          list.forEach((p) => {
-            if ((Number(p.netPos) || 0) !== 0) accountsWithPositions.add(Number(p.accountId));
-          });
+        // Count unique accounts that have a non-zero position for this symbol
+        const accountsWithPositions = new Set<number>();
+        list.forEach((p) => {
+          if ((Number(p.netPos) || 0) !== 0) accountsWithPositions.add(Number(p.accountId));
+        });
 
-          rows.push({
-            groupName: group.name,
-            symbol: sym,
-            openPositions: totalNetPos, // Total net position for this group/symbol
-            openPnL: openPnLSum,
-            realizedPnL: realizedPnLTotal,
-            totalAccounts: accountsWithPositions.size,
-          });
-        }
+        rows.push({
+          groupName: groupName,
+          symbol: sym,
+          openPositions: totalNetPos,
+          openPnL: openPnLSum,
+          realizedPnL: realizedPnLTotal,
+          totalAccounts: accountsWithPositions.size,
+        });
       }
     }
 
@@ -217,9 +330,31 @@ const TradingPage: React.FC = () => {
       return a.symbol.localeCompare(b.symbol);
     });
     return rows;
-  }, [groups, positions, pnlData, accounts]);
+  }, [groups, filteredPositions, pnlData, accounts]);
 
   // Typing-only symbol entry (no dropdown)
+
+  // Helper function to filter trading data by selected group and symbol
+  const filterTradingData = (
+    accounts: TradovateAccountsResponse[],
+    positions: TradovatePositionListResponse[],
+    orders: any[],
+    currentSymbol?: string,
+    currentGroup?: GroupInfo | null
+  ) => {
+    // Use provided parameters or fall back to state
+    const symbolToUse = currentSymbol !== undefined ? currentSymbol : symbol;
+    const groupToUse = currentGroup !== undefined ? currentGroup : selectedGroup;
+    
+    let filteredAccounts = accounts || [];
+    let filteredPositions = positions || [];
+    let filteredOrders = orders || [];
+
+    // Show ALL accounts, positions, and orders (no filtering by group or symbol)
+    // This helper function is kept for compatibility but no longer filters data
+
+    return { filteredAccounts, filteredPositions, filteredOrders };
+  };
 
   // Calculate PnL for selected group and symbol
   const calculateGroupPnL = () => {
@@ -239,9 +374,6 @@ const TradingPage: React.FC = () => {
     // Get sub-broker account IDs from selected group
     const groupAccountIds = selectedGroup.sub_brokers.map(sub => sub.sub_account_id);
     
-    console.log("🔍 Calculating PnL for group:", selectedGroup.name);
-    console.log("📊 Group account IDs:", groupAccountIds);
-    console.log("📈 Available PnL data keys:", Object.keys(pnlData));
 
     // Calculate PnL for all positions in the group
     Object.values(pnlData).forEach((data: any) => {
@@ -259,12 +391,9 @@ const TradingPage: React.FC = () => {
         const pnl = data.unrealizedPnL || 0;
         totalPnL += pnl;
         
-        console.log(`💰 Account ${accountIdStr} (${data.symbol}): $${pnl}`);
-        
         // If symbol matches, add to symbol-specific PnL
         if (symbol && data.symbol === symbol) {
           symbolPnL += pnl;
-          console.log(`🎯 Symbol ${symbol} PnL: $${pnl}`);
         }
         
         // Track the latest update time
@@ -274,7 +403,6 @@ const TradingPage: React.FC = () => {
       }
     });
 
-    console.log(`📊 Total Group PnL: $${totalPnL}, Symbol PnL: $${symbolPnL}`);
 
     setGroupPnL({
       totalPnL: Math.round(totalPnL * 100) / 100, // Round to 2 decimal places
@@ -312,44 +440,374 @@ const TradingPage: React.FC = () => {
       .filter(a => ids.has(a.accountId))
       .reduce((sum, a) => sum + (a.amount || 0), 0);
     setGroupBalance(total);
-  }, [selectedGroup, accounts]);
+  }, [selectedGroup?.id, accounts]);
 
   // Derive group symbol aggregates (net position and avg net price)
   useEffect(() => {
-    if (!selectedGroup || !symbol || positions.length === 0) {
+    if (!selectedGroup || !symbol || symbol === "All" || filteredPositions.length === 0) {
       setGroupSymbolNet({ netPos: 0, avgNetPrice: 0 });
       return;
     }
-    const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
-    const filtered = positions.filter(p => ids.has(p.accountId) && p.symbol?.toUpperCase().startsWith(symbol.toUpperCase().slice(0, 2)));
-    const totalQty = filtered.reduce((sum, p) => sum + (p.netPos || 0), 0);
-    const weightedPriceNumer = filtered.reduce((sum, p) => sum + (p.netPos || 0) * (p.netPrice || 0), 0);
+    // Use filtered positions which already account for group and symbol selection
+    const totalQty = filteredPositions.reduce((sum, p) => sum + (p.netPos || 0), 0);
+    const weightedPriceNumer = filteredPositions.reduce((sum, p) => sum + (p.netPos || 0) * (p.netPrice || 0), 0);
     const avgPrice = totalQty !== 0 ? weightedPriceNumer / totalQty : 0;
     setGroupSymbolNet({ netPos: totalQty, avgNetPrice: avgPrice });
-  }, [selectedGroup, symbol, positions]);
+  }, [selectedGroup?.id, symbol, filteredPositions]);
 
-  // Fetch accounts and positions
+  // Fetch accounts, positions, and orders on mount only
+  // Show ALL positions, orders, and accounts (no filtering)
+  // No need to reload when symbol changes since we don't filter by symbol
   useEffect(() => {
     const load = async () => {
       if (!user_id) return;
       setIsPageLoading(true);
-      const [acc, pos, ord] = await Promise.all([
-        getAccounts(user_id),
-        getPositions(user_id),
-        getOrders(user_id),
-      ]);
-      if (acc) setAccounts(acc);
-      if (pos) setPositions(pos);
-      if (ord) setOrders(ord);
-      setIsPageLoading(false);
+      try {
+        const data = await getAllTradingData(user_id);
+        
+        if (data) {
+          // Ensure we have arrays, not null
+          const rawAccounts = Array.isArray(data.accounts) ? data.accounts : [];
+          const rawPositions = Array.isArray(data.positions) ? data.positions : [];
+          const rawOrders = Array.isArray(data.orders) ? data.orders : [];
+          
+          // For positions: show ALL positions (no symbol filtering)
+          let filteredPositions = rawPositions;
+          
+          // For accounts: show ALL accounts (no filtering)
+          const allAccounts = rawAccounts;
+          
+          // For orders: show ALL orders (no filtering)
+          const allOrders = rawOrders;
+          
+          setAccounts(allAccounts);
+          setPositions(filteredPositions);
+          setOrders(allOrders);
+        } else {
+          // Set empty arrays to ensure UI shows "no data" message
+          setAccounts([]);
+          setPositions([]);
+          setOrders([]);
+        }
+      } catch (error) {
+        // Silent error handling
+      } finally {
+        setIsPageLoading(false);
+      }
     };
     load();
+    // Only reload when user_id changes (on mount or user switch)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user_id]);
 
+  // Subscribe to WebSocket updates for positions, orders, and accounts
+  // Use refs to access current selectedGroup and symbol without re-subscribing
+  const selectedGroupRef = useRef(selectedGroup);
+  const symbolRef = useRef(symbol);
+  
+  // Track if WebSocket has sent initial data (to prevent empty arrays from overwriting API data)
+  const wsHasDataRef = useRef({ positions: false, orders: false, accounts: false });
+  
+  useEffect(() => {
+    selectedGroupRef.current = selectedGroup;
+  }, [selectedGroup?.id]);
+  
+  useEffect(() => {
+    symbolRef.current = symbol;
+  }, [symbol]);
+
+  // Ref to store refresh functions and debounce timers
+  const refreshDataRef = useRef<{
+    refreshTradingData: (immediate?: boolean) => Promise<void>;
+    refreshPnLStream: () => void;
+  } | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
+  const pnlRefreshTimerRef = useRef<number | null>(null);
+  const isRefreshingRef = useRef<boolean>(false);
+  const wsRefreshTimerRef = useRef<number | null>(null); // Debounce timer for WebSocket-triggered refreshes
+  const handleWebSocketEventRef = useRef<(() => void) | null>(null); // Ref to store WebSocket event handler
+
+  // Subscribe once, filter using refs
+  useEffect(() => {
+    if (!user_id) return;
+
+    // Reset WebSocket data flags when user changes
+    wsHasDataRef.current = { positions: false, orders: false, accounts: false };
+
+    // Refresh function - executes immediately when called from WebSocket updates
+    const refreshTradingData = async (immediate = false) => {
+      // Prevent overlapping requests
+      if (isRefreshingRef.current) {
+        return;
+      }
+
+      // Clear any pending refresh timer
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+
+      const executeRefresh = async () => {
+        if (isRefreshingRef.current) {
+          return;
+        }
+        
+        isRefreshingRef.current = true;
+        try {
+          const data = await getAllTradingData(user_id);
+          if (data) {
+            console.log(`[WS TRIGGER] ✅ API data received: ${data.positions?.length || 0} positions, ${data.orders?.length || 0} orders, ${data.accounts?.length || 0} accounts`);
+            // Use current symbol from refs
+            const currentSymbol = symbolRef.current;
+            const currentGroup = selectedGroupRef.current;
+            
+            // Ensure we have arrays, not null
+            const rawAccounts = Array.isArray(data.accounts) ? data.accounts : [];
+            const rawPositions = Array.isArray(data.positions) ? data.positions : [];
+            const rawOrders = Array.isArray(data.orders) ? data.orders : [];
+            
+            // For positions: show ALL positions (no symbol filtering)
+            let filteredPositions = rawPositions;
+            
+            // For accounts: show ALL accounts (no filtering)
+            const allAccounts = rawAccounts;
+            
+            // For orders: show ALL orders (no filtering)
+            const allOrders = rawOrders;
+            
+            setAccounts(allAccounts);
+            setPositions(filteredPositions);
+            setOrders(allOrders);
+          }
+        } catch (error) {
+          // Silent error handling
+        } finally {
+          isRefreshingRef.current = false;
+        }
+      };
+
+      // If immediate (from WebSocket), execute right away
+      // Otherwise, debounce for 2 seconds (for manual refreshes)
+      if (immediate) {
+        executeRefresh();
+      } else {
+        refreshTimerRef.current = window.setTimeout(executeRefresh, 2000);
+      }
+    };
+
+    // Debounced PnL stream refresh
+    const refreshPnLStream = () => {
+      // Clear any pending refresh
+      if (pnlRefreshTimerRef.current) {
+        window.clearTimeout(pnlRefreshTimerRef.current);
+        pnlRefreshTimerRef.current = null;
+      }
+
+      // Debounce: only reconnect after 1 second of no updates
+      pnlRefreshTimerRef.current = window.setTimeout(() => {
+        if (user_id) {
+          connectToPnLStream();
+        }
+      }, 1000); // 1 second debounce
+    };
+
+    // Store in ref for WebSocket listeners
+    refreshDataRef.current = {
+      refreshTradingData,
+      refreshPnLStream,
+    };
+
+    // Throttled function to handle all WebSocket events
+    // Fire immediately on first event, then ignore events for 500ms
+    const handleWebSocketEvent = () => {
+      try {
+        // If there's already a timer, we're in the throttle window - ignore this event
+        if (wsRefreshTimerRef.current) {
+          // Timer is already set, meaning we're in the throttle window
+          // Just reset the timer to extend the window
+          window.clearTimeout(wsRefreshTimerRef.current);
+          wsRefreshTimerRef.current = null;
+        }
+
+        // If we're already refreshing, skip
+        if (isRefreshingRef.current) {
+          return;
+        }
+
+        // Fire immediately on first event
+        console.log(`[WS TRIGGER] ⚡ Immediate trigger - sending API requests`);
+        
+        const refreshFn = refreshDataRef.current;
+        if (!refreshFn) {
+          console.log(`[WS TRIGGER] ❌ refreshDataRef is null, skipping`);
+          return;
+        }
+        
+        refreshFn.refreshTradingData(true); // true = immediate
+        refreshFn.refreshPnLStream();
+
+        // Set throttle timer - ignore events for next 500ms
+        console.log(`[WS TRIGGER] Setting throttle timer (500ms)`);
+        wsRefreshTimerRef.current = window.setTimeout(() => {
+          wsRefreshTimerRef.current = null;
+          console.log(`[WS TRIGGER] Throttle window ended`);
+        }, 500);
+        
+      } catch (error) {
+        console.log(`[WS TRIGGER] ❌ Error in handleWebSocketEvent:`, error);
+      }
+    };
+    
+    // Store handler in ref so it's accessible from WebSocket listeners
+    handleWebSocketEventRef.current = handleWebSocketEvent;
+    console.log(`[WS TRIGGER] Registered handleWebSocketEvent in ref`);
+
+    console.log(`[WS TRIGGER] Registering WebSocket listeners...`);
+    const unsubPositions = tradovateWSMultiClient.onPositions((_allPositions) => {
+      console.log(`[WS TRIGGER] Positions listener called with ${_allPositions?.length || 0} positions`);
+      // Track that WebSocket has sent an event
+      wsHasDataRef.current.positions = true;
+      
+      // Trigger debounced refresh (will combine with other WebSocket events)
+      if (handleWebSocketEventRef.current) {
+        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from positions listener`);
+        handleWebSocketEventRef.current();
+      } else {
+        console.log(`[WS TRIGGER] ❌ handleWebSocketEventRef.current is null in positions listener!`);
+      }
+      
+      // DO NOT update state from WebSocket data - only use API data
+    });
+
+    console.log(`[WS TRIGGER] Positions listener registered`);
+    const unsubOrders = tradovateWSMultiClient.onOrders((_allOrders) => {
+      console.log(`[WS TRIGGER] Orders listener called with ${_allOrders?.length || 0} orders`);
+      // Track that WebSocket has sent an event
+      wsHasDataRef.current.orders = true;
+      
+      // Trigger debounced refresh (will combine with other WebSocket events)
+      if (handleWebSocketEventRef.current) {
+        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from orders listener`);
+        handleWebSocketEventRef.current();
+      } else {
+        console.log(`[WS TRIGGER] ❌ handleWebSocketEventRef.current is null in orders listener!`);
+      }
+      
+      // DO NOT update state from WebSocket data - only use API data
+    });
+
+    console.log(`[WS TRIGGER] Orders listener registered`);
+    const unsubAccounts = tradovateWSMultiClient.onAccounts((_allAccounts) => {
+      console.log(`[WS TRIGGER] Accounts listener called with ${_allAccounts?.length || 0} accounts`);
+      // Track that WebSocket has sent an event
+      wsHasDataRef.current.accounts = true;
+      
+      // Trigger debounced refresh (will combine with other WebSocket events)
+      if (handleWebSocketEventRef.current) {
+        console.log(`[WS TRIGGER] Calling handleWebSocketEvent from accounts listener`);
+        handleWebSocketEventRef.current();
+      } else {
+        console.log(`[WS TRIGGER] ❌ handleWebSocketEventRef.current is null in accounts listener!`);
+      }
+      
+      // DO NOT update state from WebSocket data - only use API data
+    });
+    console.log(`[WS TRIGGER] Accounts listener registered`);
+
+    return () => {
+      unsubPositions();
+      unsubOrders();
+      unsubAccounts();
+      refreshDataRef.current = null;
+      handleWebSocketEventRef.current = null;
+      
+      // Clear any pending timers
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      if (pnlRefreshTimerRef.current) {
+        window.clearTimeout(pnlRefreshTimerRef.current);
+        pnlRefreshTimerRef.current = null;
+      }
+      if (wsRefreshTimerRef.current) {
+        window.clearTimeout(wsRefreshTimerRef.current);
+        wsRefreshTimerRef.current = null;
+      }
+      
+      // Disconnect PnL SSE when leaving TradingPage
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
+      
+      isRefreshingRef.current = false;
+    };
+    // Only subscribe once when user_id changes, filtering uses refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user_id]);
+
+  // Refresh PnL when positions change (from polling or manual updates)
+  const prevPositionsRef = useRef<string>("");
+  useEffect(() => {
+    if (!positions || positions.length === 0) {
+      prevPositionsRef.current = "";
+      // If all positions are closed, clear PnL data and disconnect stream
+      setPnlData({});
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
+      return;
+    }
+
+    // Create a hash of position keys (symbol:accountId) to detect changes
+    const currentPositionKeys = new Set(
+      positions
+        .filter((p: any) => (p.netPos || 0) !== 0)
+        .map((p: any) => `${p.symbol}:${p.accountId}`)
+    );
+    const positionsHash = Array.from(currentPositionKeys).sort().join(",");
+
+    // Only process if position keys actually changed
+    if (positionsHash === prevPositionsRef.current) {
+      return;
+    }
+
+    prevPositionsRef.current = positionsHash;
+
+    // Clear stale PnL data for positions that no longer exist
+    setPnlData((prev) => {
+      const next = { ...prev };
+      let hasChanges = false;
+      Object.keys(prev).forEach((key) => {
+        if (!currentPositionKeys.has(key)) {
+          delete next[key];
+          hasChanges = true;
+        }
+      });
+      return hasChanges ? next : prev;
+    });
+    
+    // Recalculate PnL when positions change (from WebSocket updates)
+    // PnL stream is already connected, just recalculate
+    calculateGroupPnL();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions]);
+
   const handleFlattenAll = async () => {
+    // Check if market is closed
+    if (isMarketClosed) {
+      alert("Current Market Close");
+      return;
+    }
+
     try {
       setIsOrdering(true);
-      const exitList = positions
+      // Use filtered positions based on selected group and symbol
+      const exitList = filteredPositions
         .filter((p) => (Number(p.netPos) || 0) !== 0)
         .map((position) => {
         const action = position.netPos > 0 ? "Sell" : "Buy";
@@ -366,40 +824,16 @@ const TradingPage: React.FC = () => {
         await exitAllPostions(exitList as any);
       }
       // Wait briefly for provider to reflect flatten
-      const waitForFlatPositions = async (retries = 10, delayMs = 500) => {
-        for (let i = 0; i < retries; i++) {
-          const latest = await getPositions(user_id);
-          if (latest) {
-            const anyOpen = latest.some((p: any) => (Number(p.netPos) || 0) !== 0);
-            if (!anyOpen) return latest;
-          }
-          await new Promise((r) => setTimeout(r, delayMs));
-        }
-        return await getPositions(user_id);
-      };
-      const [acc, pos, ord] = await Promise.all([
-        getAccounts(user_id),
-        waitForFlatPositions(),
-        getOrders(user_id),
-      ]);
-      if (acc) setAccounts(acc);
-      if (pos) setPositions(pos);
-      if (ord) setOrders(ord);
+      // WebSocket will update positions automatically
+      await new Promise((r) => setTimeout(r, 1000));
       
-      // Clear stale PnL data to force fresh calculation
+      // Clear stale PnL data - WebSocket will update positions automatically
       setPnlData({});
-      // Reconnect PnL SSE to ensure fresh stream after exits
-      setTimeout(() => {
-        connectToPnLStream();
-        // Force recalculation after stream reconnects
-        setTimeout(() => {
-          calculateGroupPnL();
-        }, 500);
-      }, 300);
+      // PnL stream will automatically update when positions change via WebSocket
       // Normalize unrealized PnL to zero for accounts that are now flat to refresh equities immediately
       try {
         const netByAccount: Record<number, number> = {};
-        (pos || []).forEach((p: any) => {
+        (positions || []).forEach((p: any) => {
           const acc = Number(p.accountId);
           netByAccount[acc] = (netByAccount[acc] || 0) + (Number(p.netPos) || 0);
         });
@@ -412,7 +846,7 @@ const TradingPage: React.FC = () => {
           // Check if all group positions are flat FIRST, before updating pnlData
           if (selectedGroup) {
             const groupAccountIds = new Set(selectedGroup.sub_brokers.map(s => s.sub_account_id));
-            const groupNet = (pos || [])
+            const groupNet = (positions || [])
               .filter((p: any) => groupAccountIds.has(p.accountId.toString()))
               .reduce((sum: number, p: any) => sum + (Number(p.netPos) || 0), 0);
             
@@ -435,90 +869,109 @@ const TradingPage: React.FC = () => {
         }
       } catch {}
     } catch (e) {
-      console.error("Flatten all failed", e);
+      // Silent error handling
     } finally {
       setIsOrdering(false);
     }
   };
 
-  // Offline PnL calculation using historical last price
-  const calculateOfflinePnL = async () => {
+  const handleFlattenGroup = async () => {
+    // Check if market is closed
+    if (isMarketClosed) {
+      alert("Current Market Close");
+      return;
+    }
+
+    // Check if a group is selected
+    if (!selectedGroup || selectedGroup.id === "All") {
+      alert("Please select a specific group (not 'All')");
+      return;
+    }
+
     try {
-      if (!selectedGroup) return;
-      if (!symbol) return;
-      if (positions.length === 0) return;
+      setIsOrdering(true);
+      
+      // Use filtered positions which already account for group selection
+      const groupPositions = filteredPositions.filter((p) => {
+        const hasPosition = (Number(p.netPos) || 0) !== 0;
+        return hasPosition;
+      });
 
-      const now = new Date();
-      const endIso = new Date(now.getTime() - 60 * 1000).toISOString();
-      const startIso = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
-
-      const hist = await getHistoricalChart(symbol, startIso, endIso, "ohlcv-1m");
-      if (!hist || !hist.data || hist.data.length === 0) return;
-      const lastClose = hist.data[hist.data.length - 1].close;
-
-      const ids = new Set(selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id)));
-      const relevant = positions.filter(p => ids.has(p.accountId) && p.netPos !== 0 && p.symbol?.toUpperCase().startsWith(symbol.toUpperCase().slice(0, 2)));
-
-      let totalPnL = 0;
-      let symbolPnL = 0;
-      for (const p of relevant) {
-        const vpp = getValuePerPoint(p.symbol || symbol);
-        const qty = p.netPos;
-        const entry = p.netPrice || 0;
-        const priceDiff = qty >= 0 ? (lastClose - entry) : (entry - lastClose);
-        const pnl = priceDiff * Math.abs(qty) * vpp;
-        totalPnL += pnl;
-        symbolPnL += pnl;
+      if (groupPositions.length === 0) {
+        alert("No positions to flatten in the selected group");
+        setIsOrdering(false);
+        return;
       }
-      setGroupPnL(() => ({
-        totalPnL: Math.round(totalPnL * 100) / 100,
-        symbolPnL: Math.round(symbolPnL * 100) / 100,
-        lastUpdate: new Date().toLocaleTimeString(),
-      }));
+
+      // Create exit orders for group positions
+      const exitList = groupPositions.map((position) => {
+        const action = position.netPos > 0 ? "Sell" : "Buy";
+        return {
+          accountId: position.accountId,
+          action,
+          symbol: position.symbol,
+          orderQty: Math.abs(position.netPos),
+          orderType: "Market",
+          isAutomated: true,
+        };
+      });
+
+      if (exitList.length > 0) {
+        await exitAllPostions(exitList as any);
+      }
+
+      // Wait briefly for provider to reflect flatten
+      // WebSocket will update positions automatically
+      await new Promise((r) => setTimeout(r, 1000));
+      
+      // Clear stale PnL data for group accounts - WebSocket will update positions automatically
+      const groupAccountIds = new Set(
+        selectedGroup.sub_brokers.map(s => parseInt(s.sub_account_id))
+      );
+      setPnlData((prev) => {
+        const next = { ...prev } as Record<string, any>;
+        Object.entries(prev).forEach(([key, value]: [string, any]) => {
+          if (value && groupAccountIds.has(Number(value.accountId))) {
+            // Zero out PnL for group accounts
+            next[key] = { ...value, unrealizedPnL: 0 };
+          }
+        });
+        return next;
+      });
+
+      // Update group PnL to zero since all positions are flattened
+      setGroupPnL({ totalPnL: 0, symbolPnL: 0, lastUpdate: new Date().toLocaleTimeString() });
     } catch (e) {
-      // Silent fail to avoid UI spam
+      // Silent error handling
+      console.error("Error flattening group:", e);
+    } finally {
+      setIsOrdering(false);
     }
   };
 
-  // Trigger offline PnL when SSE disconnects
-  useEffect(() => {
-    if (isConnectedToPnL) {
-      if (offlinePnlIntervalRef.current) {
-        window.clearInterval(offlinePnlIntervalRef.current);
-        offlinePnlIntervalRef.current = null;
-      }
-      return;
-    }
-    // Immediately compute once, then every 30s
-    calculateOfflinePnL();
-    offlinePnlIntervalRef.current = window.setInterval(() => {
-      calculateOfflinePnL();
-    }, 30000) as any;
-    return () => {
-      if (offlinePnlIntervalRef.current) {
-        window.clearInterval(offlinePnlIntervalRef.current);
-        offlinePnlIntervalRef.current = null;
-      }
-    };
-  }, [isConnectedToPnL, selectedGroup, symbol, positions]);
-
   // Connect to PnL SSE stream
   const connectToPnLStream = () => {
-    if (!user_id) return;
+    if (!user_id) {
+      return;
+    }
 
-    // Close existing connection
+    // Close existing connection first
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      setIsConnectedToPnL(false);
     }
 
     const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-    const eventSource = new EventSource(`${API_BASE}/databento/sse/pnl?user_id=${user_id}`);
-    eventSourceRef.current = eventSource;
+    const url = `${API_BASE}/databento/sse/pnl?user_id=${user_id}`;
+    
+    try {
+      const eventSource = new EventSource(url);
+      eventSourceRef.current = eventSource;
 
-    eventSource.onopen = () => {
-      console.log("Connected to PnL stream for Trading Page");
-      setIsConnectedToPnL(true);
-    };
+      eventSource.onopen = () => {
+        setIsConnectedToPnL(true);
+      };
 
     eventSource.onmessage = (e) => {
       try {
@@ -526,28 +979,26 @@ const TradingPage: React.FC = () => {
         
         // Check for status messages
         if (data.status === "connected") {
-          console.log("✅ PnL stream connected:", data);
+          setIsConnectedToPnL(true);
           return;
         }
 
         // Check for errors
         if (data.error) {
-          console.error("❌ PnL stream error:", data);
+          setIsConnectedToPnL(false);
+          return;
+        }
+
+        // Check for market closed status
+        if (data.status === "market_closed") {
+          setIsConnectedToPnL(false);
+          setIsMarketClosed(true);
           return;
         }
 
         // Update PnL data; key by symbol+account to avoid overwriting
         if (data.symbol && data.unrealizedPnL !== undefined) {
           const key = data.positionKey || `${data.symbol}:${data.accountId}`;
-          console.log(`📊 Received PnL data:`, {
-            key,
-            symbol: data.symbol,
-            accountId: data.accountId,
-            unrealizedPnL: data.unrealizedPnL,
-            netPos: data.netPos,
-            entryPrice: data.entryPrice,
-            currentPrice: data.currentPrice
-          });
           
           setPnlData(prev => ({
             ...prev,
@@ -555,24 +1006,50 @@ const TradingPage: React.FC = () => {
           }));
         }
       } catch (error) {
-        console.error("Error parsing PnL data:", error);
+        // Silent error handling
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error("PnL SSE error:", error);
+      eventSource.onerror = (error) => {
+        setIsConnectedToPnL(false);
+        
+        // Close the connection if it's in a bad state
+        if (eventSource.readyState === EventSource.CLOSED) {
+          eventSourceRef.current = null;
+        }
+        
+        // Attempt to reconnect after a delay
+        setTimeout(() => {
+          if (user_id && !eventSourceRef.current) {
+            connectToPnLStream();
+          }
+        }, 5000);
+      };
+    } catch (error) {
       setIsConnectedToPnL(false);
-    };
+    }
   };
 
-  // Subscribe to real-time price stream when symbol changes, but defer
+  // Use ref to track current symbol for SSE handler
+  const currentSymbolRef = useRef(symbol);
   useEffect(() => {
+    currentSymbolRef.current = symbol;
+  }, [symbol]);
+
+  // Track connection ID to ignore data from old connections
+  const sseConnectionIdRef = useRef<string | null>(null);
+
+  // Subscribe to real-time price stream when symbol changes
+  useEffect(() => {
+    // Close old connection first and clear price
+    if (priceEventSourceRef.current) {
+      priceEventSourceRef.current.close();
+      priceEventSourceRef.current = null;
+      sseConnectionIdRef.current = null;
+    }
+    setCurrentPrice({});
+
     if (!symbol) {
-      if (priceEventSourceRef.current) {
-        priceEventSourceRef.current.close();
-        priceEventSourceRef.current = null;
-      }
-      setCurrentPrice({});
       return;
     }
 
@@ -585,40 +1062,61 @@ const TradingPage: React.FC = () => {
         const statusJson = await statusRes.json();
         if (!statusJson.open) {
           setIsPriceIdle(true);
-          // Load last historical candle to populate price snapshot
-          const now = new Date();
-          const startIso = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
-          const endIso = now.toISOString();
-          const hRes = await fetch(`${API_BASE}/databento/historical?symbol=${encodeURIComponent(symbol)}&start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&schema=ohlcv-1m`);
-          const hJson = await hRes.json();
-          const last = hJson?.data?.[hJson.data.length - 1];
-          if (last) {
-            setCurrentPrice({
-              last: last.close,
-            });
-          }
+          setIsMarketClosed(true);
           // Still attempt SSE unless API key is missing
           if (statusJson.reason === 'missing_api_key') {
             return;
           }
+        } else {
+          setIsMarketClosed(false);
         }
-      } catch {}
-      try {
-        await fetch(`${API_BASE}/databento/sse/current-price`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ symbols: [symbol] }),
-        });
-      } catch {}
-
-      const es = new EventSource(`${API_BASE}/databento/sse/current-price`);
+      } catch {
+        // On error, assume market is closed to be safe
+        setIsMarketClosed(true);
+      }
+      
+      // Create EventSource with current symbol
+      const currentSymbol = currentSymbolRef.current;
+      if (!currentSymbol) return; // Symbol changed while async operation was running
+      
+      const es = new EventSource(`${API_BASE}/databento/sse/current-price?symbols=${encodeURIComponent(currentSymbol)}`);
       priceEventSourceRef.current = es;
 
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          if (data.status === "connected" || data.test || data.error) return;
-          if (data.symbol === symbol) {
+          
+          // Handle connection status message
+          if (data.status === "connected") {
+            sseConnectionIdRef.current = data.connection_id || null;
+            setIsMarketClosed(false);
+            return;
+          }
+          
+          // Check for market closed status
+          if (data.status === "market_closed") {
+            setIsMarketClosed(true);
+            setIsPriceIdle(true);
+            return;
+          }
+          
+          if (data.test || data.error) return;
+          
+          // Ignore data from old connections
+          if (data.connection_id && sseConnectionIdRef.current && data.connection_id !== sseConnectionIdRef.current) {
+            return;
+          }
+          
+          // Use ref to get current symbol (not closure value)
+          const symbolToCheck = currentSymbolRef.current;
+          if (!symbolToCheck) return; // Symbol was cleared
+          
+          // Normalize symbols for comparison (handle .FUT suffix variations)
+          const normalizeSymbol = (s: string) => s.toUpperCase().replace('.FUT', '');
+          const dataSymbolNormalized = normalizeSymbol(data.symbol || '');
+          const currentSymbolNormalized = normalizeSymbol(symbolToCheck);
+          
+          if (dataSymbolNormalized === currentSymbolNormalized) {
             setCurrentPrice({
               bid: data.bid_price,
               ask: data.ask_price,
@@ -628,14 +1126,19 @@ const TradingPage: React.FC = () => {
             });
             lastPriceTsRef.current = Date.now();
             setIsPriceIdle(false);
+          } else {
+            // Log when we receive data for a different symbol (shouldn't happen with backend filtering)
           }
-        } catch {}
+        } catch (error) {
+          // Silent error handling
+        }
       };
 
       es.onerror = () => {
         // keep connection light; mark as idle rather than erroring UI
         setIsPriceIdle(true);
         es.close();
+        sseConnectionIdRef.current = null;
       };
     };
 
@@ -714,7 +1217,7 @@ const TradingPage: React.FC = () => {
   // Update PnL calculations when data changes (including positions)
   useEffect(() => {
     calculateGroupPnL();
-  }, [pnlData, selectedGroup, symbol, positions]);
+  }, [pnlData, selectedGroup?.id, symbol, positions]);
 
   // Reset PnL to 0 when all positions in selected group are flat
   useEffect(() => {
@@ -736,7 +1239,6 @@ const TradingPage: React.FC = () => {
       groupPositions.every((p: any) => Number(p.netPos) === 0);
 
     if (allFlat) {
-      console.log("✅ All positions flat - resetting toolbar PnL to 0");
       setGroupPnL({
         totalPnL: 0,
         symbolPnL: 0,
@@ -754,35 +1256,33 @@ const TradingPage: React.FC = () => {
         return next;
       });
     }
-  }, [positions, selectedGroup]);
+  }, [positions, selectedGroup?.id]);
 
-  // Reconnect PnL stream and refresh when symbol or group changes
+  // Connect/reconnect PnL stream when user_id changes or when positions change
+  // PnL stream should work independently of selected symbol/group - it tracks all positions
   useEffect(() => {
-    if (selectedGroup && symbol && user_id) {
-      console.log(`🔄 Symbol or group changed - reconnecting PnL stream`);
-      // Clear stale PnL data for fresh calculation
-      setPnlData({});
-      // Reconnect PnL stream to get fresh data
-      setTimeout(() => {
-        connectToPnLStream();
-      }, 300);
-      // Force recalculation after a brief delay
-      setTimeout(() => {
-        calculateGroupPnL();
-      }, 500);
+    if (!user_id) {
+      // Close connection if user_id is cleared
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
+      }
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, selectedGroup?.id]);
 
-  // Connect to PnL stream when component mounts
-  useEffect(() => {
+    // Connect/reconnect PnL stream - it will track all positions for the user
     connectToPnLStream();
     
     return () => {
+      // Disconnect PnL SSE when component unmounts or user_id changes
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsConnectedToPnL(false);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user_id]);
 
   // Load user groups
@@ -790,21 +1290,74 @@ const TradingPage: React.FC = () => {
     if (!user_id) return;
     try {
       const userGroups = await getGroup(user_id);
-      setGroups(userGroups);
-      if (userGroups.length > 0) {
-        setSelectedGroup(userGroups[0]);
+      // Load user contracts (preferred symbols)
+      try {
+        const contracts = await getUserContracts(user_id);
+        setUserContracts(contracts);
+        // Keep "All" as default, don't auto-select first contract
+      } catch (error) {
+        console.error("Error loading user contracts:", error);
       }
+      setGroups(userGroups);
+      // Default to "All" group
+      setSelectedGroup({ id: "All", name: "All", sub_brokers: [] } as GroupInfo);
     } catch (error) {
-      console.error("Error loading groups:", error);
+      // Silent error handling
+    }
+  };
+
+  // Handle adding a new contract
+  const handleAddContract = async () => {
+    if (!user_id || !newContractSymbol.trim()) {
+      alert("Please enter a symbol");
+      return;
+    }
+
+    try {
+      const contract = await addUserContract({
+        user_id,
+        symbol: newContractSymbol.trim().toUpperCase(),
+      });
+      setUserContracts((prev) => [contract, ...prev]);
+      // Automatically set the symbol to the newly added contract
+      setSymbol(contract.symbol);
+      setPendingSymbol(contract.symbol);
+      setNewContractSymbol("");
+      setIsContractModalOpen(false);
+    } catch (error) {
+      console.error("Error adding contract:", error);
+      alert("Failed to add contract. It may already exist.");
+    }
+  };
+
+  // Handle deleting a contract
+  const handleDeleteContract = async (contractId: string) => {
+    if (!user_id) return;
+    try {
+      await deleteUserContract(contractId, user_id);
+      setUserContracts((prev) => prev.filter((c) => c.id !== contractId));
+    } catch (error) {
+      console.error("Error deleting contract:", error);
     }
   };
 
   // Execute buy/sell order directly via WebSocket
   const executeOrder = async (action: "Buy" | "Sell") => {
+    // Check if market is closed
+    if (isMarketClosed) {
+      alert("Current Market Close");
+      return;
+    }
+
     if (
-      !selectedGroup
+      !selectedGroup || selectedGroup.id === "All"
     ) {
-      alert("Please select a group");
+      alert("Please select a specific group (not 'All')");
+      return;
+    }
+    
+    if (symbol === "All") {
+      alert("Please select a specific symbol (not 'All')");
       return;
     }
 
@@ -873,8 +1426,7 @@ const TradingPage: React.FC = () => {
           quantity: parseInt(orderQuantity),
           action: action,
         };
-        const response = await executeMarketOrder(order);
-        console.log("Market Order: ", response);
+        await executeMarketOrder(order);
       }
       if (orderType === "limit") {
         if (slValue == 0 && tpValue == 0) {
@@ -886,8 +1438,7 @@ const TradingPage: React.FC = () => {
             action: action,
             price: parseFloat(limitPrice),
           };
-          const response = await executeLimitOrder(order);
-          console.log("Limit Order: ", response);
+          await executeLimitOrder(order);
         }
         else {
           const order: LimitOrderWithSLTP = {
@@ -902,8 +1453,7 @@ const TradingPage: React.FC = () => {
               tp: tpValue
             }
           };
-          const response = await executeLimitOrderWithSLTP(order);
-          console.log("Limit Order: ", response);
+          await executeLimitOrderWithSLTP(order);
         }
       }
       // Calculate SL/TP values
@@ -939,43 +1489,21 @@ const TradingPage: React.FC = () => {
       setOrderHistory((prev) => [orderRecord, ...prev]);
 
       // Wait briefly for provider to reflect new positions
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 500));
 
-      // Refresh dependent data after order so UI (monitor, netPos, equities, pnls) updates
-      try {
-        const [acc, pos, ord] = await Promise.all([
-          getAccounts(user_id),
-          getPositions(user_id),
-          getOrders(user_id),
-        ]);
-        if (acc) setAccounts(acc);
-        if (pos) setPositions(pos);
-        if (ord) setOrders(ord);
-        
-        // Clear stale PnL data to force fresh calculation
-        setPnlData({});
-        // Reconnect PnL SSE to ensure fresh stream picks up new positions
-        setTimeout(() => {
-          connectToPnLStream();
-          // Force recalculation after stream reconnects
-          setTimeout(() => {
-            calculateGroupPnL();
-          }, 500);
-        }, 300);
-      } catch (e) {
-        // Silent fail; SSE/next poll will catch up
-      }
+      // WebSocket will automatically update positions, orders, and accounts
+      // Clear stale PnL data - WebSocket will update positions automatically
+      setPnlData({});
+      // PnL stream will automatically update when positions change via WebSocket
 
       // Reset form
       setOrderQuantity("1");
       setLimitPrice("");
       setOrderType("market");
 
-      alert(
-        `Order submitted for ${action} ${orderQuantity} contracts across ${selectedGroup.sub_brokers.length} sub-brokers`
-      );
+      // Success notification removed per user request
     } catch (error) {
-      console.error("Error executing order:", error);
+      // Error alert kept for user feedback
       alert("Error executing order. Please try again.");
     } finally {
       setIsOrdering(false);
@@ -1196,14 +1724,114 @@ const TradingPage: React.FC = () => {
   //   }
   // };
 
+  // Load groups once on mount
   useEffect(() => {
-    // initializeWebSocket();
-    loadGroups();
-
-    // return () => {
-    //   cleanupWebSocket();
-    // };
+    if (user_id) {
+      loadGroups();
+    }
   }, [user_id]);
+
+  // Connect WebSocket to all broker accounts when user_id changes
+  const prevUserIdRef = useRef<string | null>(null);
+  const tokenFetchAttemptRef = useRef<number>(0);
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000; // 1 second
+  
+  useEffect(() => {
+    const currentUserId = user_id;
+    
+    // Only connect if userId actually changed
+    if (currentUserId && prevUserIdRef.current !== currentUserId) {
+      prevUserIdRef.current = currentUserId;
+      tokenFetchAttemptRef.current = 0;
+      
+      // Fetch tokens for all broker accounts and connect with retry logic
+      const fetchTokensWithRetry = async (attempt: number = 0): Promise<void> => {
+        console.log(`[TradingPage] Fetching WebSocket tokens for user: ${currentUserId} (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        
+        try {
+          const tokensList = await getAllWebSocketTokens(currentUserId);
+          console.log(`[TradingPage] Received ${tokensList?.length || 0} WebSocket tokens:`, tokensList);
+          
+          if (tokensList && Array.isArray(tokensList) && tokensList.length > 0) {
+            // Filter out any invalid tokens and map to ensure all required fields are present
+            const validTokens = tokensList.filter(t => 
+              t && 
+              t.id && 
+              t.access_token && 
+              t.md_access_token
+            );
+            
+            if (validTokens.length === 0) {
+              console.error(`[TradingPage] No valid tokens found. All tokens are missing required fields.`);
+              console.error(`[TradingPage] Token structure:`, tokensList.map(t => ({
+                hasId: !!t?.id,
+                hasAccessToken: !!t?.access_token,
+                hasMdToken: !!t?.md_access_token,
+                keys: t ? Object.keys(t) : []
+              })));
+              
+              // Retry if we haven't exceeded max retries
+              if (attempt < MAX_RETRIES - 1) {
+                console.log(`[TradingPage] Retrying token fetch in ${RETRY_DELAY}ms...`);
+                setTimeout(() => fetchTokensWithRetry(attempt + 1), RETRY_DELAY);
+              }
+              return;
+            }
+            
+            // Map tokens to ensure is_demo has a default value
+            const mappedTokens = validTokens.map(t => ({
+              id: String(t.id), // Ensure id is a string
+              access_token: t.access_token,
+              md_access_token: t.md_access_token,
+              is_demo: t.is_demo ?? false
+            }));
+            
+            console.log(`[TradingPage] Mapped ${mappedTokens.length} valid tokens, connecting to WebSocket...`);
+            tradovateWSMultiClient.connectAll(currentUserId, mappedTokens);
+            tokenFetchAttemptRef.current = 0; // Reset on success
+          } else {
+            console.error(`[TradingPage] No tokens received or empty list. Response:`, tokensList);
+            
+            // Retry if we haven't exceeded max retries
+            if (attempt < MAX_RETRIES - 1) {
+              console.log(`[TradingPage] Retrying token fetch in ${RETRY_DELAY}ms...`);
+              setTimeout(() => fetchTokensWithRetry(attempt + 1), RETRY_DELAY);
+            } else {
+              console.error(`[TradingPage] Failed to fetch tokens after ${MAX_RETRIES} attempts`);
+            }
+          }
+        } catch (error: any) {
+          console.error(`[TradingPage] Error fetching WebSocket tokens (attempt ${attempt + 1}):`, error);
+          if (error.response) {
+            console.error(`[TradingPage] API Error Response:`, error.response.data);
+            console.error(`[TradingPage] API Error Status:`, error.response.status);
+          }
+          
+          // Retry if we haven't exceeded max retries and it's not a 4xx error (client error)
+          if (attempt < MAX_RETRIES - 1 && (!error.response || error.response.status >= 500)) {
+            console.log(`[TradingPage] Retrying token fetch in ${RETRY_DELAY}ms...`);
+            setTimeout(() => fetchTokensWithRetry(attempt + 1), RETRY_DELAY);
+          } else {
+            console.error(`[TradingPage] Failed to fetch tokens after ${attempt + 1} attempts`);
+          }
+        }
+      };
+      
+      fetchTokensWithRetry(0);
+    } else if (!currentUserId) {
+      // If userId is cleared, disconnect all
+      prevUserIdRef.current = null;
+      tokenFetchAttemptRef.current = 0;
+      tradovateWSMultiClient.disconnectAll();
+    }
+
+    return () => {
+      // Disconnect WebSocket when component unmounts (user leaves TradingPage)
+      tradovateWSMultiClient.disconnectAll();
+    };
+  }, [user_id]);
+
 
   // Initialize lightweight chart
   // useEffect(() => {
@@ -1319,19 +1947,33 @@ const TradingPage: React.FC = () => {
                 {/* Symbol select */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">Symbol</span>
-                  <input
-                    value={pendingSymbol}
-                    onChange={(e) => setPendingSymbol(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && pendingSymbol) setSymbol(pendingSymbol); }}
-                    placeholder="NQZ5"
-                    className="h-8 w-28 rounded border border-slate-700 bg-slate-800 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                  <button
-                    onClick={() => setSymbol(pendingSymbol)}
-                    disabled={!pendingSymbol}
-                    className={`h-8 px-3 rounded text-sm font-medium ${pendingSymbol ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-700 cursor-not-allowed'} text-white`}
+                  <select
+                    value={symbol}
+                    onChange={(e) => {
+                      setSymbol(e.target.value);
+                      if (e.target.value !== "All") {
+                        setPendingSymbol(e.target.value);
+                      }
+                    }}
+                    className="h-8 w-32 rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    Select
+                    <option value="All">All</option>
+                    {userContracts.length > 0 ? (
+                      userContracts.map((contract) => (
+                        <option key={contract.id} value={contract.symbol}>
+                          {contract.symbol}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="MNQZ5">MNQZ5</option>
+                    )}
+                  </select>
+                  <button
+                    onClick={() => setIsContractModalOpen(true)}
+                    className="h-8 px-3 rounded bg-green-600 hover:bg-green-700 text-white text-sm font-medium"
+                    title="Add preferred symbol"
+                  >
+                    + Contract
                   </button>
                 </div>
                 <div className="w-px h-6 bg-slate-700" />
@@ -1351,14 +1993,18 @@ const TradingPage: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-400">Group</span>
                   <select
-                    value={selectedGroup?.id || ""}
+                    value={selectedGroup?.id || "All"}
                     onChange={(e) => {
-                      const group = groups.find((g) => g.id === e.target.value);
-                      setSelectedGroup(group || null);
+                      if (e.target.value === "All") {
+                        setSelectedGroup({ id: "All", name: "All", sub_brokers: [] } as GroupInfo);
+                      } else {
+                        const group = groups.find((g) => g.id === e.target.value);
+                        setSelectedGroup(group || null);
+                      }
                     }}
                     className="h-8 min-w-[160px] rounded border border-slate-700 bg-slate-800 px-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="">Select group</option>
+                    <option value="All">All</option>
                     {groups.map((g) => (
                       <option key={g.id} value={g.id}>{g.name}</option>
                     ))}
@@ -1432,7 +2078,7 @@ const TradingPage: React.FC = () => {
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-slate-400">PnL</span>
                   <span className={`${groupPnL.totalPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>${groupPnL.totalPnL.toFixed(0)}</span>
-                  {symbol && (
+                  {symbol && symbol !== "All" && (
                     <span className={`${groupPnL.symbolPnL>=0? 'text-emerald-300' : 'text-rose-300'} px-2 py-0.5 rounded bg-slate-800 border border-slate-700`}>{symbol}: ${groupPnL.symbolPnL.toFixed(0)}</span>
                   )}
                 </div>
@@ -1440,25 +2086,26 @@ const TradingPage: React.FC = () => {
                 {/* Group balance and symbol net */}
                 <div className="flex items-center gap-3 text-xs text-slate-300">
                   <span>Bal ${groupBalance.toFixed(0)}</span>
-                  {symbol && (
+                  {symbol && symbol !== "All" && (
                     <span>Net {groupSymbolNet.netPos} @ {groupSymbolNet.avgNetPrice ? groupSymbolNet.avgNetPrice.toFixed(2) : 0}</span>
                   )}
                 </div>
+                <div className="w-px h-6 bg-slate-700" />
                 {/* Action buttons */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => executeOrder("Buy")}
-                    disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
+                    disabled={isOrdering || !selectedGroup || selectedGroup.id === "All" || symbol === "All" || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
                     className="h-8 px-3 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold"
-                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
+                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : (!selectedGroup || selectedGroup.id === "All" || symbol === "All" ? 'Select a specific group and symbol' : '')}
                   >
                     {orderType === 'limit' ? 'Buy Limit' : 'Buy Mkt'}
                   </button>
                   <button
                     onClick={() => executeOrder("Sell")}
-                    disabled={isOrdering || !selectedGroup || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
+                    disabled={isOrdering || !selectedGroup || selectedGroup.id === "All" || symbol === "All" || (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0))}
                     className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold"
-                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : ''}
+                    title={orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0) ? 'Enter a valid limit price' : (!selectedGroup || selectedGroup.id === "All" || symbol === "All" ? 'Select a specific group and symbol' : '')}
                   >
                     {orderType === 'limit' ? 'Sell Limit' : 'Sell Mkt'}
                   </button>
@@ -1466,8 +2113,17 @@ const TradingPage: React.FC = () => {
                 {/* push following controls to the far right */}
                 <div className="flex-1" />
                 <button
+                  onClick={handleFlattenGroup}
+                  disabled={isOrdering || !selectedGroup || selectedGroup.id === "All" || !hasGroupPositions}
+                  className="h-8 px-3 rounded bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold disabled:opacity-50"
+                  aria-label="Flatten Group / Exit All & Cancel for Selected Group"
+                  title={selectedGroup && selectedGroup.id !== "All" ? `Flatten positions for ${selectedGroup.name}` : "Select a specific group (not 'All')"}
+                >
+                  Group Flatten
+                </button>
+                <button
                   onClick={handleFlattenAll}
-                  disabled={isOrdering || positions.every(p => (Number(p.netPos) || 0) === 0)}
+                  disabled={isOrdering || filteredPositions.every(p => (Number(p.netPos) || 0) === 0)}
                   className="h-8 px-3 rounded bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold disabled:opacity-50"
                   aria-label="Flatten All / Exit All & Cancel All"
                 >
@@ -1477,7 +2133,7 @@ const TradingPage: React.FC = () => {
             </div>
 
             {/* Real-time Price Display */}
-            {symbol && (
+            {symbol && symbol !== "All" && (
               <div className="bg-slate-800 text-slate-100 rounded-md p-2 shadow-sm border border-slate-700">
                 <div className="flex items-center gap-3 md:gap-6 text-xs flex-wrap">
                   <div className="flex items-center gap-2">
@@ -1601,10 +2257,6 @@ const TradingPage: React.FC = () => {
             </Card>
           )} */}
           
-          {/* Chart - majority of the page */}
-          <div className="flex-1 min-h-0 rounded-md border border-slate-200 overflow-hidden" style={{ minHeight: '420px' }}>
-            <SymbolsMonitor key={symbol} initialSymbol={symbol} compact height={420} />
-              </div>
           
           {/* Monitor Tabs (Group Positions, Orders, Accounts) */}
           <div className="mt-4 bg-white rounded-md border border-slate-200 shadow-sm">
@@ -1616,6 +2268,12 @@ const TradingPage: React.FC = () => {
               </div>
                       </div>
             <div className="p-3 overflow-x-auto">
+              {/* Debug info - remove in production */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mb-2 text-xs text-gray-500">
+                  Debug: positions={filteredPositions.length}, orders={filteredOrders.length}, accounts={filteredAccounts.length}, groupMonitorRows={groupMonitorRows.length}
+                </div>
+              )}
               {activeTab === 'positions' && (
                 groupMonitorRows.length > 0 ? (
                   <table className="w-full text-sm">
@@ -1644,7 +2302,7 @@ const TradingPage: React.FC = () => {
                   </table>
                 ) : (
                   <div className="text-center py-4 text-slate-500">
-                    {groups.length === 0 ? "Loading groups..." : positions.length === 0 ? "No open positions found" : "No positions match the selected criteria"}
+                    {groups.length === 0 ? "Loading groups..." : filteredPositions.length === 0 ? "No positions found" : "No positions match the selected criteria"}
                       </div>
                 )
               )}
@@ -1662,8 +2320,8 @@ const TradingPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {orders.length > 0 ? (
-                        orders.map((order) => (
+                      {filteredOrders.length > 0 ? (
+                        filteredOrders.map((order) => (
                           <tr key={order.id} className="border-b last:border-0">
                             <td className="px-3 py-2">{order.accountNickname}</td>
                             <td className="px-3 py-2">{order.accountDisplayName}</td>
@@ -1682,36 +2340,41 @@ const TradingPage: React.FC = () => {
                     </tbody>
                   </table>
                 )}
-                {activeTab === 'accounts' && (
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="text-left font-semibold px-3 py-2">Account</th>
-                        <th className="text-left font-semibold px-3 py-2">Display</th>
-                        <th className="text-right font-semibold px-3 py-2">Amount</th>
-                        <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
-                        <th className="text-right font-semibold px-3 py-2">Week PnL</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {accounts.length > 0 ? (
-                        accounts.map((account) => (
-                          <tr key={account.id} className="border-b last:border-0">
-                            <td className="px-3 py-2">{account.accountNickname}</td>
-                            <td className="px-3 py-2">{account.accountDisplayName}</td>
-                            <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
-                            <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
-                            <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
-                          </tr>
-                        ))
-                      ) : (
+                {activeTab === 'accounts' && (() => {
+                  // Use filtered accounts
+                  const displayAccounts = filteredAccounts;
+                  
+                  return (
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-slate-600">
                         <tr>
-                          <td colSpan={5} className="px-3 py-4 text-center text-slate-500">No accounts found</td>
+                          <th className="text-left font-semibold px-3 py-2">Account</th>
+                          <th className="text-left font-semibold px-3 py-2">Display</th>
+                          <th className="text-right font-semibold px-3 py-2">Amount</th>
+                          <th className="text-right font-semibold px-3 py-2">Realized PnL</th>
+                          <th className="text-right font-semibold px-3 py-2">Week PnL</th>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
-                )}
+                      </thead>
+                      <tbody>
+                        {displayAccounts.length > 0 ? (
+                          displayAccounts.map((account) => (
+                            <tr key={account.id} className="border-b last:border-0">
+                              <td className="px-3 py-2">{account.accountNickname}</td>
+                              <td className="px-3 py-2">{account.accountDisplayName}</td>
+                              <td className={`px-3 py-2 text-right ${account.amount>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.amount.toFixed(2)}</td>
+                              <td className={`px-3 py-2 text-right ${account.realizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.realizedPnL.toFixed(2)}</td>
+                              <td className={`px-3 py-2 text-right ${account.weekRealizedPnL>=0? 'text-emerald-600' : 'text-rose-600'}`}>${account.weekRealizedPnL.toFixed(2)}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="px-3 py-4 text-center text-slate-500">No accounts found</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  );
+                })()}
                       </div>
                       </div>
 
@@ -1720,6 +2383,60 @@ const TradingPage: React.FC = () => {
         </main>
         <Footer />
       </div>
+
+      {/* Add Contract Modal */}
+      <Modal
+        isOpen={isContractModalOpen}
+        onClose={() => {
+          setIsContractModalOpen(false);
+          setNewContractSymbol("");
+        }}
+        title="Add Preferred Symbol"
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Symbol
+            </label>
+            <input
+              type="text"
+              value={newContractSymbol}
+              onChange={(e) => setNewContractSymbol(e.target.value.toUpperCase())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleAddContract();
+                }
+              }}
+              placeholder="e.g., NQZ5"
+              className="w-full h-10 rounded border border-slate-300 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setIsContractModalOpen(false);
+                setNewContractSymbol("");
+              }}
+              className="px-4 py-2 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddContract}
+              disabled={!newContractSymbol.trim()}
+              className={`px-4 py-2 rounded text-sm font-medium ${
+                newContractSymbol.trim()
+                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                  : "bg-slate-300 text-slate-500 cursor-not-allowed"
+              }`}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

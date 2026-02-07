@@ -209,6 +209,7 @@ export interface Tokens {
   id: string;
   access_token: string;
   md_access_token: string;
+  is_demo?: boolean; // Whether this is a demo account (determines WebSocket endpoint)
 }
 
 export interface MarketOrder {
