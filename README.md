@@ -1,103 +1,211 @@
-# TradeCopier
+# 🧭 TradeCopier
 
 A web app for group trading and copying orders across sub-accounts, with real-time market data, PnL monitoring, and Tradovate integration.
 
-## Features
-- Group-based order routing (market/limit, optional SL/TP)
-- Real-time quotes via Tradovate WebSocket and server-sent events (SSE)
-- Live PnL stream and dashboard
-- Account, order, and position syncing
+---
 
-## Getting Started
+## 📚 Table of Contents
 
-### Prerequisites
-- Node.js 18+ and npm (or pnpm/yarn) for the frontend
-- A running backend exposing the required endpoints
-- A Tradovate account and API access configured on the backend
+- [About](#-about)
+- [Features](#-features)
+- [Tech Stack](#-tech-stack)
+- [Installation](#️-installation)
+- [Usage](#-usage)
+- [Configuration](#-configuration)
+- [Screenshots & Demo](#-screenshots--demo)
+- [API Documentation](#-api-documentation)
+- [Troubleshooting](#-troubleshooting)
+- [Acknowledgements](#-acknowledgements)
+- [License](#license)
 
-### Environment
-Frontend uses the following env var:
+---
 
+## 🧩 About
+
+TradeCopier provides an intuitive interface for managing group-based trading and copying orders across sub-accounts. It solves the need to route and mirror trades in real time while keeping accounts, orders, and positions in sync. The project combines a lightweight **React + TypeScript** frontend with a **FastAPI** backend and integrates **Tradovate** for execution and market data, plus **DataBento**-style SSE streams for PnL and price snapshots.
+
+Key goals:
+
+- Centralized order routing (market, limit, optional SL/TP) for groups
+- Real-time quotes and PnL via WebSocket and server-sent events
+- Account, order, and position syncing with a clean dashboard
+
+---
+
+## ✨ Features
+
+- **Group-based order routing** – Route market/limit orders (optional SL/TP) across sub-accounts from a single interface
+- **Real-time quotes** – Live price stream via Tradovate WebSocket and complementary SSE endpoints
+- **Live PnL stream and dashboard** – Server-sent events for PnL and current-price updates with fallback when market is closed
+- **Account, order, and position syncing** – Broker accounts, orders, and positions kept in sync with the backend
+
+---
+
+## 🧠 Tech Stack
+
+| Category   | Technologies |
+|-----------|--------------|
+| **Languages** | Python, TypeScript, JavaScript |
+| **Frameworks** | FastAPI, React, Vite |
+| **Database** | PostgreSQL (async via SQLAlchemy + asyncpg) |
+| **Tools** | Tailwind CSS, Axios, Lightweight Charts, Tradovate API, DataBento-style SSE |
+
+---
+
+## ⚙️ Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/TradeCopier.git
+
+# Navigate to the project directory
+cd TradeCopier
 ```
-VITE_BACKEND_URL=<http(s)://your-backend-host[:port]>
+
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+# Configure .env (see Configuration)
+# Run migrations / DB setup as per backend/README.md
 ```
 
-If omitted, it defaults to `http://localhost:8000` (or `http://localhost:8000/api/v1` where applicable in API modules).
+### Frontend
 
-Create `frontend/.env` (or `.env.local`) and set:
-
-```
-VITE_BACKEND_URL=http://localhost:8000
-```
-
-### Install & Run
-
-From the repository root:
-
-```
+```bash
 cd frontend
 npm install
+```
+
+---
+
+## 🚀 Usage
+
+### Backend
+
+From the project root:
+
+```bash
+cd backend
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+(Or use the run command documented in `backend/`.)
+
+### Frontend
+
+```bash
+cd frontend
 npm run dev
 ```
 
-Backend: see `backend/` for its own setup and run instructions.
+Then open your browser and go to:
 
-## Real-time Data
+👉 [http://localhost:5173](http://localhost:5173)
 
-### Quotes (WebSocket)
-We integrated a lightweight Tradovate WebSocket client used by `frontend/src/pages/TradingPage.tsx` to stream quote updates for the active symbol.
+*(Vite default port is 5173; adjust if your config differs.)*
 
-- Client implementation: `frontend/src/services/tradovateWs.ts`
-- It fetches an access token via `getWebSocketToken` (frontend calls your backend), then connects to `wss://md.tradovateapi.com/v1/websocket` and authorizes.
-- It maintains heartbeats and auto-reconnects and exposes:
-  - `connect(userId)`
-  - `subscribeQuotes(symbol)`
-  - `onQuote(listener)`
+---
 
-`TradingPage.tsx` calls `tradovateWSClient.connect(user_id)` and subscribes to the current `symbol`, updating `currentPrice` on incoming quotes.
+## 🧾 Configuration
 
-Reference: `tradovate/example-api-js – tutorial/WebSockets`
-https://github.com/tradovate/example-api-js/tree/main/tutorial/WebSockets
+### Frontend
 
-### PnL and Price Snapshot (SSE)
-The app also uses backend SSE endpoints for PnL and current-price streams as a complementary data source and fallback:
+Create `frontend/.env` (or `.env.local`) with:
 
-- `GET {VITE_BACKEND_URL}/databento/sse/pnl?user_id=<id>`
-- `POST {VITE_BACKEND_URL}/databento/sse/current-price` then `GET` with EventSource
-- `GET {VITE_BACKEND_URL}/databento/market-status` and `GET {VITE_BACKEND_URL}/databento/historical` for market-open checks and snapshots
+```env
+VITE_BACKEND_URL=http://localhost:8000
+```
 
-Ensure your backend exposes these endpoints and is configured with necessary market data credentials.
+If omitted, the app defaults to `http://localhost:8000` (or `http://localhost:8000/api/v1` where used in API modules).
 
-## Required Backend Endpoints
-Frontend expects the following (non-exhaustive):
+### Backend
 
-- Broker/account data:
-  - `GET /api/v1/broker/positions`
-  - `GET /api/v1/broker/orders`
-  - `GET /api/v1/broker/accounts`
-- Order execution:
-  - `POST /api/v1/broker/execute-order/market`
-  - `POST /api/v1/broker/execute-order/limit`
-  - `POST /api/v1/broker/execute-order/limitwithsltp`
-- Tradovate tokens:
-  - `GET /api/v1/broker/websockettoken`
-- Market data (if using SSE/DataBento-like services):
-  - `GET /databento/market-status`
-  - `GET /databento/historical`
-  - `POST /databento/sse/current-price`
-  - `GET /databento/sse/pnl`
+Copy `backend/env.example` to `backend/.env` and fill in your values. Required and optional variables:
 
-Adjust base paths if your backend differs.
+| Group | Variables |
+|-------|-----------|
+| **Database** | `DATABASE_URL`, `ASYNC_DATABASE_URL` (use `postgresql+asyncpg://...` for async) |
+| **App** | `FRONTEND_URL`, `DEBUG`, `ENVIRONMENT`, `APP_VERSION`, `APP_ID` |
+| **JWT** | `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES` |
+| **Email (EmailJS)** | `EMAILJS_SERVICE_ID`, `EMAILJS_OTP_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `EMAILJS_RRIVATE_KEY`, `OTP_EXPIRE_MINUTES` |
+| **Google OAuth** | `GOOGLE_CLIENT_ID` |
+| **Tradovate** | `CID`, `SEC`, `TRADOVATE_LIVE_API_URL`, `TRADOVATE_DEMO_API_URL`, `TRADOVATE_REDIRECT_URL`, `TRADOVATE_AUTH_URL`, `TRADOVATE_EXCHANGE_URL`, `TRADOVATE_API_ME_URL` |
+| **Market data** | `DATABENTO_KEY` |
 
-## Troubleshooting
-- No quotes updating:
-  - Verify `VITE_BACKEND_URL` and that `GET /api/v1/broker/websockettoken` returns an access token.
-  - Confirm your backend has valid Tradovate credentials and market data permissions.
-- SSE not connecting:
-  - Check CORS and cookies; frontend sets `axios.defaults.withCredentials = true`.
-  - Ensure backend SSE endpoints are reachable and not blocked by a proxy.
-- Symbols not found / market closed:
-  - The UI falls back to a historical snapshot and marks the price stream idle if market is closed or API key is missing.
+Backend requires valid **Tradovate** API credentials for execution and WebSocket tokens. For SSE/DataBento PnL and price streams, set **DATABENTO_KEY** and ensure the corresponding endpoints are configured.
+
+---
+
+## 🖼 Screenshots & Demo
+
+### 🎬 Loom video
+
+Watch a short walkthrough of TradeCopier:
+
+**[▶ Watch on Loom](https://www.loom.com/share/7456d5db2d7a4b18b128bf16fa26a8a0)**  
+
+---
+
+### Screenshots
+
+![TradeCopier screenshot](docs/images/screenshot1.png)
+
+Add more images to `docs/images/` and reference them with `![Description](docs/images/filename.png)`.
+
+---
+
+## 📜 API Documentation
+
+The backend exposes REST and SSE endpoints. Summary:
+
+### Broker / account
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/broker/positions` | List positions |
+| GET | `/api/v1/broker/orders` | List orders |
+| GET | `/api/v1/broker/accounts` | List broker accounts |
+
+### Order execution
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/broker/execute-order/market` | Submit market order |
+| POST | `/api/v1/broker/execute-order/limit` | Submit limit order |
+| POST | `/api/v1/broker/execute-order/limitwithsltp` | Submit limit order with SL/TP |
+
+### Tradovate / market data
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/broker/websockettoken` | Get Tradovate WebSocket token |
+| GET | `/databento/market-status` | Market open/closed status |
+| GET | `/databento/historical` | Historical snapshot |
+| POST | `/databento/sse/current-price` | Start current-price SSE |
+| GET | `/databento/sse/pnl?user_id=<id>` | PnL SSE stream |
+
+Adjust base paths if your backend uses different prefixes. For full API details, see the backend docs or OpenAPI schema (e.g. `/docs` when the server is running).
+
+---
+
+## 🔧 Troubleshooting
+
+- **No quotes updating** – Check `VITE_BACKEND_URL` and that `GET /api/v1/broker/websockettoken` returns an access token. Ensure backend has valid Tradovate credentials and market data permissions.
+- **SSE not connecting** – Verify CORS and cookies; frontend uses `axios.defaults.withCredentials = true`. Ensure backend SSE endpoints are reachable and not blocked by a proxy.
+- **Symbols not found / market closed** – The UI falls back to a historical snapshot and marks the price stream idle when the market is closed or the API key is missing.
+
+---
+
+## 🌟 Acknowledgements
+
+- [Tradovate API](https://www.tradovate.com/) and [example-api-js (WebSockets)](https://github.com/tradovate/example-api-js/tree/main/tutorial/WebSockets) for market data and execution
+- DataBento-style SSE for PnL and current-price streams
+- Libraries: FastAPI, React, Vite, Tailwind CSS, Lightweight Charts, Axios
+
+---
 
 ## License
+
 Proprietary (update as appropriate).
