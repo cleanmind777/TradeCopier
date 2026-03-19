@@ -148,9 +148,6 @@ Watch a short walkthrough of TradeCopier:
 
 ---
 
-### Screenshots
-
-![TradeCopier screenshot](docs/images/screenshot1.png)
 
 Add more images to `docs/images/` and reference them with `![Description](docs/images/filename.png)`.
 
