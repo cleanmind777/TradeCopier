@@ -144,7 +144,7 @@ Backend requires valid **Tradovate** API credentials for execution and WebSocket
 
 Watch a short walkthrough of TradeCopier:
 
-**[▶ Watch on Loom](https://www.loom.com/share/7456d5db2d7a4b18b128bf16fa26a8a0)**  
+
 
 ---
 
